@@ -45,11 +45,11 @@
     "abort": {
       "discover_timeout": "Impossibile trovare il gateway MyHome",
       "no_gateways": "Nessun gateway MyHome trovato",
-      "all_configured": "Tutti i gateway MyHome sono già configurati",
-      "unknown": "Si è verificato un errore sconosciuto",
+      "all_configured": "Tutti i gateway MyHome sono gi\u00e0 configurati",
+      "unknown": "Si \u00e8 verificato un errore sconosciuto",
       "cannot_connect": "Impossibile connettersi al gateway",
-      "already_configured": "Questo gateway è già configurato",
-      "already_in_progress": "La configurazione di questo gateway è già in corso",
+      "already_configured": "Questo gateway \u00e8 gi\u00e0 configurato",
+      "already_in_progress": "La configurazione di questo gateway \u00e8 gi\u00e0 in corso",
       "reauth_successful": "Nuova password accettata"
     }
   },
@@ -64,11 +64,11 @@
       },
       "scan_active": {
         "title": "Scansione Attiva del Bus",
-        "description": "Questo eseguirà una scansione di tutti gli indirizzi standard sul bus SCS per luci, tapparelle e zone di riscaldamento. Richiede circa 10-15 secondi. Vuoi avviare?"
+        "description": "Questo eseguir\u00e0 una scansione di tutti gli indirizzi standard sul bus SCS per luci, tapparelle e zone di riscaldamento. Richiede circa 10-15 secondi. Vuoi avviare?"
       },
       "sniff_passive": {
         "title": "Sniffing Passivo del Bus",
-        "description": "Questo rimarrà in ascolto degli eventi sul bus. Gira per casa e premi gli interruttori/pulsanti a parete per farli rilevare. Scegli la durata dell'ascolto qui sotto.",
+        "description": "Questo rimarr\u00e0 in ascolto degli eventi sul bus. Gira per casa e premi gli interruttori/pulsanti a parete per farli rilevare. Scegli la durata dell'ascolto qui sotto.",
         "data": {
           "duration": "Durata (secondi)"
         }
@@ -84,6 +84,10 @@
           "generate_events": "Genera eventi in Home Assistant per ogni messaggio ricevuto",
           "enable_auto_learning": "Abilita auto-apprendimento in background (rileva nuovi dispositivi quando vengono usati)"
         }
+      },
+      "import_yaml": {
+        "title": "Importa da YAML",
+        "description": "{summary}"
       }
     },
     "error": {

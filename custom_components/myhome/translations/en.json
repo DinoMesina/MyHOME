@@ -84,6 +84,10 @@
           "generate_events": "Generate events in Home Assistant for each message received",
           "enable_auto_learning": "Enable background auto-learning (discover new devices as they are used)"
         }
+      },
+      "import_yaml": {
+        "title": "Import from YAML",
+        "description": "{summary}"
       }
     },
     "error": {
@@ -105,7 +109,8 @@
       "options": {
         "settings": "Configure Gateway Settings",
         "scan": "Scan Bus for Devices (Active)",
-        "sniff": "Sniff Bus for Keypresses (Passive)"
+        "sniff": "Sniff Bus for Keypresses (Passive)",
+        "import_yaml": "Import configurations from myhome.yaml"
       }
     }
   },

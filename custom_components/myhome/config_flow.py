@@ -406,6 +406,8 @@ class MyhomeOptionsFlowHandler(OptionsFlow):
                 return await self.async_step_scan_active()
             elif choice == "sniff":
                 return await self.async_step_sniff_passive()
+            elif choice == "import_yaml":
+                return await self.async_step_import_yaml()
 
         return self.async_show_form(
             step_id="menu",
@@ -413,7 +415,7 @@ class MyhomeOptionsFlowHandler(OptionsFlow):
                 {
                     Required("select_option", default="settings"): SelectSelector(
                         SelectSelectorConfig(
-                            options=["settings", "scan", "sniff"],
+                            options=["settings", "scan", "sniff", "import_yaml"],
                             translation_key="menu_options",
                         )
                     )
@@ -442,6 +444,15 @@ class MyhomeOptionsFlowHandler(OptionsFlow):
                             new_device_count += 1
                             
                 self.options["devices"] = current_devices
+                
+                # Automatically rename the YAML file to prevent it from being loaded again
+                import os
+                if os.path.exists(_config_file_path):
+                    new_path = f"{_config_file_path}.old"
+                    if os.path.exists(new_path):
+                        import time
+                        new_path = f"{_config_file_path}.{int(time.time())}.old"
+                    os.rename(_config_file_path, new_path)
                 
                 self.hass.config_entries.async_update_entry(
                     self.config_entry,
@@ -484,6 +495,15 @@ class MyhomeOptionsFlowHandler(OptionsFlow):
                             new_device_count += 1
                             
                 self.options["devices"] = current_devices
+                
+                # Automatically rename the YAML file to prevent it from being loaded again
+                import os
+                if os.path.exists(_config_file_path):
+                    new_path = f"{_config_file_path}.old"
+                    if os.path.exists(new_path):
+                        import time
+                        new_path = f"{_config_file_path}.{int(time.time())}.old"
+                    os.rename(_config_file_path, new_path)
                 
                 self.hass.config_entries.async_update_entry(
                     self.config_entry,
@@ -570,4 +590,65 @@ class MyhomeOptionsFlowHandler(OptionsFlow):
                 }
             ),
             errors=errors,
+        )
+
+    async def async_step_import_yaml(self, user_input=None):
+        """Import devices from myhome.yaml."""
+        if user_input is not None:
+            return self.async_create_entry(title="", data=self.options)
+
+        import aiofiles
+        import yaml
+        from .validate import config_schema
+
+        
+        _config_file_path = (
+            str(self.options.get(CONF_FILE_PATH, "/config/myhome.yaml"))
+        )
+        if _config_file_path.startswith("/config/"):
+            _config_file_path = self.hass.config.path(_config_file_path[8:])
+        elif _config_file_path == "myhome.yaml":
+            _config_file_path = self.hass.config.path("myhome.yaml")
+
+        imported_count = 0
+        error_msg = None
+
+        try:
+            async with aiofiles.open(_config_file_path, mode="r") as yaml_file:
+                parsed_yaml = yaml.safe_load(await yaml_file.read())
+                validated_config = config_schema(parsed_yaml)
+                gateway_mac = self.config_entry.data[CONF_MAC]
+                yaml_devices = validated_config.get(gateway_mac, {})
+                
+                current_devices = self.options.get("devices", {})
+                
+                for platform, devices in yaml_devices.items():
+                    if platform not in current_devices:
+                        current_devices[platform] = {}
+                    for dev_id, dev_conf in devices.items():
+                        current_devices[platform][dev_id] = dev_conf
+                        imported_count += 1
+                        
+                self.options["devices"] = current_devices
+                
+                # Automatically rename the YAML file to prevent it from being loaded again
+                import os
+                if os.path.exists(_config_file_path):
+                    new_path = f"{_config_file_path}.old"
+                    if os.path.exists(new_path):
+                        import time
+                        new_path = f"{_config_file_path}.{int(time.time())}.old"
+                    os.rename(_config_file_path, new_path)
+        except FileNotFoundError:
+            error_msg = f"File non trovato: {_config_file_path}"
+        except Exception as e:
+            error_msg = f"Errore durante la validazione del file YAML: {e}"
+
+        description = f"**{imported_count} devices successfully imported from myhome.yaml!**\n\nYour `myhome.yaml` file has been automatically renamed to `myhome.yaml.old` to prevent conflicts.\n\nYou can now safely restart Home Assistant. All your entities will remain exactly as they were, but they will now be managed completely via the UI."
+        if error_msg:
+            description = f"**ERROR:** {error_msg}\nMake sure your `myhome.yaml` file exists and is formatted correctly."
+
+        return self.async_show_form(
+            step_id="import_yaml",
+            description_placeholders={"summary": description},
         )
