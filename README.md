@@ -1,11 +1,14 @@
 <p align="center">
-  <img src="images/logo.png" alt="BTicino MyHOME SCS" width="600">
+  <img src="https://raw.githubusercontent.com/mantovanellimatteo/MyHOME/master/images/logo.png" alt="BTicino MyHOME SCS" width="600">
 </p>
 
 # MyHOME (Modernized Fork)
-**Version: v1.2.0**
+**Version: v1.2.1**
 
 ## 🌟 Changelog
+* **v1.2.1**: **HACS & Native Home Assistant Brand Asset Fix!**
+  - **HACS Markdown Rendering Fix**: Switched README image URLs to absolute GitHub raw links so logos and screenshots render properly inside HACS without broken image icons.
+  - **Native Local Brand Packaging**: Packaged official brand icons inside `custom_components/myhome/brand/` ensuring Home Assistant Core automatically loads and serves the custom integration icon and logo locally under *Settings > Devices & Services*.
 * **v1.2.0**: **Official BTicino MyHOME SCS Brand Assets!**
   - **Brand & Logo Overhaul**: Added official high-resolution brand assets (`icon.png`, `icon@2x.png`, `logo.png`) featuring authentic BTicino typography, signature orange 'b', and SCS bus emblem.
   - **Home Assistant & HACS Integration**: Direct asset support for local brand icons and prepared submission for `home-assistant/brands`.
@@ -167,7 +170,7 @@ Your setup will boot up exactly as it was, but running the new codebase. You can
 4. Choose whether to perform a high-speed active bus scan (~4-7s) and/or import your existing `myhome.yaml` file with one click!
 
 <p align="center">
-  <img src="images/onboarding_wizard.png" alt="MyHOME Zero-Knowledge Wizard" width="600">
+  <img src="https://raw.githubusercontent.com/mantovanellimatteo/MyHOME/master/images/onboarding_wizard.png" alt="MyHOME Zero-Knowledge Wizard" width="600">
 </p>
 
 Once added, you can also click **Configure** on the MyHOME card at any time to access gateway settings, run an Active Scan, or start Passive Sniffing.
