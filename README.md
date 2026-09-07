@@ -1,7 +1,11 @@
 # MyHOME (Modernized Fork)
-**Version: v1.0.0**
+**Version: v1.1.0**
 
 ## 🌟 Changelog
+* **v1.1.0**: **Native Animated Progress Screens!**
+  - **Animated Progress Feedback (`async_show_progress`)**: Active bus scanning and passive packet sniffing in the Options menu now run seamlessly as asynchronous background tasks with native animated spinners and live contextual status messages.
+  - **Fluid Onboarding Experience**: The Zero-Knowledge setup wizard now displays a progress spinner during the initial automatic SCS bus scan instead of freezing the dialog.
+  - **Full Bilingual Localization**: Progress indicators and completion summaries fully translated in Italian (🇮🇹) and English (🇬🇧).
 * **v1.0.0**: **Major Release: Zero-Knowledge Wizard & Onboarding Redesign!**
   - **Zero-Knowledge Setup**: Automatic gateway discovery via SSDP. No manual IP or technical details required to get started.
   - **🤓 NERD MODE**: Optional manual configuration switch for advanced users who want to manually specify IP, port, MAC, and gateway model.
@@ -9,10 +13,11 @@
   - **Ultra-Fast SCS Bus Discovery**: High-speed active scan (~4-7s) of lights, covers, and climate zones with strict frame matching, buffer draining, and zero ghost devices.
   - **Bilingual Support**: Complete Italian (🇮🇹) and English (🇬🇧) localization for all setup steps, options, and descriptions.
 * **v0.5.0**: **New Feature!** Added a "Import from YAML" button to the Config Flow options. Users can now securely migrate all their `myhome.yaml` configuration into the UI with one click. The script automatically converts the entities and renames the YAML file to `myhome.yaml.old` to prevent conflicts.
-* **v0.4.12**: **Documentation Update:** Added explicit instructions on how to migrate from the original `anotherjulien/MyHOME` integration without losing entities or configuration.
 
 <details>
 <summary><b>Previous versions changelog (Click to expand)</b></summary>
+
+* **v0.4.12**: **Documentation Update:** Added explicit instructions on how to migrate from the original `anotherjulien/MyHOME` integration without losing entities or configuration.
 
 * **v0.4.11**: **Startup Crash Fix!** Fixed a critical `KeyError: entities` and `KeyError: entity_name` crash during startup on Home Assistant 2024.x when devices were configured via `myhome.yaml`. This was caused by the Voluptuous validation library silently bypassing our schema defaults during dictionary unwrapping. All schemas are now explicitly enforced.
 * **v0.4.10**: **Climate HVAC Action Fix!** Fixed a bug where `hvac_action` would constantly show as `idle` when actuator frames were received for zones that support both heating and cooling. Actuator frames (unlike valve frames) do not explicitly specify if they are heating or cooling, so the integration now correctly infers the action from the current `hvac_mode`.

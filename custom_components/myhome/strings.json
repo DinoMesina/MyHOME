@@ -93,9 +93,16 @@
       "already_configured": "This gateway is already configured",
       "already_in_progress": "The configuration of this gateway is already in progress",
       "reauth_successful": "Password change successful"
+    },
+    "progress": {
+      "scanning_bus": "Scanning SCS bus for lights, covers, and climate zones..."
     }
   },
   "options": {
+    "progress": {
+      "scanning_bus": "Scanning SCS bus for lights, covers, and climate zones...",
+      "sniffing_bus": "Listening to SCS bus for events... Press physical buttons on your walls to discover them!"
+    },
     "step": {
       "menu": {
         "title": "Select Action",

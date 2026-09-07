@@ -93,9 +93,16 @@
       "already_configured": "Questo gateway \u00e8 gi\u00e0 configurato",
       "already_in_progress": "La configurazione di questo gateway \u00e8 gi\u00e0 in corso",
       "reauth_successful": "Nuova password accettata"
+    },
+    "progress": {
+      "scanning_bus": "🔍 Scansione del bus SCS in corso... Ricerca luci, tapparelle e zone clima..."
     }
   },
   "options": {
+    "progress": {
+      "scanning_bus": "🔍 Scansione del bus SCS in corso... Ricerca luci, tapparelle e zone clima...",
+      "sniffing_bus": "🎧 Ascolto passivo del bus in corso... Premi i tasti fisici sui muri per apprenderli!"
+    },
     "step": {
       "menu": {
         "title": "Seleziona Azione",

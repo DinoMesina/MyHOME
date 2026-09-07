@@ -139,6 +139,7 @@ class MyhomeFlowHandler(ConfigFlow, domain=DOMAIN):
         self._existing_entry: Optional[ConfigEntry] = None
         self._new_entry_data: Optional[dict] = None
         self._new_entry_options: Optional[dict] = None
+        self._onboarding_scan_task: Optional[asyncio.Task] = None
 
     async def async_step_user(self, user_input=None):
         """Handle a flow initialized by the user."""
@@ -450,20 +451,9 @@ class MyhomeFlowHandler(ConfigFlow, domain=DOMAIN):
 
             # 2. Active Bus Scan if requested
             if auto_scan:
-                try:
-                    from .discovery import async_discover_all_devices
-                    LOGGER.info("Starting active bus discovery during onboarding...")
-                    discovered = await async_discover_all_devices(self.gateway_handler, quick=True)
-                    for platform, devs in discovered.items():
-                        current_devices.setdefault(platform, {}).update(devs)
-                except Exception as err:
-                    LOGGER.warning("Bus discovery during onboarding encountered an issue: %s", err)
+                return await self.async_step_onboarding_scan()
 
-            return self.async_create_entry(
-                title=f"{self.gateway_handler.model_name} Gateway",
-                data=self._new_entry_data,
-                options=self._new_entry_options,
-            )
+            return self._async_create_gateway_entry()
 
         schema_dict = {
             Required("auto_scan", default=True): BooleanSelector(),
@@ -479,6 +469,46 @@ class MyhomeFlowHandler(ConfigFlow, domain=DOMAIN):
                 CONF_MAC: self.gateway_handler.serial,
             },
         )
+
+    def _async_create_gateway_entry(self):
+        """Create config entry for gateway."""
+        return self.async_create_entry(
+            title=f"{self.gateway_handler.model_name} Gateway",
+            data=self._new_entry_data,
+            options=self._new_entry_options,
+        )
+
+    async def async_step_onboarding_scan(self, user_input=None):
+        """Show progress while performing quick bus scan on onboarding."""
+        if not self._onboarding_scan_task:
+            from .discovery import async_discover_all_devices
+            LOGGER.info("Starting active bus discovery during onboarding...")
+            self._onboarding_scan_task = self.hass.async_create_task(
+                async_discover_all_devices(self.gateway_handler, quick=True)
+            )
+
+        if not self._onboarding_scan_task.done():
+            return self.async_show_progress(
+                step_id="onboarding_scan",
+                progress_action="scanning_bus",
+                progress_task=self._onboarding_scan_task,
+            )
+
+        try:
+            discovered = await self._onboarding_scan_task
+            current_devices = self._new_entry_options.setdefault("devices", {})
+            for platform, devs in discovered.items():
+                current_devices.setdefault(platform, {}).update(devs)
+        except Exception as err:
+            LOGGER.warning("Bus discovery during onboarding encountered an issue: %s", err)
+        finally:
+            self._onboarding_scan_task = None
+
+        return self.async_show_progress_done(next_step_id="onboarding_done")
+
+    async def async_step_onboarding_done(self, user_input=None):
+        """Finalize gateway creation after onboarding scan."""
+        return self._async_create_gateway_entry()
 
     async def async_step_ssdp(self, discovery_info):
         """Handle a discovered OpenWebNet gateway."""
@@ -516,6 +546,10 @@ class MyhomeOptionsFlowHandler(OptionsFlow):
         """Initialize MyHome options flow."""
         self.options = {}
         self.data = {}
+        self._scan_task: Optional[asyncio.Task] = None
+        self._sniff_task: Optional[asyncio.Task] = None
+        self._sniff_duration: int = 60
+        self._new_device_count: int = 0
 
     async def async_step_init(self, user_input=None):  # pylint: disable=unused-argument
         """Manage the MyHome options."""
@@ -559,102 +593,93 @@ class MyhomeOptionsFlowHandler(OptionsFlow):
             ),
         )
 
+    def _process_discovered_devices(self, discovered):
+        """Update options with newly discovered devices and reload."""
+        current_devices = self.options.get("devices", {})
+        self._new_device_count = 0
+        for platform, devices in discovered.items():
+            if platform not in current_devices:
+                current_devices[platform] = {}
+            for dev_id, dev_conf in devices.items():
+                if dev_id not in current_devices[platform]:
+                    current_devices[platform][dev_id] = dev_conf
+                    self._new_device_count += 1
+
+        self.options["devices"] = current_devices
+
+        # Automatically rename the YAML file to prevent it from being loaded again
+        import os
+        config_file_path = self.options.get("config_file_path", self.hass.config.path("myhome.yaml"))
+        if os.path.exists(config_file_path):
+            new_path = f"{config_file_path}.old"
+            if os.path.exists(new_path):
+                import time
+                new_path = f"{config_file_path}.{int(time.time())}.old"
+            os.rename(config_file_path, new_path)
+
+        self.hass.config_entries.async_update_entry(
+            self.config_entry,
+            options=self.options
+        )
+        self.hass.async_create_task(
+            self.hass.config_entries.async_reload(self.config_entry.entry_id)
+        )
+
     async def async_step_scan_active(self, user_input=None):
-        """Perform active scan of the OpenWebNet bus."""
+        """Confirm active scan of the OpenWebNet bus."""
         if user_input is not None:
-            gateway_handler = self.hass.data[DOMAIN][self.config_entry.data[CONF_MAC]][CONF_ENTITY]
-            gateway = gateway_handler.gateway
-            
-            from .discovery import async_discover_all_devices
-            try:
-                discovered = await async_discover_all_devices(gateway)
-                
-                current_devices = self.options.get("devices", {})
-                new_device_count = 0
-                for platform, devices in discovered.items():
-                    if platform not in current_devices:
-                        current_devices[platform] = {}
-                    for dev_id, dev_conf in devices.items():
-                        if dev_id not in current_devices[platform]:
-                            current_devices[platform][dev_id] = dev_conf
-                            new_device_count += 1
-                            
-                self.options["devices"] = current_devices
-                
-                # Automatically rename the YAML file to prevent it from being loaded again
-                import os
-                if os.path.exists(_config_file_path):
-                    new_path = f"{_config_file_path}.old"
-                    if os.path.exists(new_path):
-                        import time
-                        new_path = f"{_config_file_path}.{int(time.time())}.old"
-                    os.rename(_config_file_path, new_path)
-                
-                self.hass.config_entries.async_update_entry(
-                    self.config_entry,
-                    options=self.options
-                )
-                await self.hass.config_entries.async_reload(self.config_entry.entry_id)
-                
-                return self.async_abort(
-                    reason="scan_completed",
-                    description_placeholders={"count": str(new_device_count)}
-                )
-            except Exception as err:
-                LOGGER.exception("Active scan failed: %s", err)
-                return self.async_abort(reason="scan_failed")
-                
+            return await self.async_step_scan_progress()
+
         return self.async_show_form(
             step_id="scan_active"
         )
 
-    async def async_step_sniff_passive(self, user_input=None):
-        """Perform passive sniffing of the OpenWebNet bus."""
-        errors = {}
-        if user_input is not None:
-            duration = int(user_input["duration"])
+    async def async_step_scan_progress(self, user_input=None):
+        """Show progress while scanning bus."""
+        if not self._scan_task:
             gateway_handler = self.hass.data[DOMAIN][self.config_entry.data[CONF_MAC]][CONF_ENTITY]
             gateway = gateway_handler.gateway
-            
-            from .discovery import async_sniff_bus
-            try:
-                discovered = await async_sniff_bus(gateway, duration)
-                
-                current_devices = self.options.get("devices", {})
-                new_device_count = 0
-                for platform, devices in discovered.items():
-                    if platform not in current_devices:
-                        current_devices[platform] = {}
-                    for dev_id, dev_conf in devices.items():
-                        if dev_id not in current_devices[platform]:
-                            current_devices[platform][dev_id] = dev_conf
-                            new_device_count += 1
-                            
-                self.options["devices"] = current_devices
-                
-                # Automatically rename the YAML file to prevent it from being loaded again
-                import os
-                if os.path.exists(_config_file_path):
-                    new_path = f"{_config_file_path}.old"
-                    if os.path.exists(new_path):
-                        import time
-                        new_path = f"{_config_file_path}.{int(time.time())}.old"
-                    os.rename(_config_file_path, new_path)
-                
-                self.hass.config_entries.async_update_entry(
-                    self.config_entry,
-                    options=self.options
-                )
-                await self.hass.config_entries.async_reload(self.config_entry.entry_id)
-                
-                return self.async_abort(
-                    reason="sniff_completed",
-                    description_placeholders={"count": str(new_device_count)}
-                )
-            except Exception as err:
-                LOGGER.exception("Passive sniffing failed: %s", err)
-                return self.async_abort(reason="sniff_failed")
-                
+            from .discovery import async_discover_all_devices
+            self._scan_task = self.hass.async_create_task(
+                async_discover_all_devices(gateway)
+            )
+
+        if not self._scan_task.done():
+            return self.async_show_progress(
+                step_id="scan_progress",
+                progress_action="scanning_bus",
+                progress_task=self._scan_task,
+            )
+
+        try:
+            discovered = await self._scan_task
+            self._process_discovered_devices(discovered)
+        except Exception as err:
+            LOGGER.exception("Active scan failed: %s", err)
+            return self.async_show_progress_done(next_step_id="scan_failed")
+        finally:
+            self._scan_task = None
+
+        return self.async_show_progress_done(next_step_id="scan_done")
+
+    async def async_step_scan_done(self, user_input=None):
+        """Finish scan and show result."""
+        return self.async_abort(
+            reason="scan_completed",
+            description_placeholders={"count": str(self._new_device_count)}
+        )
+
+    async def async_step_scan_failed(self, user_input=None):
+        """Abort on scan failure."""
+        return self.async_abort(reason="scan_failed")
+
+    async def async_step_sniff_passive(self, user_input=None):
+        """Configure passive sniffing duration."""
+        errors = {}
+        if user_input is not None:
+            self._sniff_duration = int(user_input["duration"])
+            return await self.async_step_sniff_progress()
+
         return self.async_show_form(
             step_id="sniff_passive",
             data_schema=Schema(
@@ -664,6 +689,45 @@ class MyhomeOptionsFlowHandler(OptionsFlow):
             ),
             errors=errors,
         )
+
+    async def async_step_sniff_progress(self, user_input=None):
+        """Show progress while sniffing bus."""
+        if not self._sniff_task:
+            gateway_handler = self.hass.data[DOMAIN][self.config_entry.data[CONF_MAC]][CONF_ENTITY]
+            gateway = gateway_handler.gateway
+            from .discovery import async_sniff_bus
+            self._sniff_task = self.hass.async_create_task(
+                async_sniff_bus(gateway, self._sniff_duration)
+            )
+
+        if not self._sniff_task.done():
+            return self.async_show_progress(
+                step_id="sniff_progress",
+                progress_action="sniffing_bus",
+                progress_task=self._sniff_task,
+            )
+
+        try:
+            discovered = await self._sniff_task
+            self._process_discovered_devices(discovered)
+        except Exception as err:
+            LOGGER.exception("Passive sniffing failed: %s", err)
+            return self.async_show_progress_done(next_step_id="sniff_failed")
+        finally:
+            self._sniff_task = None
+
+        return self.async_show_progress_done(next_step_id="sniff_done")
+
+    async def async_step_sniff_done(self, user_input=None):
+        """Finish sniffing and show result."""
+        return self.async_abort(
+            reason="sniff_completed",
+            description_placeholders={"count": str(self._new_device_count)}
+        )
+
+    async def async_step_sniff_failed(self, user_input=None):
+        """Abort on sniffing failure."""
+        return self.async_abort(reason="sniff_failed")
 
     async def async_step_user(self, user_input=None, errors={}):  # pylint: disable=dangerous-default-value
         """Manage the MyHome devices options."""
