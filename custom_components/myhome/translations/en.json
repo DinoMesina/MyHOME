@@ -207,5 +207,17 @@
     "trigger_type": {
       "scenario_button_pressed": "Button {subtype} pressed"
     }
+  },
+  "entity": {
+    "binary_sensor": {
+      "gateway_connectivity": {
+        "name": "Connectivity"
+      }
+    },
+    "sensor": {
+      "gateway_devices": {
+        "name": "Configured devices"
+      }
+    }
   }
 }

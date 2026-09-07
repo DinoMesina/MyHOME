@@ -10,7 +10,10 @@ from homeassistant.const import (
     CONF_MAC,
     CONF_ENTITIES,
     STATE_ON,
+    EntityCategory,
 )
+from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.restore_state import RestoreEntity
 
 from OWNd.message import (
@@ -44,60 +47,68 @@ PIR_SENSITIVITY = ["low", "medium", "high", "very high"]
 
 
 async def async_setup_entry(hass, config_entry, async_add_entities):
-    if PLATFORM not in hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS]:
-        return True
-
     _binary_sensors = []
-    _configured_binary_sensors = hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS][PLATFORM]
+    gateway = hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_ENTITY]
 
-    for _binary_sensor in _configured_binary_sensors.keys():
-        _who = int(_configured_binary_sensors[_binary_sensor][CONF_WHO])
-        _device_class = _configured_binary_sensors[_binary_sensor][CONF_DEVICE_CLASS]
-        if _who == 25:
-            _binary_sensor = MyHOMEDryContact(
-                hass=hass,
-                device_id=_binary_sensor,
-                who=_configured_binary_sensors[_binary_sensor][CONF_WHO],
-                where=_configured_binary_sensors[_binary_sensor][CONF_WHERE],
-                name=_configured_binary_sensors[_binary_sensor][CONF_NAME],
-                entity_name=_configured_binary_sensors[_binary_sensor][CONF_ENTITY_NAME],
-                inverted=_configured_binary_sensors[_binary_sensor][CONF_INVERTED],
-                device_class=_device_class,
-                manufacturer=_configured_binary_sensors[_binary_sensor][CONF_MANUFACTURER],
-                model=_configured_binary_sensors[_binary_sensor][CONF_DEVICE_MODEL],
-                gateway=hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_ENTITY],
-            )
-            _binary_sensors.append(_binary_sensor)
-        elif _who == 9:
-            _binary_sensor = MyHOMEAuxiliary(
-                hass=hass,
-                device_id=_binary_sensor,
-                who=_configured_binary_sensors[_binary_sensor][CONF_WHO],
-                where=_configured_binary_sensors[_binary_sensor][CONF_WHERE],
-                name=_configured_binary_sensors[_binary_sensor][CONF_NAME],
-                entity_name=_configured_binary_sensors[_binary_sensor][CONF_ENTITY_NAME],
-                inverted=_configured_binary_sensors[_binary_sensor][CONF_INVERTED],
-                device_class=_device_class,
-                manufacturer=_configured_binary_sensors[_binary_sensor][CONF_MANUFACTURER],
-                model=_configured_binary_sensors[_binary_sensor][CONF_DEVICE_MODEL],
-                gateway=hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_ENTITY],
-            )
-            _binary_sensors.append(_binary_sensor)
-        elif _who == 1 and _device_class == BinarySensorDeviceClass.MOTION:
-            _binary_sensor = MyHOMEMotionSensor(
-                hass=hass,
-                device_id=_binary_sensor,
-                who=_configured_binary_sensors[_binary_sensor][CONF_WHO],
-                where=_configured_binary_sensors[_binary_sensor][CONF_WHERE],
-                name=_configured_binary_sensors[_binary_sensor][CONF_NAME],
-                entity_name=_configured_binary_sensors[_binary_sensor][CONF_ENTITY_NAME],
-                inverted=_configured_binary_sensors[_binary_sensor][CONF_INVERTED],
-                device_class=_device_class,
-                manufacturer=_configured_binary_sensors[_binary_sensor][CONF_MANUFACTURER],
-                model=_configured_binary_sensors[_binary_sensor][CONF_DEVICE_MODEL],
-                gateway=hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_ENTITY],
-            )
-            _binary_sensors.append(_binary_sensor)
+    # Always register Gateway Connectivity diagnostic sensor
+    _binary_sensors.append(
+        MyHOMEGatewayConnectivity(
+            gateway=gateway,
+            config_entry=config_entry,
+        )
+    )
+
+    if PLATFORM in hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS]:
+        _configured_binary_sensors = hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS][PLATFORM]
+
+        for _binary_sensor in _configured_binary_sensors.keys():
+            _who = int(_configured_binary_sensors[_binary_sensor][CONF_WHO])
+            _device_class = _configured_binary_sensors[_binary_sensor][CONF_DEVICE_CLASS]
+            if _who == 25:
+                _binary_sensor = MyHOMEDryContact(
+                    hass=hass,
+                    device_id=_binary_sensor,
+                    who=_configured_binary_sensors[_binary_sensor][CONF_WHO],
+                    where=_configured_binary_sensors[_binary_sensor][CONF_WHERE],
+                    name=_configured_binary_sensors[_binary_sensor][CONF_NAME],
+                    entity_name=_configured_binary_sensors[_binary_sensor][CONF_ENTITY_NAME],
+                    inverted=_configured_binary_sensors[_binary_sensor][CONF_INVERTED],
+                    device_class=_device_class,
+                    manufacturer=_configured_binary_sensors[_binary_sensor][CONF_MANUFACTURER],
+                    model=_configured_binary_sensors[_binary_sensor][CONF_DEVICE_MODEL],
+                    gateway=hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_ENTITY],
+                )
+                _binary_sensors.append(_binary_sensor)
+            elif _who == 9:
+                _binary_sensor = MyHOMEAuxiliary(
+                    hass=hass,
+                    device_id=_binary_sensor,
+                    who=_configured_binary_sensors[_binary_sensor][CONF_WHO],
+                    where=_configured_binary_sensors[_binary_sensor][CONF_WHERE],
+                    name=_configured_binary_sensors[_binary_sensor][CONF_NAME],
+                    entity_name=_configured_binary_sensors[_binary_sensor][CONF_ENTITY_NAME],
+                    inverted=_configured_binary_sensors[_binary_sensor][CONF_INVERTED],
+                    device_class=_device_class,
+                    manufacturer=_configured_binary_sensors[_binary_sensor][CONF_MANUFACTURER],
+                    model=_configured_binary_sensors[_binary_sensor][CONF_DEVICE_MODEL],
+                    gateway=hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_ENTITY],
+                )
+                _binary_sensors.append(_binary_sensor)
+            elif _who == 1 and _device_class == BinarySensorDeviceClass.MOTION:
+                _binary_sensor = MyHOMEMotionSensor(
+                    hass=hass,
+                    device_id=_binary_sensor,
+                    who=_configured_binary_sensors[_binary_sensor][CONF_WHO],
+                    where=_configured_binary_sensors[_binary_sensor][CONF_WHERE],
+                    name=_configured_binary_sensors[_binary_sensor][CONF_NAME],
+                    entity_name=_configured_binary_sensors[_binary_sensor][CONF_ENTITY_NAME],
+                    inverted=_configured_binary_sensors[_binary_sensor][CONF_INVERTED],
+                    device_class=_device_class,
+                    manufacturer=_configured_binary_sensors[_binary_sensor][CONF_MANUFACTURER],
+                    model=_configured_binary_sensors[_binary_sensor][CONF_DEVICE_MODEL],
+                    gateway=hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_ENTITY],
+                )
+                _binary_sensors.append(_binary_sensor)
 
     async_add_entities(_binary_sensors)
 
@@ -334,3 +345,65 @@ class MyHOMEMotionSensor(MyHOMEEntity, BinarySensorEntity, RestoreEntity):
         self._attr_force_update = True
         self.async_write_ha_state()
         self._attr_force_update = False
+
+
+class MyHOMEGatewayConnectivity(BinarySensorEntity):
+    """Diagnostic binary sensor for MyHOME Gateway connection status."""
+
+    _attr_should_poll = False
+    _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_has_entity_name = True
+    _attr_translation_key = "gateway_connectivity"
+
+    def __init__(self, gateway: MyHOMEGatewayHandler, config_entry) -> None:
+        """Initialize the gateway connectivity sensor."""
+        self._gateway = gateway
+        self._config_entry = config_entry
+        self._attr_unique_id = f"{gateway.mac}-gateway-connectivity"
+        self._attr_name = "Connectivity"
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Link directly to the MyHOME Gateway device."""
+        return DeviceInfo(
+            identifiers={(DOMAIN, self._gateway.unique_id)},
+            connections={(dr.CONNECTION_NETWORK_MAC, self._gateway.mac)},
+            manufacturer=self._gateway.manufacturer,
+            model=self._gateway.model,
+            name=self._gateway.name,
+            sw_version=self._gateway.firmware,
+        )
+
+    @property
+    def is_on(self) -> bool:
+        """Return True if gateway is connected."""
+        return self._gateway.is_connected
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        """Return gateway connection attributes."""
+        attrs = {
+            "ip_address": str(self._gateway.gateway.host),
+            "port": self._gateway.gateway.port,
+            "mac_address": self._gateway.mac,
+            "model": self._gateway.model,
+            "firmware": self._gateway.firmware,
+            "reconnect_count": self._gateway.reconnect_count,
+        }
+        if self._gateway.connected_at:
+            attrs["connected_since"] = self._gateway.connected_at.isoformat()
+        return attrs
+
+    async def async_added_to_hass(self) -> None:
+        """Register connection state callback."""
+        self._gateway.register_connection_callback(self._on_connection_change)
+
+    async def async_will_remove_from_hass(self) -> None:
+        """Unregister connection state callback."""
+        self._gateway.unregister_connection_callback(self._on_connection_change)
+
+    def _on_connection_change(self) -> None:
+        """Handle connection change callback."""
+        self.schedule_update_ha_state()
+

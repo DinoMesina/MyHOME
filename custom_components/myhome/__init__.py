@@ -1,5 +1,6 @@
 """ MyHOME integration. """
 
+from pathlib import Path
 import aiofiles
 import yaml
 
@@ -10,6 +11,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import device_registry as dr, entity_registry as er, config_validation as cv
 from homeassistant.const import CONF_MAC
+from homeassistant.components.frontend import add_extra_js_url
+from homeassistant.components.http import StaticPathConfig
 
 from .const import (
     ATTR_GATEWAY,
@@ -34,9 +37,26 @@ CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 PLATFORMS = ["light", "switch", "cover", "climate", "binary_sensor", "sensor", "media_player"]
 
 
+async def _async_register_frontend(hass: HomeAssistant):
+    """Register static path and custom Lovelace card."""
+    if hass.data.setdefault(DOMAIN, {}).get("_frontend_registered"):
+        return
+    hass.data[DOMAIN]["_frontend_registered"] = True
+    frontend_dir = Path(__file__).parent / "frontend"
+    if frontend_dir.exists():
+        try:
+            await hass.http.async_register_static_paths([
+                StaticPathConfig("/myhome_static", str(frontend_dir), cache_headers=False)
+            ])
+        except Exception as err:
+            LOGGER.debug(f"Static path registration: {err}")
+        add_extra_js_url(hass, "/myhome_static/myhome-monitor-card.js?v=1.3.0")
+
+
 async def async_setup(hass, config):
     """Set up the MyHOME component."""
-    hass.data[DOMAIN] = {}
+    hass.data.setdefault(DOMAIN, {})
+    await _async_register_frontend(hass)
 
     if DOMAIN not in config:
         return True
@@ -47,6 +67,8 @@ async def async_setup(hass, config):
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
+    await _async_register_frontend(hass)
+
     if entry.data[CONF_MAC] not in hass.data[DOMAIN]:
         hass.data[DOMAIN][entry.data[CONF_MAC]] = {}
 
@@ -164,8 +186,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
         sw_version=hass.data[DOMAIN][entry.data[CONF_MAC]][CONF_ENTITY].firmware,
     )
 
+    _platforms_to_setup = set(
+        hass.data[DOMAIN][entry.data[CONF_MAC]][CONF_PLATFORMS].keys()
+    ) | {"binary_sensor", "sensor"}
     await hass.config_entries.async_forward_entry_setups(
-        entry, hass.data[DOMAIN][entry.data[CONF_MAC]][CONF_PLATFORMS].keys()
+        entry, _platforms_to_setup
     )
 
     hass.data[DOMAIN][entry.data[CONF_MAC]][CONF_ENTITY].listening_worker = (
@@ -207,6 +232,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
                     configured_entities.append(
                         f"{entry.data[CONF_MAC]}-{_device}"
                     )  # extrapolating _attr_unique_id out of the entity's place in the config data structure
+
+    # Protect gateway diagnostic entities from pruning
+    configured_entities.append(f"{entry.data[CONF_MAC]}-gateway-connectivity")
+    configured_entities.append(f"{entry.data[CONF_MAC]}-gateway-devices")
 
     for entity_entry in entity_entries:
         if entity_entry.unique_id in configured_entities:
@@ -446,7 +475,10 @@ async def async_unload_entry(hass, entry):
 
     LOGGER.info("Unloading MyHome entry.")
 
-    for platform in hass.data[DOMAIN][entry.data[CONF_MAC]][CONF_PLATFORMS].keys():
+    _platforms_to_unload = set(
+        hass.data[DOMAIN][entry.data[CONF_MAC]][CONF_PLATFORMS].keys()
+    ) | {"binary_sensor", "sensor"}
+    for platform in _platforms_to_unload:
         await hass.config_entries.async_forward_entry_unload(entry, platform)
 
     hass.services.async_remove(DOMAIN, "sync_time")

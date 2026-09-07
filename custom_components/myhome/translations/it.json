@@ -206,5 +206,17 @@
     "trigger_type": {
       "scenario_button_pressed": "Pulsante {subtype} premuto"
     }
+  },
+  "entity": {
+    "binary_sensor": {
+      "gateway_connectivity": {
+        "name": "Connettività"
+      }
+    },
+    "sensor": {
+      "gateway_devices": {
+        "name": "Dispositivi configurati"
+      }
+    }
   }
 }

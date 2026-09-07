@@ -23,7 +23,10 @@ from homeassistant.const import (
     UnitOfPower,
     UnitOfEnergy,
     UnitOfTemperature,
+    EntityCategory,
 )
+from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_platform
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.event import async_track_time_interval
@@ -68,50 +71,95 @@ ATTR_DAY = "day"
 
 
 async def async_setup_entry(hass, config_entry, async_add_entities):
-    if PLATFORM not in hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS]:
-        return True
-
     _sensors = []
-    _configured_sensors = hass.data[DOMAIN][config_entry.data[CONF_MAC]][
-        CONF_PLATFORMS
-    ][PLATFORM]
+    gateway = hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_ENTITY]
+
+    # Always register Gateway Configured Devices diagnostic sensor
+    _sensors.append(
+        MyHOMEGatewayDeviceCount(gateway=gateway, config_entry=config_entry)
+    )
+
     _power_devices_configured = False
 
-    for _sensor in _configured_sensors.keys():
-        if (
-            _configured_sensors[_sensor][CONF_DEVICE_CLASS] == SensorDeviceClass.POWER
-            or _configured_sensors[_sensor][CONF_DEVICE_CLASS]
-            == SensorDeviceClass.ENERGY
-        ):
-            _required_entities = list(
-                _configured_sensors[_sensor][CONF_ENTITIES].keys()
-            )
+    if PLATFORM in hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS]:
+        _configured_sensors = hass.data[DOMAIN][config_entry.data[CONF_MAC]][
+            CONF_PLATFORMS
+        ][PLATFORM]
 
+        for _sensor in _configured_sensors.keys():
             if (
-                _configured_sensors[_sensor][CONF_DEVICE_CLASS]
-                == SensorDeviceClass.POWER
+                _configured_sensors[_sensor][CONF_DEVICE_CLASS] == SensorDeviceClass.POWER
+                or _configured_sensors[_sensor][CONF_DEVICE_CLASS]
+                == SensorDeviceClass.ENERGY
             ):
-                _power_devices_configured = True
-
-                ent_reg = er.async_get(hass)
-                existing_entity_id = ent_reg.async_get_entity_id(
-                    "sensor", DOMAIN, _sensor
+                _required_entities = list(
+                    _configured_sensors[_sensor][CONF_ENTITIES].keys()
                 )
-                if existing_entity_id is not None:
-                    LOGGER.warning(
-                        "Sensor %s: %s will be migrated to %s-%s",
-                        _sensor,
-                        existing_entity_id,
-                        _sensor,
-                        SensorDeviceClass.POWER,
+
+                if (
+                    _configured_sensors[_sensor][CONF_DEVICE_CLASS]
+                    == SensorDeviceClass.POWER
+                ):
+                    _power_devices_configured = True
+
+                    ent_reg = er.async_get(hass)
+                    existing_entity_id = ent_reg.async_get_entity_id(
+                        "sensor", DOMAIN, _sensor
                     )
-                    ent_reg.async_update_entity(
-                        entity_id=existing_entity_id,
-                        new_unique_id=f"{_sensor}-{SensorDeviceClass.POWER}",
+                    if existing_entity_id is not None:
+                        LOGGER.warning(
+                            "Sensor %s: %s will be migrated to %s-%s",
+                            _sensor,
+                            existing_entity_id,
+                            _sensor,
+                            SensorDeviceClass.POWER,
+                        )
+                        ent_reg.async_update_entity(
+                            entity_id=existing_entity_id,
+                            new_unique_id=f"{_sensor}-{SensorDeviceClass.POWER}",
+                        )
+
+                    _sensors.append(
+                        MyHOMEPowerSensor(
+                            hass=hass,
+                            device_id=_sensor,
+                            who=_configured_sensors[_sensor][CONF_WHO],
+                            where=_configured_sensors[_sensor][CONF_WHERE],
+                            name=_configured_sensors[_sensor][CONF_NAME],
+                            device_class=_configured_sensors[_sensor][CONF_DEVICE_CLASS],
+                            manufacturer=_configured_sensors[_sensor][CONF_MANUFACTURER],
+                            model=_configured_sensors[_sensor][CONF_DEVICE_MODEL],
+                            gateway=hass.data[DOMAIN][config_entry.data[CONF_MAC]][
+                                CONF_ENTITY
+                            ],
+                        )
+                    )
+                    _required_entities.remove(SensorDeviceClass.POWER)
+
+                for entity_specific_id in _required_entities:
+                    _sensors.append(
+                        MyHOMEEnergySensor(
+                            hass=hass,
+                            device_id=_sensor,
+                            who=_configured_sensors[_sensor][CONF_WHO],
+                            where=_configured_sensors[_sensor][CONF_WHERE],
+                            name=_configured_sensors[_sensor][CONF_NAME],
+                            entity_specific_id=entity_specific_id,
+                            device_class=SensorDeviceClass.ENERGY,
+                            manufacturer=_configured_sensors[_sensor][CONF_MANUFACTURER],
+                            model=_configured_sensors[_sensor][CONF_DEVICE_MODEL],
+                            gateway=hass.data[DOMAIN][config_entry.data[CONF_MAC]][
+                                CONF_ENTITY
+                            ],
+                        )
                     )
 
+            elif (
+                _configured_sensors[_sensor][CONF_DEVICE_CLASS]
+                == SensorDeviceClass.TEMPERATURE
+            ):
                 _sensors.append(
-                    MyHOMEPowerSensor(
+                    MyHOMETemperatureSensor(
                         hass=hass,
                         device_id=_sensor,
                         who=_configured_sensors[_sensor][CONF_WHO],
@@ -120,66 +168,27 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
                         device_class=_configured_sensors[_sensor][CONF_DEVICE_CLASS],
                         manufacturer=_configured_sensors[_sensor][CONF_MANUFACTURER],
                         model=_configured_sensors[_sensor][CONF_DEVICE_MODEL],
-                        gateway=hass.data[DOMAIN][config_entry.data[CONF_MAC]][
-                            CONF_ENTITY
-                        ],
+                        gateway=hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_ENTITY],
                     )
                 )
-                _required_entities.remove(SensorDeviceClass.POWER)
 
-            for entity_specific_id in _required_entities:
+            elif (
+                _configured_sensors[_sensor][CONF_DEVICE_CLASS]
+                == SensorDeviceClass.ILLUMINANCE
+            ):
                 _sensors.append(
-                    MyHOMEEnergySensor(
+                    MyHOMEIlluminanceSensor(
                         hass=hass,
                         device_id=_sensor,
                         who=_configured_sensors[_sensor][CONF_WHO],
                         where=_configured_sensors[_sensor][CONF_WHERE],
                         name=_configured_sensors[_sensor][CONF_NAME],
-                        entity_specific_id=entity_specific_id,
-                        device_class=SensorDeviceClass.ENERGY,
+                        device_class=_configured_sensors[_sensor][CONF_DEVICE_CLASS],
                         manufacturer=_configured_sensors[_sensor][CONF_MANUFACTURER],
                         model=_configured_sensors[_sensor][CONF_DEVICE_MODEL],
-                        gateway=hass.data[DOMAIN][config_entry.data[CONF_MAC]][
-                            CONF_ENTITY
-                        ],
+                        gateway=hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_ENTITY],
                     )
                 )
-
-        elif (
-            _configured_sensors[_sensor][CONF_DEVICE_CLASS]
-            == SensorDeviceClass.TEMPERATURE
-        ):
-            _sensors.append(
-                MyHOMETemperatureSensor(
-                    hass=hass,
-                    device_id=_sensor,
-                    who=_configured_sensors[_sensor][CONF_WHO],
-                    where=_configured_sensors[_sensor][CONF_WHERE],
-                    name=_configured_sensors[_sensor][CONF_NAME],
-                    device_class=_configured_sensors[_sensor][CONF_DEVICE_CLASS],
-                    manufacturer=_configured_sensors[_sensor][CONF_MANUFACTURER],
-                    model=_configured_sensors[_sensor][CONF_DEVICE_MODEL],
-                    gateway=hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_ENTITY],
-                )
-            )
-
-        elif (
-            _configured_sensors[_sensor][CONF_DEVICE_CLASS]
-            == SensorDeviceClass.ILLUMINANCE
-        ):
-            _sensors.append(
-                MyHOMEIlluminanceSensor(
-                    hass=hass,
-                    device_id=_sensor,
-                    who=_configured_sensors[_sensor][CONF_WHO],
-                    where=_configured_sensors[_sensor][CONF_WHERE],
-                    name=_configured_sensors[_sensor][CONF_NAME],
-                    device_class=_configured_sensors[_sensor][CONF_DEVICE_CLASS],
-                    manufacturer=_configured_sensors[_sensor][CONF_MANUFACTURER],
-                    model=_configured_sensors[_sensor][CONF_DEVICE_MODEL],
-                    gateway=hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_ENTITY],
-                )
-            )
 
     if _power_devices_configured:
         platform = entity_platform.current_platform.get()
@@ -615,3 +624,93 @@ class MyHOMEIlluminanceSensor(MyHOMEEntity, SensorEntity):
         )
         self._attr_native_value = message.illuminance
         self.async_schedule_update_ha_state()
+
+
+class MyHOMEGatewayDeviceCount(SensorEntity):
+    """Diagnostic sensor for total configured devices on MyHOME Gateway."""
+
+    _attr_should_poll = False
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = "mdi:home-automation"
+    _attr_has_entity_name = True
+    _attr_translation_key = "gateway_devices"
+
+    def __init__(self, gateway: MyHOMEGatewayHandler, config_entry) -> None:
+        """Initialize the device count sensor."""
+        self._gateway = gateway
+        self._config_entry = config_entry
+        self._attr_unique_id = f"{gateway.mac}-gateway-devices"
+        self._attr_name = "Configured devices"
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Link directly to the MyHOME Gateway device."""
+        return DeviceInfo(
+            identifiers={(DOMAIN, self._gateway.unique_id)},
+            connections={(dr.CONNECTION_NETWORK_MAC, self._gateway.mac)},
+            manufacturer=self._gateway.manufacturer,
+            model=self._gateway.model,
+            name=self._gateway.name,
+            sw_version=self._gateway.firmware,
+        )
+
+    def _calculate_counts(self) -> tuple[int, dict]:
+        """Compute device counts from local memory without sending network frames."""
+        platforms = (
+            self.hass.data.get(DOMAIN, {})
+            .get(self._gateway.mac, {})
+            .get(CONF_PLATFORMS, {})
+        )
+        counts = {}
+        total = 0
+        for plat in [
+            "light",
+            "cover",
+            "climate",
+            "switch",
+            "sensor",
+            "binary_sensor",
+            "media_player",
+        ]:
+            c = len(platforms.get(plat, {}))
+            counts[plat] = c
+            total += c
+
+        # Also count scenario modules from device registry
+        try:
+            dev_reg = dr.async_get(self.hass)
+            devices = dr.async_entries_for_config_entry(dev_reg, self._config_entry.entry_id)
+            scenario_count = sum(1 for d in devices if d.model == "Scenario Module")
+        except Exception:
+            scenario_count = 0
+
+        counts["scenarios"] = scenario_count
+        total += scenario_count
+
+        return total, counts
+
+    @property
+    def native_value(self) -> int:
+        """Return total number of configured devices."""
+        total, _ = self._calculate_counts()
+        return total
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        """Return breakdown of configured devices per category."""
+        _, counts = self._calculate_counts()
+        return {
+            "lights": counts.get("light", 0),
+            "covers": counts.get("cover", 0),
+            "climate_zones": counts.get("climate", 0),
+            "switches": counts.get("switch", 0),
+            "sensors": counts.get("sensor", 0),
+            "binary_sensors": counts.get("binary_sensor", 0),
+            "media_players": counts.get("media_player", 0),
+            "scenarios": counts.get("scenarios", 0),
+        }
+
+    async def async_added_to_hass(self) -> None:
+        """Update state when added to hass."""
+        self.async_write_ha_state()
+

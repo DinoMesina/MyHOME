@@ -1,6 +1,7 @@
 """Code to handle a MyHome Gateway."""
 import asyncio
-from typing import Dict, List
+from datetime import datetime, timezone
+from typing import Callable, Dict, List, Optional
 
 from homeassistant.const import (
     CONF_ENTITIES,
@@ -97,9 +98,30 @@ class MyHOMEGatewayHandler:
         self._terminate_listener = False
         self._terminate_sender = False
         self.is_connected = False
+        self.connected_at: Optional[datetime] = None
+        self.reconnect_count: int = 0
+        self._connection_callbacks: List[Callable[[], None]] = []
         self.listening_worker: asyncio.tasks.Task = None
         self.sending_workers: List[asyncio.tasks.Task] = []
         self.send_buffer = asyncio.Queue()
+
+    def register_connection_callback(self, callback: Callable[[], None]) -> None:
+        """Register callback for connection state changes."""
+        if callback not in self._connection_callbacks:
+            self._connection_callbacks.append(callback)
+
+    def unregister_connection_callback(self, callback: Callable[[], None]) -> None:
+        """Unregister callback."""
+        if callback in self._connection_callbacks:
+            self._connection_callbacks.remove(callback)
+
+    def _notify_connection_change(self) -> None:
+        """Notify all registered listeners about connection state changes."""
+        for callback in self._connection_callbacks:
+            try:
+                callback()
+            except Exception as ex:
+                LOGGER.error("%s Error in connection state callback: %s", self.log_id, ex)
 
     @property
     def mac(self) -> str:
@@ -145,13 +167,19 @@ class MyHOMEGatewayHandler:
                     raise ConnectionError("Failed to open listening connection streams.")
 
                 self.is_connected = True
+                self.connected_at = datetime.now(timezone.utc)
+                self.reconnect_count += 1
                 backoff = 1
                 LOGGER.info("%s Listening session established.", self.log_id)
+                self._notify_connection_change()
 
                 while not self._terminate_listener:
                     message = await _event_session.get_next()
                     if message is None:
                         LOGGER.warning("%s Listening session disconnected. Reconnecting...", self.log_id)
+                        if self.is_connected:
+                            self.is_connected = False
+                            self._notify_connection_change()
                         break
 
                     try:
@@ -484,7 +512,9 @@ class MyHOMEGatewayHandler:
                             message,
                         )
             except (OSError, asyncio.TimeoutError, ConnectionError) as err:
-                self.is_connected = False
+                if self.is_connected:
+                    self.is_connected = False
+                    self._notify_connection_change()
                 LOGGER.warning(
                     "%s Connection error in listener: %s. Retrying in %d seconds...",
                     self.log_id,
@@ -492,7 +522,9 @@ class MyHOMEGatewayHandler:
                     backoff,
                 )
             except Exception as ex:
-                self.is_connected = False
+                if self.is_connected:
+                    self.is_connected = False
+                    self._notify_connection_change()
                 LOGGER.exception(
                     "%s Unexpected error in listener: %s. Retrying in %d seconds...",
                     self.log_id,
@@ -509,7 +541,9 @@ class MyHOMEGatewayHandler:
                 await asyncio.sleep(backoff)
                 backoff = min(backoff * 2, 120)
 
-        self.is_connected = False
+        if self.is_connected:
+            self.is_connected = False
+            self._notify_connection_change()
         LOGGER.debug("%s Destroying listening worker.", self.log_id)
 
     async def sending_loop(self, worker_id: int):
@@ -537,7 +571,7 @@ class MyHOMEGatewayHandler:
                     task = await self.send_buffer.get()
                     try:
                         LOGGER.debug(
-                            "%s Message `%s` was successfully unqueued by worker %s.",
+                            "[%s - %s] Message `%s` was successfully unqueued by worker %s.",
                             self.name,
                             self.gateway.host,
                             task["message"],

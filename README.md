@@ -3,17 +3,19 @@
 </p>
 
 # MyHOME (Modernized Fork)
-**Version: v1.2.2**
+**Version: v1.3.0**
 
 ## 🌟 Changelog
-* **v1.2.2**: **Transparent Icon Corners (Clean Alpha Channel)!**
-  - **Alpha Channel Fix**: Converted icon assets to 32-bit RGBA with smooth anti-aliased transparency on the outer corners. Eliminates the white square corner artifacts on dark and custom Home Assistant themes.
-* **v1.2.1**: **HACS & Native Home Assistant Brand Asset Fix!**
-  - **HACS Markdown Rendering Fix**: Switched README image URLs to absolute GitHub raw links so logos and screenshots render properly inside HACS without broken image icons.
-  - **Native Local Brand Packaging**: Packaged official brand icons inside `custom_components/myhome/brand/` ensuring Home Assistant Core automatically loads and serves the custom integration icon and logo locally under *Settings > Devices & Services*.
-* **v1.2.0**: **Official BTicino MyHOME SCS Brand Assets!**
+* **v1.3.0**: **Gateway Diagnostics & Sleek "MyHOME Monitor" Lovelace Card!**
+  - **Zero-Overhead Gateway Diagnostics**: Added native diagnostic entities for BTicino gateways:
+    - `binary_sensor.<gateway>_connectivity` (tracks active OpenWebNet connection status, IP, port, hardware model, firmware version, session uptime, and reconnection counter).
+    - `sensor.<gateway>_configured_devices` (reports total configured devices with attributes breakdown: lights, covers, climate zones, switches, sensors, and scenarios).
+    - **100% Passive & Safe**: Zero bus polling, zero pinging, and zero frame flooding — completely safe for legacy and resource-constrained gateways (AM4890, F454, MH200N).
+  - **Dedicated "MyHOME Monitor" Custom Lovelace Card**: Built-in, ultra-responsive Lovelace card (`custom:myhome-monitor-card`) featuring gateway status badge, hardware metrics, and interactive device counters grid with dark/light mode support. Automatically registered with Home Assistant frontend.
+* **v1.2.0**: **Official BTicino MyHOME SCS Brand Assets & Clean Alpha Packaging!**
   - **Brand & Logo Overhaul**: Added official high-resolution brand assets (`icon.png`, `icon@2x.png`, `logo.png`) featuring authentic BTicino typography, signature orange 'b', and SCS bus emblem.
-  - **Home Assistant & HACS Integration**: Direct asset support for local brand icons and prepared submission for `home-assistant/brands`.
+  - **Native Local Brand Packaging & Clean Alpha Channel**: Packaged official brand icons with 32-bit RGBA smooth anti-aliased transparency inside `custom_components/myhome/brand/` ensuring Home Assistant Core automatically loads and serves custom integration icons under *Settings > Devices & Services* without white square corner artifacts.
+  - **HACS Markdown Rendering Fix**: Switched README image URLs to absolute GitHub raw links so logos and screenshots render properly inside HACS.
 * **v1.1.0**: **Native Animated Progress Screens!**
   - **Animated Progress Feedback (`async_show_progress`)**: Active bus scanning and passive packet sniffing in the Options menu now run seamlessly as asynchronous background tasks with native animated spinners and live contextual status messages.
   - **Fluid Onboarding Experience**: The Zero-Knowledge setup wizard now displays a progress spinner during the initial automatic SCS bus scan instead of freezing the dialog.
@@ -134,6 +136,35 @@ action:
   - service: light.toggle
     target:
       entity_id: light.living_room_hue
+### 📊 MyHOME Monitor Card (Custom Lovelace Card)
+The integration comes with a built-in, beautifully styled Lovelace card: **MyHOME Monitor Card** (`custom:myhome-monitor-card`). It displays real-time connection status with animated badge, hardware/network parameters (IP, port, model, firmware, uptime, reconnects), and a clean responsive grid breaking down all configured devices on your SCS bus (Lights, Shutters, Climate, Switches, Sensors, and Scenarios).
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/mantovanellimatteo/MyHOME/master/images/myhome_monitor_card.png" alt="MyHOME Monitor Card" width="480">
+</p>
+
+#### Visual Dashboard Editor
+You can add it directly from the Home Assistant dashboard UI without writing any code:
+1. In any dashboard, click **Add Card**.
+2. Search for **MyHOME Monitor Card** in the card picker.
+3. Click to insert — it automatically discovers your MyHOME gateway and device statistics!
+
+#### Manual YAML Configuration
+If you prefer adding or customizing the card via YAML code:
+
+```yaml
+type: custom:myhome-monitor-card
+```
+
+#### Customization Options
+
+```yaml
+type: custom:myhome-monitor-card
+title: "MyHOME Gateway"        # Optional custom title (defaults to gateway name)
+show_attributes: true          # Set to false to hide IP, firmware, and uptime section
+show_device_counts: true       # Set to false to hide the bus devices grid
+gateway_entity: binary_sensor.am4890_gateway_connectivity      # Optional: manual entity override
+device_count_entity: sensor.am4890_gateway_configured_devices  # Optional: manual entity override
 ```
 
 ---
