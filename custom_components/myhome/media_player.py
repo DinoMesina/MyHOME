@@ -118,12 +118,12 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
             _configured_players[dev_id][CONF_ENTITIES] = {}
         _configured_players[dev_id][CONF_ENTITIES][PLATFORM] = new_player
         async_add_entities([new_player])
-        LOGGER.info("Creato dinamicamente nuovo media_player: %s (%s)", name, where)
+        LOGGER.info("Dynamically created new media_player: %s (%s)", name, where)
         return new_player
 
     hass.data[DOMAIN][config_entry.data[CONF_MAC]]["async_add_media_player"] = async_add_new_player
 
-    # Allineamento iniziale singolo al boot per il Tuner centrale e le zone
+    # Initial single startup alignment query for central Tuner and zones
     async def _initial_startup_query():
         await asyncio.sleep(4)
         gateway = hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_ENTITY]
@@ -140,7 +140,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
                 if q_cmd:
                     await gateway.send(q_cmd)
         except Exception as err:
-            LOGGER.debug("Errore query iniziale startup: %s", err)
+            LOGGER.debug("Error in initial startup query: %s", err)
 
     hass.async_create_task(_initial_startup_query())
 
@@ -306,16 +306,16 @@ class MyHOMEMediaPlayer(MyHOMEEntity, MediaPlayerEntity, RestoreEntity):
             else:
                 await self._send_own_command(f"*#16*{self._where}##")
         except Exception as err:
-            LOGGER.debug("Errore query stato bus per %s: %s", self._where, err)
+            LOGGER.debug("Error querying bus state for %s: %s", self._where, err)
 
     async def _send_own_command(self, cmd_str: str):
         """Send raw OpenWebNet command safely."""
         try:
-            LOGGER.info("[Sound Zone %s] Invio comando OpenWebNet: %s", self._where, cmd_str)
+            LOGGER.info("[Sound Zone %s] Sending OpenWebNet command: %s", self._where, cmd_str)
             cmd = OWNCommand.parse(cmd_str) or cmd_str
             await self._gateway_handler.send(cmd)
         except Exception as err:
-            LOGGER.error("Errore invio comando MyHome %s: %s", cmd_str, err)
+            LOGGER.error("Error sending MyHome command %s: %s", cmd_str, err)
 
     async def async_turn_on(self, **kwargs):
         """Turn the media player on."""
@@ -486,9 +486,9 @@ class MyHOMEMediaPlayer(MyHOMEEntity, MediaPlayerEntity, RestoreEntity):
     def handle_event(self, event):
         """Handle status update from the bus."""
         msg_str = str(event)
-        LOGGER.debug("%s [Sound Zone %s] Ricevuto evento bus: %s", self._gateway.log_id, self._where, msg_str)
+        LOGGER.debug("%s [Sound Zone %s] Received bus event: %s", self._gateway.log_id, self._where, msg_str)
 
-        # 0. Sincronizzazione commutazione sorgente (Tuner 2#1 vs AUX 2#2)
+        # 0. Source switching synchronization (Tuner 2#1 vs AUX 2#2)
         if ("*2#1##" in msg_str or "*5#2#1##" in msg_str) and "*22*" in msg_str:
             self._source = "Radio FM (Tuner)"
             self._refresh_media_title()
@@ -500,12 +500,12 @@ class MyHOMEMediaPlayer(MyHOMEEntity, MediaPlayerEntity, RestoreEntity):
             self.async_write_ha_state()
             return
 
-        # 1. Messaggio Frequenza dal Tuner (Dimensione 5: *#22*5#2#1*5*1*<freq>## o *#22*2#1*5*1*<freq>##)
+        # 1. Frequency message from Tuner (Dimension 5: *#22*5#2#1*5*1*<freq>## or *#22*2#1*5*1*<freq>##)
         if ("*5*1*" in msg_str or "*#5*1*" in msg_str) and ("*22*" in msg_str or "*#22*" in msg_str):
             try:
-                # Estraiamo i blocchi delimitati da '*'
+                # Extract parts delimited by '*'
                 parts = [p for p in msg_str.strip("#").split("*") if p]
-                # Se è Dimensione 5 (scrittura o lettura frequenza)
+                # Dimension 5 (frequency read or write)
                 if len(parts) >= 4:
                     val_str = parts[-1]
                     if val_str.isdigit():
@@ -532,9 +532,9 @@ class MyHOMEMediaPlayer(MyHOMEEntity, MediaPlayerEntity, RestoreEntity):
                             self._refresh_media_title()
                             self.async_write_ha_state()
             except Exception as ex:
-                LOGGER.debug("Errore parsing frequenza %s: %s", msg_str, ex)
+                LOGGER.debug("Error parsing frequency %s: %s", msg_str, ex)
 
-        # 2. Messaggio Preset dal Tuner (Dimensione 6: *#22*2#1*6*<preset>## o *#22*2#1*#6*<preset>##)
+        # 2. Preset message from Tuner (Dimension 6: *#22*2#1*6*<preset>## or *#22*2#1*#6*<preset>##)
         elif ("*6*" in msg_str or "*#6*" in msg_str) and ("*2#1" in msg_str or "*5#2#1" in msg_str):
             try:
                 parts = [p for p in msg_str.strip("#").split("*") if p]
@@ -554,14 +554,14 @@ class MyHOMEMediaPlayer(MyHOMEEntity, MediaPlayerEntity, RestoreEntity):
                             self._refresh_media_title()
                             self.async_write_ha_state()
             except Exception as ex:
-                LOGGER.debug("Errore parsing preset %s: %s", msg_str, ex)
+                LOGGER.debug("Error parsing preset %s: %s", msg_str, ex)
 
-        # 3. Messaggi destinati all'amplificatore di questa stanza
+        # 3. Messages destined for this room's amplifier
         if self._where in msg_str or self._full_where in msg_str:
             clean = msg_str.strip("#").split("*")
             norm_parts = [p.replace("#", "") for p in clean if p]
 
-            # Stato Dimensione 12: *#22*WHERE*12*ST*SRC## oppure *#22*WHERE*#12*ST*SRC##
+            # Dimension 12 state: *#22*WHERE*12*ST*SRC## or *#22*WHERE*#12*ST*SRC##
             if "12" in norm_parts and ("*12*" in msg_str or "*#12*" in msg_str):
                 try:
                     idx = norm_parts.index("12")
@@ -576,13 +576,13 @@ class MyHOMEMediaPlayer(MyHOMEEntity, MediaPlayerEntity, RestoreEntity):
                                 if src_code in SRC_MAP_INV:
                                     self._source = SRC_MAP_INV[src_code]
                                     self._refresh_media_title()
-                                    LOGGER.debug("[Filodiffusione %s] Sorgente sincronizzata da stato bus: %s", self._where, self._source)
+                                    LOGGER.debug("[Sound Zone %s] Source synchronized from bus state: %s", self._where, self._source)
                     self.async_write_ha_state()
                 except Exception as ex:
-                    LOGGER.debug("Errore parsing stato sorgente %s: %s", msg_str, ex)
+                    LOGGER.debug("Error parsing source state %s: %s", msg_str, ex)
 
-            # Comando o Evento con selezione/cambio sorgente (#4#SRC)
-            # es. *22*1#4#1*WHERE##, *22*22#4#1*WHERE##, *22*2#4#1*WHERE##, *22*0#4#0*WHERE##
+            # Command or event with source selection (#4#SRC)
+            # e.g. *22*1#4#1*WHERE##, *22*22#4#1*WHERE##, *22*2#4#1*WHERE##, *22*0#4#0*WHERE##
             elif "#4#" in msg_str:
                 try:
                     for part in clean:
@@ -594,30 +594,30 @@ class MyHOMEMediaPlayer(MyHOMEEntity, MediaPlayerEntity, RestoreEntity):
                                 self._state = MediaPlayerState.PLAYING
                                 self._source = SRC_MAP_INV[src_code]
                                 self._refresh_media_title()
-                                LOGGER.debug("[Sound Zone %s] Sorgente aggiornata da bus (#4#): %s", self._where, self._source)
+                                LOGGER.debug("[Sound Zone %s] Source updated from bus (#4#): %s", self._where, self._source)
                     self.async_write_ha_state()
                 except Exception as ex:
-                    LOGGER.debug("Errore parsing #4# sorgente %s: %s", msg_str, ex)
+                    LOGGER.debug("Error parsing #4# source %s: %s", msg_str, ex)
 
-            # Comando toggle sorgente generico (es. *22*22#4*WHERE## da tasto a muro)
+            # Generic source toggle command (e.g. *22*22#4*WHERE## from physical wall button)
             elif "#4" in msg_str:
                 try:
                     self.hass.async_create_task(self.async_update())
                 except Exception as ex:
-                    LOGGER.debug("Errore request update per #4: %s", ex)
+                    LOGGER.debug("Error requesting update for #4: %s", ex)
 
-            # Comando ON semplice: *22*1*WHERE## o *16*1*WHERE##
+            # Simple ON command: *22*1*WHERE## or *16*1*WHERE##
             elif msg_str.startswith(f"*22*1*{self._where}") or msg_str.startswith(f"*16*1*{self._where}"):
                 self._state = MediaPlayerState.PLAYING
                 self._refresh_media_title()
                 self.async_write_ha_state()
 
-            # Comando OFF semplice: *22*0*WHERE## o *16*0*WHERE##
+            # Simple OFF command: *22*0*WHERE## or *16*0*WHERE##
             elif msg_str.startswith(f"*22*0*{self._where}") or msg_str.startswith(f"*16*0*{self._where}"):
                 self._state = MediaPlayerState.OFF
                 self.async_write_ha_state()
 
-            # Stato Dimensione 1 (Volume): *#22*WHERE*1*VAL## oppure *#22*WHERE*#1*VAL##
+            # Dimension 1 state (Volume): *#22*WHERE*1*VAL## or *#22*WHERE*#1*VAL##
             elif "*1*" in msg_str or "*#1*" in msg_str:
                 try:
                     if "1" in norm_parts:
@@ -628,4 +628,4 @@ class MyHOMEMediaPlayer(MyHOMEEntity, MediaPlayerEntity, RestoreEntity):
                                 self._volume_level = round(val / 31.0, 2)
                                 self.async_write_ha_state()
                 except Exception as ex:
-                    LOGGER.debug("Errore parsing volume %s: %s", msg_str, ex)
+                    LOGGER.debug("Error parsing volume %s: %s", msg_str, ex)

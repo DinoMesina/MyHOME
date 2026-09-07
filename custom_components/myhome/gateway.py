@@ -179,7 +179,7 @@ class MyHOMEGatewayHandler:
                     await self.send_status_request(OWNCommand.parse("*#2*0##"))   # WHO 2: Automation / Covers
                     await self.send_status_request(OWNCommand.parse("*#4*0##"))   # WHO 4: Climate
                 except Exception as disc_err:
-                    LOGGER.debug("%s Errore invio richieste discovery: %s", self.log_id, disc_err)
+                    LOGGER.debug("%s Error sending discovery requests: %s", self.log_id, disc_err)
 
                 while not self._terminate_listener:
                     message = await _event_session.get_next()
@@ -252,7 +252,7 @@ class MyHOMEGatewayHandler:
                                                 notification_id=f"myhome_learned_{dev_id}"
                                             )
                                 except Exception as learn_ex:
-                                    LOGGER.debug("Errore auto-learning sound: %s", learn_ex)
+                                    LOGGER.debug("Error in sound auto-learning: %s", learn_ex)
 
                                 if "media_player" in self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS]:
                                     for dev_id, dev_data in self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS]["media_player"].items():
@@ -449,7 +449,7 @@ class MyHOMEGatewayHandler:
                                         who_prefix = "16"
 
                                     if who_prefix in ["22", "16"]:
-                                        LOGGER.info("%s [Sound Bus Sniffer] Ricevuto evento OpenWebNet: %s", self.log_id, msg_str)
+                                        LOGGER.info("%s [Sound Bus Sniffer] Received OpenWebNet event: %s", self.log_id, msg_str)
 
                                     for _platform in self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS]:
                                         if _platform == BUTTON:
@@ -464,8 +464,8 @@ class MyHOMEGatewayHandler:
                                             if combined_key in platform_devices and combined_key not in matched_keys:
                                                 matched_keys.append(combined_key)
 
-                                        # Per i messaggi Sound (WHO 22 / WHO 16), inoltra a tutte le zone media_player
-                                        # così che eventi Tuner (2#1) e cambi sorgente (#4#) siano ricevuti istantaneamente
+                                        # For Sound messages (WHO 22 / WHO 16), forward to all media_player zones
+                                        # so Tuner events (2#1) and source switches (#4#) are processed immediately
                                         if _platform == "media_player" and who_prefix in ["22", "16"]:
                                             for p_key in platform_devices:
                                                 if p_key not in matched_keys:
