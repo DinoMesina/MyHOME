@@ -136,6 +136,8 @@ action:
   - service: light.toggle
     target:
       entity_id: light.living_room_hue
+```
+
 ### 📊 MyHOME Monitor Card (Custom Lovelace Card)
 The integration comes with a built-in, beautifully styled Lovelace card: **MyHOME Monitor Card** (`custom:myhome-monitor-card`). It displays real-time connection status with animated badge, hardware/network parameters (IP, port, model, firmware, uptime, reconnects), and a clean responsive grid breaking down all configured devices on your SCS bus (Lights, Shutters, Climate, Switches, Sensors, and Scenarios).
 
