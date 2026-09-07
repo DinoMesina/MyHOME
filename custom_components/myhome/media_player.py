@@ -1,4 +1,5 @@
 """Support for MyHome sound diffusion (WHO 16 and WHO 22) media players."""
+import asyncio
 from homeassistant.components.media_player import (
     DOMAIN as PLATFORM,
     MediaPlayerEntity,
@@ -8,9 +9,12 @@ from homeassistant.components.media_player import (
 from homeassistant.const import (
     CONF_NAME,
     CONF_MAC,
+    CONF_ENTITIES,
 )
 
 from OWNd.message import OWNCommand, OWNMessage
+
+from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import (
     CONF_PLATFORMS,
@@ -28,14 +32,44 @@ from .myhome_device import MyHOMEEntity
 from .gateway import MyHOMEGatewayHandler
 
 
+SOURCES_WHO22 = {
+    "Radio FM (Tuner)": "7",
+    "Ingresso Locale AUX": "10",
+}
+
+# Mapping codici sorgente MyHome -> Nome sorgente Home Assistant
+SRC_MAP_INV = {
+    "7": "Radio FM (Tuner)",
+    "4": "Radio FM (Tuner)",
+    "1": "Radio FM (Tuner)",
+    "0": "Radio FM (Tuner)",
+    "2": "Ingresso Locale AUX",
+    "3": "Ingresso Locale AUX",
+    "10": "Ingresso Locale AUX",
+    "11": "Ingresso Locale AUX",
+    "12": "Ingresso Locale AUX",
+    "13": "Ingresso Locale AUX",
+}
+TUNER_WHERE = "2#1"
+
+# Registro dinamico dei preset radio (1..5) popolato dal bus OpenWebNet
+TUNER_PRESETS: dict[int, str | None] = {
+    1: None,
+    2: None,
+    3: None,
+    4: None,
+    5: None,
+}
+
+
 async def async_setup_entry(hass, config_entry, async_add_entities):
     if PLATFORM not in hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS]:
-        return True
+        hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS][PLATFORM] = {}
 
     _media_players = []
     _configured_players = hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS][PLATFORM]
 
-    for _player in _configured_players.keys():
+    for _player in list(_configured_players.keys()):
         _media_player = MyHOMEMediaPlayer(
             hass=hass,
             device_id=_player,
@@ -48,9 +82,67 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
             model=_configured_players[_player].get(CONF_DEVICE_MODEL, None),
             gateway=hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_ENTITY],
         )
+        if CONF_ENTITIES not in _configured_players[_player]:
+            _configured_players[_player][CONF_ENTITIES] = {}
+        _configured_players[_player][CONF_ENTITIES][PLATFORM] = _media_player
         _media_players.append(_media_player)
 
     async_add_entities(_media_players)
+
+    def async_add_new_player(dev_id: str, who: str, where: str, name: str = None):
+        """Dynamically add a new media player entity on the fly."""
+        if dev_id in _configured_players and PLATFORM in _configured_players[dev_id].get(CONF_ENTITIES, {}):
+            return _configured_players[dev_id][CONF_ENTITIES][PLATFORM]
+        if name is None:
+            name = f"Sound Zone {where}"
+        new_player = MyHOMEMediaPlayer(
+            hass=hass,
+            device_id=dev_id,
+            who=who,
+            where=where,
+            interface=None,
+            name=name,
+            entity_name=name,
+            manufacturer="BTicino S.p.A.",
+            model="F500N Sound Diffusion",
+            gateway=hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_ENTITY],
+        )
+        if dev_id not in _configured_players:
+            _configured_players[dev_id] = {
+                CONF_WHO: who,
+                CONF_WHERE: where,
+                CONF_NAME: name,
+                CONF_ENTITY_NAME: name,
+            }
+        if CONF_ENTITIES not in _configured_players[dev_id]:
+            _configured_players[dev_id][CONF_ENTITIES] = {}
+        _configured_players[dev_id][CONF_ENTITIES][PLATFORM] = new_player
+        async_add_entities([new_player])
+        LOGGER.info("Creato dinamicamente nuovo media_player: %s (%s)", name, where)
+        return new_player
+
+    hass.data[DOMAIN][config_entry.data[CONF_MAC]]["async_add_media_player"] = async_add_new_player
+
+    # Allineamento iniziale singolo al boot per il Tuner centrale e le zone
+    async def _initial_startup_query():
+        await asyncio.sleep(4)
+        gateway = hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_ENTITY]
+        try:
+            cmd = OWNCommand.parse(f"*#22*{TUNER_WHERE}*6##")
+            if cmd:
+                await gateway.send(cmd)
+            for player in _media_players:
+                await asyncio.sleep(0.2)
+                if player._who == "22":
+                    q_cmd = OWNCommand.parse(f"*#22*{player._where}*12##")
+                else:
+                    q_cmd = OWNCommand.parse(f"*#16*{player._where}##")
+                if q_cmd:
+                    await gateway.send(q_cmd)
+        except Exception as err:
+            LOGGER.debug("Errore query iniziale startup: %s", err)
+
+    hass.async_create_task(_initial_startup_query())
 
 
 async def async_unload_entry(hass, config_entry):
@@ -63,7 +155,7 @@ async def async_unload_entry(hass, config_entry):
         del hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS][PLATFORM][_player]
 
 
-class MyHOMEMediaPlayer(MyHOMEEntity, MediaPlayerEntity):
+class MyHOMEMediaPlayer(MyHOMEEntity, MediaPlayerEntity, RestoreEntity):
     """Representation of a MyHome Sound Diffusion entity."""
 
     def __init__(
@@ -90,174 +182,450 @@ class MyHOMEMediaPlayer(MyHOMEEntity, MediaPlayerEntity):
             model=model,
             gateway=gateway,
         )
-
-        self._attr_name = entity_name
-        self._interface = interface
-        self._full_where = f"{self._where}#4#{self._interface}" if self._interface is not None else self._where
-
-        # Supported features and attributes
-        self._attr_supported_features = (
+        self._who = str(who).replace("#", "")
+        self._where = str(where)
+        self._full_where = str(where)
+        self._gateway_handler = gateway
+        self._gateway = gateway
+        self._state = MediaPlayerState.OFF
+        self._volume_level = 0.5
+        self._source = "Radio FM (Tuner)"
+        self._tuner_preset = 1
+        self._tuner_freq = None
+        self._media_title = "Radio FM P1"
+        self._attr_should_poll = False
+        self._supported_features = (
             MediaPlayerEntityFeature.TURN_ON
             | MediaPlayerEntityFeature.TURN_OFF
+            | MediaPlayerEntityFeature.PLAY
+            | MediaPlayerEntityFeature.PAUSE
+            | MediaPlayerEntityFeature.STOP
             | MediaPlayerEntityFeature.VOLUME_SET
-            | MediaPlayerEntityFeature.VOLUME_MUTE
+            | MediaPlayerEntityFeature.VOLUME_STEP
+            | MediaPlayerEntityFeature.SELECT_SOURCE
+            | MediaPlayerEntityFeature.NEXT_TRACK
+            | MediaPlayerEntityFeature.PREVIOUS_TRACK
+            | MediaPlayerEntityFeature.PLAY_MEDIA
         )
 
-        if self._who == "16":
-            self._attr_supported_features |= MediaPlayerEntityFeature.SELECT_SOURCE
-            self._attr_source_list = ["Source 1", "Source 2", "Source 3", "Source 4"]
-        else:
-            self._attr_source_list = []
+    async def async_added_to_hass(self):
+        """When entity is added to hass, restore state and register."""
+        await super().async_added_to_hass()
+        last_state = await self.async_get_last_state()
+        if last_state:
+            if last_state.state in [MediaPlayerState.PLAYING, MediaPlayerState.ON, "playing", "on"]:
+                self._state = MediaPlayerState.PLAYING
+            elif last_state.state in [MediaPlayerState.OFF, "off"]:
+                self._state = MediaPlayerState.OFF
 
-        self._attr_state = MediaPlayerState.OFF
-        self._attr_source = None
-        self._attr_volume_level = 0.5  # default to 50%
-        self._hardware_volume = 15     # default hardware volume (middle of 0-31 range)
-        self._is_muted = False
-        self._pre_mute_volume = 15     # cached hardware volume level before mute
+            attrs = last_state.attributes
+            if "source" in attrs and attrs["source"]:
+                self._source = attrs["source"]
+            if "volume_level" in attrs and attrs["volume_level"] is not None:
+                self._volume_level = attrs["volume_level"]
+            if "media_title" in attrs and attrs["media_title"]:
+                self._media_title = attrs["media_title"]
+            if "radio_preset" in attrs and attrs["radio_preset"]:
+                self._tuner_preset = attrs["radio_preset"]
+            if "radio_frequenza" in attrs and attrs["radio_frequenza"]:
+                self._tuner_freq = attrs["radio_frequenza"]
+            self.async_write_ha_state()
+
+    def _refresh_media_title(self):
+        """Update media_title attribute based on current state, source, and tuner info."""
+        if self._source in ["Radio FM (Tuner)", "7", "4"]:
+            p_num = self._tuner_preset
+            p_str = f"P{p_num}" if p_num else ""
+            freq_str = self._tuner_freq or (TUNER_PRESETS.get(p_num) if p_num else None)
+
+            if p_str and freq_str:
+                self._media_title = f"Radio FM {p_str} - {freq_str}"
+            elif freq_str:
+                self._media_title = f"Radio FM - {freq_str}"
+            elif p_str:
+                self._media_title = f"Radio FM {p_str}"
+            else:
+                self._media_title = "Radio FM"
+        elif self._source:
+            self._media_title = self._source
 
     @property
-    def is_volume_muted(self) -> bool:
-        """Return True if volume is muted."""
-        return self._is_muted
+    def should_poll(self) -> bool:
+        return False
+
+    @property
+    def supported_features(self) -> MediaPlayerEntityFeature:
+        return self._supported_features
+
+    @property
+    def state(self) -> MediaPlayerState | None:
+        return self._state
+
+    @property
+    def volume_level(self) -> float | None:
+        return self._volume_level
+
+    @property
+    def source(self) -> str | None:
+        return self._source
+
+    @property
+    def source_list(self) -> list[str]:
+        if self._who == "22":
+            return list(SOURCES_WHO22.keys())
+        return ["Sorgente 1"]
+
+    @property
+    def media_title(self) -> str | None:
+        return self._media_title
+
+    @property
+    def extra_state_attributes(self):
+        cur_val = int(round((self._volume_level or 0) * 31))
+        attrs = {
+            "volume_bticino": cur_val,
+            "scala_volume": "1-31",
+        }
+        if self._source in ["Radio FM (Tuner)", "7", "4"]:
+            if self._tuner_preset:
+                attrs["radio_preset"] = self._tuner_preset
+            freq = self._tuner_freq or (TUNER_PRESETS.get(self._tuner_preset) if self._tuner_preset else None)
+            if freq:
+                attrs["radio_frequenza"] = freq
+            attrs["radio_presets"] = {
+                f"P{k}": (v if v else "Non sintonizzato")
+                for k, v in TUNER_PRESETS.items()
+            }
+        return attrs
 
     async def async_update(self):
-        """Update the entity state."""
-        # Query status: *#WHO*WHERE##
-        cmd = OWNCommand.parse(f"*#{self._who}*{self._full_where}##")
-        if cmd is not None:
-            await self._gateway_handler.send_status_request(cmd)
-            
-        # Query volume dimension if WHO 16: *#16*WHERE*1##
-        if self._who == "16":
-            vol_cmd = OWNCommand.parse(f"*#16*{self._full_where}*1##")
-            if vol_cmd is not None:
-                await self._gateway_handler.send_status_request(vol_cmd)
+        """Query actual zone state from the bus on startup or on demand."""
+        try:
+            if self._who == "22":
+                await self._send_own_command(f"*#22*{self._where}*12##")
+            else:
+                await self._send_own_command(f"*#16*{self._where}##")
+        except Exception as err:
+            LOGGER.debug("Errore query stato bus per %s: %s", self._where, err)
 
-    async def async_turn_on(self, **kwargs):  # pylint: disable=unused-argument
-        """Turn the sound diffusion zone on."""
-        if self._who == "16":
-            # Turn on using the active/cached source, default to Source 1
-            src_num = 1
-            if self._attr_source in self._attr_source_list:
-                src_num = self._attr_source_list.index(self._attr_source) + 1
-            cmd = OWNCommand.parse(f"*16*{10 + src_num}*{self._full_where}##")
+    async def _send_own_command(self, cmd_str: str):
+        """Send raw OpenWebNet command safely."""
+        try:
+            LOGGER.info("[Sound Zone %s] Invio comando OpenWebNet: %s", self._where, cmd_str)
+            cmd = OWNCommand.parse(cmd_str) or cmd_str
+            await self._gateway_handler.send(cmd)
+        except Exception as err:
+            LOGGER.error("Errore invio comando MyHome %s: %s", cmd_str, err)
+
+    async def async_turn_on(self, **kwargs):
+        """Turn the media player on."""
+        src_id = SOURCES_WHO22.get(self._source, "7")
+        if self._who == "22":
+            await self._send_own_command(f"*22*1#4#{src_id}*{self._where}##")
+            await self._send_own_command(f"*22*22#4#{src_id}*{self._where}##")
+            await self._send_own_command(f"*22*22#4#{src_id}*5#{self._where}##")
         else:
-            cmd = OWNCommand.parse(f"*22*1*{self._full_where}##")
-            
-        if cmd is not None:
-            await self._gateway_handler.send(cmd)
-
-    async def async_turn_off(self, **kwargs):  # pylint: disable=unused-argument
-        """Turn the sound diffusion zone off."""
-        if self._who == "16":
-            cmd = OWNCommand.parse(f"*16*10*{self._full_where}##")
+            cmd_str = f"*16*1*{self._where}##"
+            await self._send_own_command(cmd_str)
+        self._state = MediaPlayerState.PLAYING
+        if src_id not in ["4", "7"] and self._source:
+            self._media_title = self._source
         else:
-            cmd = OWNCommand.parse(f"*22*0*{self._full_where}##")
-            
-        if cmd is not None:
-            await self._gateway_handler.send(cmd)
+            self._refresh_media_title()
+        self.async_write_ha_state()
 
-    async def async_select_source(self, source):
-        """Select input source."""
-        if self._who == "16" and source in self._attr_source_list:
-            src_num = self._attr_source_list.index(source) + 1
-            # In WHO 16, sending *16*1X*WHERE## selects source X and turns on the zone
-            cmd = OWNCommand.parse(f"*16*{10 + src_num}*{self._full_where}##")
-            if cmd is not None:
-                await self._gateway_handler.send(cmd)
+    async def async_turn_off(self, **kwargs):
+        """Turn the media player off."""
+        if self._who == "22":
+            cmd_str = f"*22*0#4#0*{self._where}##"
+        else:
+            cmd_str = f"*16*0*{self._where}##"
+        await self._send_own_command(cmd_str)
+        self._state = MediaPlayerState.OFF
+        self.async_write_ha_state()
 
-    async def async_set_volume_level(self, volume):
-        """Set volume level, range 0..1."""
-        # Convert float (0..1) to hardware volume (0..31)
-        hardware_vol = int(volume * 31)
-        hardware_vol = max(0, min(31, hardware_vol))
-        
-        # Disable mute if setting volume to positive
-        if hardware_vol > 0 and self._is_muted:
-            self._is_muted = False
-            
-        cmd = OWNCommand.parse(f"*#16*{self._full_where}*#1*{hardware_vol}##")
-        if cmd is not None:
-            await self._gateway_handler.send(cmd)
+    async def async_media_play(self):
+        """Play media."""
+        await self.async_turn_on()
+
+    async def async_media_pause(self):
+        """Pause media."""
+        await self.async_turn_off()
+
+    async def async_media_stop(self):
+        """Stop media."""
+        await self.async_turn_off()
+
+    async def async_set_volume_level(self, volume: float):
+        """Set volume level (scaled 1..31)."""
+        val = max(1, min(31, int(round(volume * 31))))
+        self._volume_level = round(val / 31.0, 2)
+        if self._who == "22":
+            cmd_str = f"*#22*{self._where}*#1*{val}##"
+        else:
+            cmd_str = f"*#16*{self._where}*#1*{val}##"
+        await self._send_own_command(cmd_str)
+        self.async_write_ha_state()
 
     async def async_volume_up(self):
-        """Step volume up."""
-        # Increase hardware volume by 2 steps
-        new_hw_vol = min(31, self._hardware_volume + 2)
-        await self.async_set_volume_level(new_hw_vol / 31.0)
+        """Turn volume up for media player."""
+        cmd_str = f"*22*3#1*{self._where}##" if self._who == "22" else f"*16*3#1*{self._where}##"
+        await self._send_own_command(cmd_str)
+        if self._volume_level is not None:
+            cur_val = int(round(self._volume_level * 31))
+            new_val = min(31, cur_val + 1)
+            self._volume_level = round(new_val / 31.0, 2)
+        self.async_write_ha_state()
 
     async def async_volume_down(self):
-        """Step volume down."""
-        # Decrease hardware volume by 2 steps
-        new_hw_vol = max(0, self._hardware_volume - 2)
-        await self.async_set_volume_level(new_hw_vol / 31.0)
+        """Turn volume down for media player."""
+        cmd_str = f"*22*4#1*{self._where}##" if self._who == "22" else f"*16*4#1*{self._where}##"
+        await self._send_own_command(cmd_str)
+        if self._volume_level is not None:
+            cur_val = int(round(self._volume_level * 31))
+            new_val = max(1, cur_val - 1)
+            self._volume_level = round(new_val / 31.0, 2)
+        self.async_write_ha_state()
 
-    async def async_mute_volume(self, mute):
-        """Mute/unmute volume (Emulated)."""
-        if mute:
-            if not self._is_muted:
-                self._pre_mute_volume = self._hardware_volume
-                self._is_muted = True
-                # Set volume to 0 to emulate mute
-                cmd = OWNCommand.parse(f"*#16*{self._full_where}*#1*0##")
-                if cmd is not None:
-                    await self._gateway_handler.send(cmd)
+    async def async_media_next_track(self):
+        """Next radio preset station (P1 -> P2 -> P3 -> P4 -> P5 -> P1)."""
+        cmd_str = f"*22*11#1*{TUNER_WHERE}##"
+        await self._send_own_command(cmd_str)
+
+    async def async_media_previous_track(self):
+        """Previous radio preset station (P1 -> P5 -> P4 -> P3 -> P2 -> P1)."""
+        cmd_str = f"*22*12#1*{TUNER_WHERE}##"
+        await self._send_own_command(cmd_str)
+
+    async def async_seek_up(self):
+        """Scan forward to the next radio station with a strong signal (Seek Up)."""
+        cmd_str = f"*22*13#1*{TUNER_WHERE}##"
+        await self._send_own_command(cmd_str)
+
+    async def async_seek_down(self):
+        """Scan backward to the previous radio station with a strong signal (Seek Down)."""
+        cmd_str = f"*22*14#1*{TUNER_WHERE}##"
+        await self._send_own_command(cmd_str)
+
+    async def _tune_frequency(self, freq_float: float):
+        """Tune specific frequency float and broadcast to tuner."""
+        self._tuner_freq = f"{freq_float:.1f} MHz"
+        matched_preset = None
+        for p_num, p_freq in TUNER_PRESETS.items():
+            if p_freq == self._tuner_freq:
+                matched_preset = p_num
+                break
+        self._tuner_preset = matched_preset
+        self._refresh_media_title()
+        self.async_write_ha_state()
+
+        freq_code = int(round(freq_float * 10))
+        cmd_str = f"*#22*{TUNER_WHERE}*#5*1*{freq_code}##"
+        await self._send_own_command(cmd_str)
+
+    async def async_play_media(self, media_type: str, media_id: str, **kwargs):
+        """Play radio preset, scan for next/previous station, or tune specific frequency."""
+        media_type_l = (media_type or "").lower()
+        media_id_str = str(media_id).strip()
+
+        # 1. Scansione automatica emittenti (Seek Up / Seek Down)
+        if media_type_l in ["scan", "seek", "search", "step", "frequency_step", "tune_step"]:
+            if media_id_str.lower() in ["up", "+", "+1", "next", "forward", "seek_up", "scan_up", "+0.1"]:
+                await self.async_seek_up()
+                return
+            elif media_id_str.lower() in ["down", "-", "-1", "prev", "previous", "backward", "seek_down", "scan_down", "-0.1"]:
+                await self.async_seek_down()
+                return
+
+        # 2. Selezione diretta preset (es. media_type='preset' o media_id='1'..'5' o 'P1'..'P5')
+        p_clean = media_id_str.upper().replace("P", "").strip()
+        if media_type_l in ["preset", "channel", "track"] or (p_clean.isdigit() and 1 <= int(p_clean) <= 5 and "." not in media_id_str):
+            p_val = int(p_clean)
+            self._tuner_preset = p_val
+            stored_freq = TUNER_PRESETS.get(p_val)
+            if stored_freq:
+                self._tuner_freq = stored_freq
+            self._refresh_media_title()
+            self.async_write_ha_state()
+            cmd_str = f"*#22*{TUNER_WHERE}*#6*{p_val}##"
+            await self._send_own_command(cmd_str)
+            return
+
+        # 3. Sintonizzazione frequenza numerica diretta (es. media_type='frequency' o media_id='95.2' o '102.5 MHz')
+        f_clean = media_id_str.upper().replace("MHZ", "").strip()
+        try:
+            f_float = float(f_clean)
+            if 87.0 <= f_float <= 108.5:
+                await self._tune_frequency(f_float)
+        except ValueError:
+            LOGGER.warning("Formato media_id frequenza non riconosciuto: %s", media_id)
+
+    async def async_select_source(self, source: str):
+        """Select input source directly via verified 3-frame sequence with bus timing."""
+        self._source = source
+        if self._who == "22":
+            src_num = "1" if source == "Radio FM (Tuner)" else "2"
+            if self._state != MediaPlayerState.PLAYING:
+                await self._send_own_command(f"*22*1*{self._where}##")
+                await asyncio.sleep(0.15)
+                self._state = MediaPlayerState.PLAYING
+
+            await self._send_own_command(f"*22*22#4#7*5#{self._where}##")
+            await asyncio.sleep(0.18)
+            await self._send_own_command(f"*22*22#4#7*2#{src_num}##")
+            await asyncio.sleep(0.18)
+            await self._send_own_command(f"*22*2#4#7*5#2#{src_num}##")
         else:
-            if self._is_muted:
-                self._is_muted = False
-                # Restore pre-mute volume
-                cmd = OWNCommand.parse(f"*#16*{self._full_where}*#1*{self._pre_mute_volume}##")
-                if cmd is not None:
-                    await self._gateway_handler.send(cmd)
+            src_id = "1" if source == "Radio FM (Tuner)" else "2"
+            await self._send_own_command(f"*16*1#{src_id}*{self._where}##")
+            self._state = MediaPlayerState.PLAYING
 
-    def handle_event(self, message: OWNMessage):
-        """Handle an event message."""
-        LOGGER.info(
-            "%s Sound Diffusion event: %s",
-            self._gateway_handler.log_id,
-            message,
-        )
-        
-        # 1. Parse ON/OFF and Source events
-        if hasattr(message, "what") and message.what is not None:
-            what = str(message.what)
-            
-            # WHO 16 parsing
-            if self._who == "16":
-                if what == "10":
-                    self._attr_state = MediaPlayerState.OFF
-                elif what in ["11", "12", "13", "14"]:
-                    self._attr_state = MediaPlayerState.ON
-                    src_num = int(what) - 10
-                    self._attr_source = f"Source {src_num}"
-            # WHO 22 parsing
-            elif self._who == "22":
-                if what == "0":
-                    self._attr_state = MediaPlayerState.OFF
-                elif what == "1":
-                    self._attr_state = MediaPlayerState.ON
+        self._refresh_media_title()
+        self.async_write_ha_state()
 
-        # 2. Parse Absolute Volume dimension: *#16*WHERE*1*VOL## or *#22*WHERE*1*VOL##
-        # When a dimension message is parsed, it might be an OWNMessage with dimension properties.
-        # OpenWebNet format for dimension value feedback is: *#WHO*WHERE*1*VOL## (where 1 is the volume dimension)
-        # We can extract the volume value by parsing raw message string or checking properties.
-        # Let's write a regex/string match to extract absolute volume from message frames
-        msg_str = str(message)
-        if "*#" in msg_str:
-            # Format: *#16*WHERE*1*VOL## or similar
-            import re
-            match = re.match(r"\*#(?:16|22)\*(\d+)\*1\*(\d+)##", msg_str)
-            if match:
-                # Extract volume (0-31 scale)
-                vol_val = int(match.group(2))
-                self._hardware_volume = vol_val
-                self._attr_volume_level = vol_val / 31.0
-                
-                # Update muted flag based on volume state
-                if vol_val == 0:
-                    self._is_muted = True
-                else:
-                    self._is_muted = False
+    def handle_event(self, event):
+        """Handle status update from the bus."""
+        msg_str = str(event)
+        LOGGER.debug("%s [Sound Zone %s] Ricevuto evento bus: %s", self._gateway.log_id, self._where, msg_str)
 
-        self.async_schedule_update_ha_state()
+        # 0. Sincronizzazione commutazione sorgente (Tuner 2#1 vs AUX 2#2)
+        if ("*2#1##" in msg_str or "*5#2#1##" in msg_str) and "*22*" in msg_str:
+            self._source = "Radio FM (Tuner)"
+            self._refresh_media_title()
+            self.async_write_ha_state()
+            return
+        elif ("*2#2##" in msg_str or "*5#2#2##" in msg_str) and "*22*" in msg_str:
+            self._source = "Ingresso Locale AUX"
+            self._refresh_media_title()
+            self.async_write_ha_state()
+            return
+
+        # 1. Messaggio Frequenza dal Tuner (Dimensione 5: *#22*5#2#1*5*1*<freq>## o *#22*2#1*5*1*<freq>##)
+        if ("*5*1*" in msg_str or "*#5*1*" in msg_str) and ("*22*" in msg_str or "*#22*" in msg_str):
+            try:
+                # Estraiamo i blocchi delimitati da '*'
+                parts = [p for p in msg_str.strip("#").split("*") if p]
+                # Se è Dimensione 5 (scrittura o lettura frequenza)
+                if len(parts) >= 4:
+                    val_str = parts[-1]
+                    if val_str.isdigit():
+                        freq_val = int(val_str)
+                        freq_str = None
+                        if 870 <= freq_val <= 1085:
+                            freq_str = f"{freq_val / 10.0:.1f} MHz"
+                        elif 8700 <= freq_val <= 10850:
+                            f_float = freq_val / 100.0
+                            freq_str = f"{f_float:.2f}".rstrip("0").rstrip(".") + " MHz" if (freq_val % 10 != 0) else f"{f_float:.1f} MHz"
+                        elif 87000 <= freq_val <= 108500:
+                            f_float = freq_val / 1000.0
+                            freq_str = f"{f_float:.2f}".rstrip("0").rstrip(".") + " MHz" if (freq_val % 100 != 0) else f"{f_float:.1f} MHz"
+
+                        if freq_str:
+                            self._tuner_freq = freq_str
+                            if self._tuner_preset and 1 <= self._tuner_preset <= 5:
+                                TUNER_PRESETS[self._tuner_preset] = freq_str
+                            else:
+                                for p_num, p_freq in TUNER_PRESETS.items():
+                                    if p_freq == freq_str:
+                                        self._tuner_preset = p_num
+                                        break
+                            self._refresh_media_title()
+                            self.async_write_ha_state()
+            except Exception as ex:
+                LOGGER.debug("Errore parsing frequenza %s: %s", msg_str, ex)
+
+        # 2. Messaggio Preset dal Tuner (Dimensione 6: *#22*2#1*6*<preset>## o *#22*2#1*#6*<preset>##)
+        elif ("*6*" in msg_str or "*#6*" in msg_str) and ("*2#1" in msg_str or "*5#2#1" in msg_str):
+            try:
+                parts = [p for p in msg_str.strip("#").split("*") if p]
+                if parts:
+                    last_val = parts[-1]
+                    if last_val.isdigit():
+                        preset_val = int(last_val)
+                        if 1 <= preset_val <= 5:
+                            self._tuner_preset = preset_val
+                            stored_freq = TUNER_PRESETS.get(preset_val)
+                            if stored_freq:
+                                self._tuner_freq = stored_freq
+                            self._refresh_media_title()
+                            self.async_write_ha_state()
+                        elif preset_val == 0:
+                            self._tuner_preset = None
+                            self._refresh_media_title()
+                            self.async_write_ha_state()
+            except Exception as ex:
+                LOGGER.debug("Errore parsing preset %s: %s", msg_str, ex)
+
+        # 3. Messaggi destinati all'amplificatore di questa stanza
+        if self._where in msg_str or self._full_where in msg_str:
+            clean = msg_str.strip("#").split("*")
+            norm_parts = [p.replace("#", "") for p in clean if p]
+
+            # Stato Dimensione 12: *#22*WHERE*12*ST*SRC## oppure *#22*WHERE*#12*ST*SRC##
+            if "12" in norm_parts and ("*12*" in msg_str or "*#12*" in msg_str):
+                try:
+                    idx = norm_parts.index("12")
+                    if len(norm_parts) > idx + 1:
+                        st = norm_parts[idx + 1]
+                        if st == "0":
+                            self._state = MediaPlayerState.OFF
+                        elif st == "1":
+                            self._state = MediaPlayerState.PLAYING
+                            if len(norm_parts) > idx + 2:
+                                src_code = norm_parts[idx + 2]
+                                if src_code in SRC_MAP_INV:
+                                    self._source = SRC_MAP_INV[src_code]
+                                    self._refresh_media_title()
+                                    LOGGER.debug("[Filodiffusione %s] Sorgente sincronizzata da stato bus: %s", self._where, self._source)
+                    self.async_write_ha_state()
+                except Exception as ex:
+                    LOGGER.debug("Errore parsing stato sorgente %s: %s", msg_str, ex)
+
+            # Comando o Evento con selezione/cambio sorgente (#4#SRC)
+            # es. *22*1#4#1*WHERE##, *22*22#4#1*WHERE##, *22*2#4#1*WHERE##, *22*0#4#0*WHERE##
+            elif "#4#" in msg_str:
+                try:
+                    for part in clean:
+                        if "#4#" in part:
+                            src_code = part.split("#")[-1]
+                            if src_code == "0":
+                                self._state = MediaPlayerState.OFF
+                            elif src_code in SRC_MAP_INV:
+                                self._state = MediaPlayerState.PLAYING
+                                self._source = SRC_MAP_INV[src_code]
+                                self._refresh_media_title()
+                                LOGGER.debug("[Sound Zone %s] Sorgente aggiornata da bus (#4#): %s", self._where, self._source)
+                    self.async_write_ha_state()
+                except Exception as ex:
+                    LOGGER.debug("Errore parsing #4# sorgente %s: %s", msg_str, ex)
+
+            # Comando toggle sorgente generico (es. *22*22#4*WHERE## da tasto a muro)
+            elif "#4" in msg_str:
+                try:
+                    self.hass.async_create_task(self.async_update())
+                except Exception as ex:
+                    LOGGER.debug("Errore request update per #4: %s", ex)
+
+            # Comando ON semplice: *22*1*WHERE## o *16*1*WHERE##
+            elif msg_str.startswith(f"*22*1*{self._where}") or msg_str.startswith(f"*16*1*{self._where}"):
+                self._state = MediaPlayerState.PLAYING
+                self._refresh_media_title()
+                self.async_write_ha_state()
+
+            # Comando OFF semplice: *22*0*WHERE## o *16*0*WHERE##
+            elif msg_str.startswith(f"*22*0*{self._where}") or msg_str.startswith(f"*16*0*{self._where}"):
+                self._state = MediaPlayerState.OFF
+                self.async_write_ha_state()
+
+            # Stato Dimensione 1 (Volume): *#22*WHERE*1*VAL## oppure *#22*WHERE*#1*VAL##
+            elif "*1*" in msg_str or "*#1*" in msg_str:
+                try:
+                    if "1" in norm_parts:
+                        idx = norm_parts.index("1")
+                        if len(norm_parts) > idx + 1:
+                            val = int(norm_parts[idx + 1])
+                            if 1 <= val <= 31:
+                                self._volume_level = round(val / 31.0, 2)
+                                self.async_write_ha_state()
+                except Exception as ex:
+                    LOGGER.debug("Errore parsing volume %s: %s", msg_str, ex)
