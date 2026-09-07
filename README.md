@@ -1,7 +1,8 @@
 # MyHOME (Modernized Fork)
-**Version: v0.4.11**
+**Version: v0.4.12**
 
 ## 🌟 Changelog
+* **v0.4.12**: **Documentation Update:** Added explicit instructions on how to migrate from the original `anotherjulien/MyHOME` integration without losing entities or configuration.
 * **v0.4.11**: **Startup Crash Fix!** Fixed a critical `KeyError: entities` and `KeyError: entity_name` crash during startup on Home Assistant 2024.x when devices were configured via `myhome.yaml`. This was caused by the Voluptuous validation library silently bypassing our schema defaults during dictionary unwrapping. All schemas are now explicitly enforced.
 * **v0.4.10**: **Climate HVAC Action Fix!** Fixed a bug where `hvac_action` would constantly show as `idle` when actuator frames were received for zones that support both heating and cooling. Actuator frames (unlike valve frames) do not explicitly specify if they are heating or cooling, so the integration now correctly infers the action from the current `hvac_mode`.
 * **v0.4.9**: **Diagnostic Frames Interception Fix!** Fixed a bug where diagnostic frames (`*#1001*` for lights and `*#1004*` for climate) were not properly intercepted because the `OWNd` library parses them into a generic `OWNEvent` object, skipping the raw string interception logic. The integration now correctly handles these objects and queries the gateway for the standard status.
@@ -115,6 +116,20 @@ action:
 3. Add the URL of this repository: `https://github.com/mantovanellimatteo/MyHOME` as an **Integration**.
 4. Click **Download**.
 5. Restart Home Assistant.
+
+### Migrating from the Original Integration (`anotherjulien`)
+If you are already using the original `anotherjulien/MyHOME` integration and want to switch to this fork **without losing your entities, historical data, or breaking your automations**, you can do so safely. 
+Because this fork maintains the same `DOMAIN` and `unique_id` generation logic, it functions as a drop-in replacement.
+
+**Zero-Problem Migration Steps:**
+1. **⚠️ IMPORTANT:** Do **NOT** delete the integration from the *Settings -> Devices & Services* page in Home Assistant. Doing so will permanently wipe your entities!
+2. Open **HACS** and go to **Integrations**.
+3. Click the three dots in the top-right corner and select **Custom repositories**.
+4. Add `https://github.com/mantovanellimatteo/MyHOME` with the category **Integration**.
+5. Once the repository is added, click on it and hit **Download**. HACS will simply overwrite the old files in the `custom_components/myhome` folder with the new ones.
+6. **Restart** Home Assistant.
+
+Your setup will boot up exactly as it was, but running the new codebase. You can verify the installation by checking for the new `MyHOME` options and discovery menus under *Settings -> Devices & Services*.
 
 ---
 
