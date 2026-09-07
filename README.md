@@ -3,9 +3,11 @@
 </p>
 
 # MyHOME (Modernized Fork)
-**Version: v1.2.1**
+**Version: v1.2.2**
 
 ## 🌟 Changelog
+* **v1.2.2**: **Transparent Icon Corners (Clean Alpha Channel)!**
+  - **Alpha Channel Fix**: Converted icon assets to 32-bit RGBA with smooth anti-aliased transparency on the outer corners. Eliminates the white square corner artifacts on dark and custom Home Assistant themes.
 * **v1.2.1**: **HACS & Native Home Assistant Brand Asset Fix!**
   - **HACS Markdown Rendering Fix**: Switched README image URLs to absolute GitHub raw links so logos and screenshots render properly inside HACS without broken image icons.
   - **Native Local Brand Packaging**: Packaged official brand icons inside `custom_components/myhome/brand/` ensuring Home Assistant Core automatically loads and serves the custom integration icon and logo locally under *Settings > Devices & Services*.
