@@ -148,10 +148,17 @@ Your setup will boot up exactly as it was, but running the new codebase. You can
 
 ## Configuration
 
+### Zero-Knowledge Onboarding Wizard
 1. In Home Assistant, go to **Settings** > **Devices & Services**.
 2. Click **Add Integration** and search for **MyHOME**.
-3. Fill in your gateway's IP address, port (`20000`), and your OpenWebNet password.
-4. Once added, click **Configure** on the MyHOME card to access gateway settings, run an Active Scan, or start Passive Sniffing.
+3. Your gateway will be automatically discovered on your local network. Simply select it, or toggle **🤓 NERD MODE** if you wish to configure your IP, port, MAC, and model manually.
+4. Choose whether to perform a high-speed active bus scan (~4-7s) and/or import your existing `myhome.yaml` file with one click!
+
+<p align="center">
+  <img src="images/onboarding_wizard.png" alt="MyHOME Zero-Knowledge Wizard" width="600">
+</p>
+
+Once added, you can also click **Configure** on the MyHOME card at any time to access gateway settings, run an Active Scan, or start Passive Sniffing.
 
 ### YAML Configuration (Optional)
 If you wish to configure devices manually using YAML, create a file named `myhome.yaml` in your Home Assistant configuration directory (e.g., `/config/` or `/homeassistant/` depending on your setup):
