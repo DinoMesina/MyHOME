@@ -1,8 +1,8 @@
 # MyHOME (Modernized Fork)
-**Version: v0.4.13**
+**Version: v0.5.0**
 
 ## 🌟 Changelog
-* **v0.4.13**: **New Feature!** Added a "Import from YAML" button to the Config Flow options. Users can now securely migrate all their `myhome.yaml` configuration into the UI with one click. The script automatically converts the entities and renames the YAML file to `myhome.yaml.old` to prevent conflicts.
+* **v0.5.0**: **New Feature!** Added a "Import from YAML" button to the Config Flow options. Users can now securely migrate all their `myhome.yaml` configuration into the UI with one click. The script automatically converts the entities and renames the YAML file to `myhome.yaml.old` to prevent conflicts.
 * **v0.4.12**: **Documentation Update:** Added explicit instructions on how to migrate from the original `anotherjulien/MyHOME` integration without losing entities or configuration.
 * **v0.4.11**: **Startup Crash Fix!** Fixed a critical `KeyError: entities` and `KeyError: entity_name` crash during startup on Home Assistant 2024.x when devices were configured via `myhome.yaml`. This was caused by the Voluptuous validation library silently bypassing our schema defaults during dictionary unwrapping. All schemas are now explicitly enforced.
 * **v0.4.10**: **Climate HVAC Action Fix!** Fixed a bug where `hvac_action` would constantly show as `idle` when actuator frames were received for zones that support both heating and cooling. Actuator frames (unlike valve frames) do not explicitly specify if they are heating or cooling, so the integration now correctly infers the action from the current `hvac_mode`.
