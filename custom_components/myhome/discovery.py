@@ -8,6 +8,8 @@ from OWNd.message import OWNMessage
 
 from .const import LOGGER
 
+import re
+
 async def async_scan_bus(gateway, who: str, addresses: List[str]) -> List[str]:
     """Scan a list of addresses on the OpenWebNet bus for a specific WHO."""
     session = OWNCommandSession(gateway=gateway, logger=LOGGER)
@@ -18,48 +20,57 @@ async def async_scan_bus(gateway, who: str, addresses: List[str]) -> List[str]:
     discovered = []
     try:
         for addr in addresses:
+            # Drain any stale frames from previous queries
+            while True:
+                try:
+                    await asyncio.wait_for(session._stream_reader.readuntil(OWNSession.SEPARATOR), timeout=0.01)
+                except asyncio.TimeoutError:
+                    break
+
             cmd = f"*#{who}*{addr}##"
             session._stream_writer.write(cmd.encode())
             await session._stream_writer.drain()
-            
+
+            has_state = False
+            deadline = asyncio.get_event_loop().time() + 0.08
             try:
-                # Rapid read with short timeout since gateway responds instantly on local network
-                raw_response = await asyncio.wait_for(
-                    session._stream_reader.readuntil(OWNSession.SEPARATOR),
-                    timeout=0.15
-                )
-                resp = raw_response.decode()
-                
-                is_nack = "*#*0##" in resp
-                has_state = f"*{who}*" in resp
-                
-                # Consume extra frames until we get STATE or NACK
-                while not (has_state or is_nack):
-                    try:
-                        raw_response = await asyncio.wait_for(
-                            session._stream_reader.readuntil(OWNSession.SEPARATOR),
-                            timeout=0.1
-                        )
-                        resp = raw_response.decode()
-                        if "*#*0##" in resp:
-                            is_nack = True
-                        if f"*{who}*" in resp:
-                            has_state = True
-                    except asyncio.TimeoutError:
+                while asyncio.get_event_loop().time() < deadline:
+                    remaining = max(0.005, deadline - asyncio.get_event_loop().time())
+                    raw_response = await asyncio.wait_for(
+                        session._stream_reader.readuntil(OWNSession.SEPARATOR),
+                        timeout=remaining
+                    )
+                    frame = raw_response.decode().strip()
+
+                    # Strictly verify that the frame belongs to THIS who AND THIS addr
+                    if who == "1" and re.match(rf"^\*1\*[0-9#]+\*{re.escape(addr)}##$", frame):
+                        has_state = True
+                    elif who == "2" and re.match(rf"^\*2\*[0-9#]+\*{re.escape(addr)}##$", frame):
+                        has_state = True
+                    elif who == "4" and (re.match(rf"^\*#?4\*[0-9#]+\*{re.escape(addr)}.*##$", frame) or re.match(rf"^\*4\*[0-9#]+\*{re.escape(addr)}##$", frame)):
+                        has_state = True
+                    elif who in ("16", "22") and re.match(rf"^\*#?{who}\*.*{re.escape(addr)}.*##$", frame):
+                        has_state = True
+
+                    if frame in ("*#*0##", "*#*1##"):
                         break
-                
-                if has_state:
-                    discovered.append(addr)
-                    LOGGER.debug("Discovered device at WHO %s, WHERE %s", who, addr)
             except asyncio.TimeoutError:
-                # Timeout means no device exists at this address
-                continue
+                pass
             except Exception as err:
                 LOGGER.warning("Error scanning address %s: %s", addr, err)
                 continue
+
+            if has_state:
+                discovered.append(addr)
+                LOGGER.info("Discovered device at WHO %s, WHERE %s", who, addr)
+
+            await asyncio.sleep(0.005)
     finally:
-        await session.close()
-        
+        try:
+            await session.close()
+        except Exception:
+            pass
+
     return discovered
 
 async def async_sniff_bus(gateway, duration_seconds: int) -> Dict[str, Dict[str, dict]]:
@@ -123,18 +134,22 @@ async def async_sniff_bus(gateway, duration_seconds: int) -> Dict[str, Dict[str,
         
     return discovered
 
-async def async_discover_all_devices(gateway) -> Dict[str, Dict[str, dict]]:
+async def async_discover_all_devices(gateway, quick: bool = False) -> Dict[str, Dict[str, dict]]:
     """Perform an active scan of all possible bus addresses for lights, covers, and climate."""
     discovered = {}
     
-    # 1. Generate addresses 11 to 99 (no 0s in standard point-to-point)
-    ptp_addresses = []
-    for a in range(1, 10):
-        for pl in range(1, 10):
-            ptp_addresses.append(f"{a}{pl}")
-            
-    # 2. Climate zones 1 to 99
-    climate_addresses = [str(z) for z in range(1, 100)]
+    if quick:
+        ptp_addresses = []
+        for a in range(1, 6):
+            for pl in range(1, 10):
+                ptp_addresses.append(f"{a}{pl}")
+        climate_addresses = [str(z) for z in range(1, 5)]
+    else:
+        ptp_addresses = []
+        for a in range(1, 10):
+            for pl in range(1, 10):
+                ptp_addresses.append(f"{a}{pl}")
+        climate_addresses = [str(z) for z in range(1, 100)]
     
     # Lights (WHO = 1)
     LOGGER.info("Starting active bus scan for Lights...")
@@ -176,37 +191,38 @@ async def async_discover_all_devices(gateway) -> Dict[str, Dict[str, dict]]:
                 "name": f"Zone {addr}"
             }
             
-    # Sound Diffusion (WHO = 16)
-    LOGGER.info("Starting active bus scan for Sound Diffusion zones (WHO 16)...")
-    # WHO 16 addresses: single digit 1-9, two-digit 11-99, and stereo amplifier zones 110-149
-    audio_addresses = [str(a) for a in range(1, 10)] + ptp_addresses
-    for zone in range(11, 15):
-        for sub in range(0, 10):
-            audio_addresses.append(f"{zone}{sub}")
-            
-    audio_zones = await async_scan_bus(gateway, "16", audio_addresses)
-    if audio_zones:
-        discovered["media_player"] = {}
-        for addr in audio_zones:
-            dev_id = f"16-{addr}"
-            discovered["media_player"][dev_id] = {
-                "who": "16",
-                "where": addr,
-                "name": f"Sound Zone {addr}"
-            }
-
-    # Sound Diffusion (WHO = 22)
-    LOGGER.info("Starting active bus scan for Sound Diffusion zones (WHO 22)...")
-    audio_zones_22 = await async_scan_bus(gateway, "22", ptp_addresses)
-    if audio_zones_22:
-        if "media_player" not in discovered:
+    if not quick:
+        # Sound Diffusion (WHO = 16)
+        LOGGER.info("Starting active bus scan for Sound Diffusion zones (WHO 16)...")
+        # WHO 16 addresses: single digit 1-9, two-digit 11-99, and stereo amplifier zones 110-149
+        audio_addresses = [str(a) for a in range(1, 10)] + ptp_addresses
+        for zone in range(11, 15):
+            for sub in range(0, 10):
+                audio_addresses.append(f"{zone}{sub}")
+                
+        audio_zones = await async_scan_bus(gateway, "16", audio_addresses)
+        if audio_zones:
             discovered["media_player"] = {}
-        for addr in audio_zones_22:
-            dev_id = f"22-{addr}"
-            discovered["media_player"][dev_id] = {
-                "who": "22",
-                "where": addr,
-                "name": f"Sound Zone {addr}"
-            }
+            for addr in audio_zones:
+                dev_id = f"16-{addr}"
+                discovered["media_player"][dev_id] = {
+                    "who": "16",
+                    "where": addr,
+                    "name": f"Sound Zone {addr}"
+                }
+
+        # Sound Diffusion (WHO = 22)
+        LOGGER.info("Starting active bus scan for Sound Diffusion zones (WHO 22)...")
+        audio_zones_22 = await async_scan_bus(gateway, "22", ptp_addresses)
+        if audio_zones_22:
+            if "media_player" not in discovered:
+                discovered["media_player"] = {}
+            for addr in audio_zones_22:
+                dev_id = f"22-{addr}"
+                discovered["media_player"][dev_id] = {
+                    "who": "22",
+                    "where": addr,
+                    "name": f"Sound Zone {addr}"
+                }
             
     return discovered

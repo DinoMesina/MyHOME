@@ -4,33 +4,73 @@
     "flow_title": "Gateway MyHome {name} ({host})",
     "step": {
       "user": {
-        "title": "Scegli il tuo gateway \"MyHome\"",
+        "title": "\ud83e\ude84 Collega il tuo Gateway MyHOME",
+        "description": "\ud83e\ude84 **Modalit\u00e0 Zero-Knowledge:** Il tuo gateway viene rilevato automaticamente sulla rete locale.\n\nAttiva la **MODALIT\u00c0 NERD \ud83e\udd13** se desideri configurare manualmente indirizzo IP, porta, indirizzo MAC e modello.",
         "data": {
-          "host": "Indirizzo Ip"
+          "gateway_select": "\ud83c\udfe0 Gateway Rilevato",
+          "nerd_mode": "\ud83e\udd13 MODALIT\u00c0 NERD (Configurazione manuale)"
+        },
+        "data_description": {
+          "gateway_select": "Seleziona il gateway MyHOME trovato automaticamente sulla tua rete locale.",
+          "nerd_mode": "Abilita questo interruttore se desideri inserire a mano tutti i parametri tecnici del gateway (IP, Porta, MAC, Modello)."
         }
       },
       "port": {
-        "title": "Porta del Gateway",
-        "description": "Inserisci la porta utilizzata per la comunicazione OpenWebNet con il gateway {name} {host}",
+        "title": "\ud83d\udd0c Porta del Gateway",
+        "description": "Inserisci la porta utilizzata per la comunicazione OpenWebNet con il gateway {name} ({host})",
         "data": {
-          "port": "Porta"
+          "port": "\ud83d\udd0c Porta"
         }
       },
       "password": {
-        "title": "Porta del Gateway",
-        "description": "Inserisci la password OpenWebNet per il gateway {name} {host}",
+        "title": "\ud83d\udd11 Password del Gateway",
+        "description": "Inserisci la password OpenWebNet per il gateway {name} ({host}).\n\n*(Lascia vuoto o inserisci la password solo se richiesta dal tuo gateway)*",
         "data": {
-          "password": "Password"
+          "password": "\ud83d\udd11 Password"
         }
       },
       "custom": {
-        "title": "Inserimento manuale gateway",
-        "description": "Compila con le impostazioni del tuo gateway",
+        "title": "\ud83e\udd13 Configurazione Manuale (Modalit\u00e0 Nerd)",
+        "description": "Hai il controllo completo su tutti i parametri del tuo gateway OpenWebNet.",
         "data": {
-          "address": "Indirizzo IP",
-          "port": "Porta",
-          "serialNumber": "Indirizzo MAC",
-          "modelName": "Tipo di gateway"
+          "address": "\ud83c\udf10 Indirizzo IP Gateway",
+          "port": "\ud83d\udd0c Porta OpenWebNet",
+          "serialNumber": "\ud83c\udff7\ufe0f Indirizzo MAC Gateway",
+          "modelName": "\ud83d\udce6 Modello Gateway"
+        },
+        "data_description": {
+          "address": "L'indirizzo IPv4 locale del tuo gateway OpenWebNet (es. 192.168.1.50).",
+          "port": "Porta standard OpenWebNet (predefinita 20000).",
+          "serialNumber": "Indirizzo hardware MAC esadecimale del gateway.",
+          "modelName": "Identificativo del modello (es. F454, AM4890, MyHomeServer1)."
+        }
+      },
+      "nerd": {
+        "title": "\ud83e\udd13 Configurazione Manuale (Modalit\u00e0 Nerd)",
+        "description": "Hai il controllo completo su tutti i parametri del tuo gateway OpenWebNet.",
+        "data": {
+          "address": "\ud83c\udf10 Indirizzo IP Gateway",
+          "port": "\ud83d\udd0c Porta OpenWebNet",
+          "serialNumber": "\ud83c\udff7\ufe0f Indirizzo MAC Gateway",
+          "modelName": "\ud83d\udce6 Modello Gateway"
+        },
+        "data_description": {
+          "address": "L'indirizzo IPv4 locale del tuo gateway OpenWebNet (es. 192.168.1.50).",
+          "port": "Porta standard OpenWebNet (predefinita 20000).",
+          "serialNumber": "Indirizzo hardware MAC esadecimale del gateway.",
+          "modelName": "Identificativo del modello (es. F454, AM4890, MyHomeServer1)."
+        }
+      },
+      "welcome": {
+        "title": "\ud83c\udf89 Benvenuto in MyHOME!",
+        "description": "\ud83c\udfe0 **Gateway connesso con successo!**\n* **Modello:** {name}\n* **Indirizzo:** {host}\n* **MAC:** {mac}\n\n---\n\ud83e\ude84 **Configurazione Iniziale Dispositivi:**\nScegli come desideri popolare i dispositivi del tuo impianto.\n\n\ud83d\udca1 **Nota sul Passive Sniffing:**\nSe alcuni comandi (come i moduli scenari a 4 pulsanti, contatti o comandi speciali) non dovessero comparire con la scansione automatica, potrai aggiungerli in qualsiasi momento abilitando lo **Sniffing Passivo del Bus** dal menu *Configura* dell'integrazione: baster\u00e0 premere i pulsanti fisici a parete per catturarli e registrarli istantaneamente!",
+        "data": {
+          "auto_scan": "\ud83d\udd0d SCANSIONE AUTOMATICA BUS SCS",
+          "import_yaml": "\ud83d\udcc1 IMPORTA DA MYHOME.YAML"
+        },
+        "data_description": {
+          "auto_scan": "Interroga attivamente il bus per rilevare in automatico tutte le luci, tapparelle, zone clima e diffusione sonora.",
+          "import_yaml": "Importa tutti i dispositivi configurati nel file myhome.yaml e lo rinomina automaticamente in .old per prevenire conflitti."
         }
       }
     },
@@ -40,7 +80,9 @@
       "invalid_mac": "Indirizzo MAC non valido",
       "invalid_password": "Password non valida",
       "password_retry": "Il gateway non ha accettato la password, aspetta 60s prima di riprovare.",
-      "password_error": "Password non valida"
+      "password_error": "Password non valida",
+      "missing_ip": "Inserisci un indirizzo IP o seleziona un gateway rilevato",
+      "no_gateway_found": "Nessun gateway rilevato sulla rete locale. Attiva la MODALIT\u00c0 NERD \ud83e\udd13 per inserire i dati a mano."
     },
     "abort": {
       "discover_timeout": "Impossibile trovare il gateway MyHome",

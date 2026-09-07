@@ -85,10 +85,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
 
     # Merge UI-configured devices from options
     ui_devices = entry.options.get("devices", {})
+    if "platforms" in ui_devices and isinstance(ui_devices["platforms"], dict):
+        ui_devices = ui_devices["platforms"]
+
     for platform, devices in ui_devices.items():
+        if platform in ("platforms", CONF_PLATFORMS) or not isinstance(devices, dict):
+            continue
         if platform not in hass.data[DOMAIN][entry.data[CONF_MAC]][CONF_PLATFORMS]:
             hass.data[DOMAIN][entry.data[CONF_MAC]][CONF_PLATFORMS][platform] = {}
         for dev_id, dev_conf in devices.items():
+            if not isinstance(dev_conf, dict):
+                continue
             merged_conf = dev_conf.copy()
             merged_conf[CONF_ENTITIES] = {}
             if CONF_MANUFACTURER not in merged_conf:

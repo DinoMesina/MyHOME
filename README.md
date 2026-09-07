@@ -1,9 +1,19 @@
 # MyHOME (Modernized Fork)
-**Version: v0.5.0**
+**Version: v1.0.0**
 
 ## 🌟 Changelog
+* **v1.0.0**: **Major Release: Zero-Knowledge Wizard & Onboarding Redesign!**
+  - **Zero-Knowledge Setup**: Automatic gateway discovery via SSDP. No manual IP or technical details required to get started.
+  - **🤓 MODALITÀ NERD**: Optional manual configuration switch for advanced users who want to manually specify IP, port, MAC, and gateway model.
+  - **One-Click YAML Import**: Seamlessly import your existing `myhome.yaml` configuration into the UI during onboarding or from the Options menu, automatically renaming the old file to `myhome.yaml.old` to prevent conflicts.
+  - **Ultra-Fast SCS Bus Discovery**: High-speed active scan (~4-7s) of lights, covers, and climate zones with strict frame matching, buffer draining, and zero ghost devices.
+  - **Bilingual Support**: Complete Italian (🇮🇹) and English (🇬🇧) localization for all setup steps, options, and descriptions.
 * **v0.5.0**: **New Feature!** Added a "Import from YAML" button to the Config Flow options. Users can now securely migrate all their `myhome.yaml` configuration into the UI with one click. The script automatically converts the entities and renames the YAML file to `myhome.yaml.old` to prevent conflicts.
 * **v0.4.12**: **Documentation Update:** Added explicit instructions on how to migrate from the original `anotherjulien/MyHOME` integration without losing entities or configuration.
+
+<details>
+<summary><b>Changelog versioni precedenti (Click per espandere)</b></summary>
+
 * **v0.4.11**: **Startup Crash Fix!** Fixed a critical `KeyError: entities` and `KeyError: entity_name` crash during startup on Home Assistant 2024.x when devices were configured via `myhome.yaml`. This was caused by the Voluptuous validation library silently bypassing our schema defaults during dictionary unwrapping. All schemas are now explicitly enforced.
 * **v0.4.10**: **Climate HVAC Action Fix!** Fixed a bug where `hvac_action` would constantly show as `idle` when actuator frames were received for zones that support both heating and cooling. Actuator frames (unlike valve frames) do not explicitly specify if they are heating or cooling, so the integration now correctly infers the action from the current `hvac_mode`.
 * **v0.4.9**: **Diagnostic Frames Interception Fix!** Fixed a bug where diagnostic frames (`*#1001*` for lights and `*#1004*` for climate) were not properly intercepted because the `OWNd` library parses them into a generic `OWNEvent` object, skipping the raw string interception logic. The integration now correctly handles these objects and queries the gateway for the standard status.
@@ -27,6 +37,8 @@
 * **v0.2.0**: **New Feature!** Added native support for Bticino Scenario controls (WHO 0). Pressing physical scenario buttons now natively fires the `myhome_scenario_event` in Home Assistant, allowing you to use your scenario wall-plates as remote controls for ANY entity in Home Assistant (Philips Hue, Sonos, generic automations, etc.) without needing to physically reconfigure them as CEN/CEN+ modules!
 * **v0.1.1**: **Stable Release Update!** Fixed OptionsFlow `500 Internal Server Error` in HA 2024.12+, fixed `Unknown error` during auto-learning, fixed Cover `lock/unlock` icon mapping issue by assigning `_attr_device_class` properly, and fixed a critical initialization `KeyError` crash for ALL auto-learned devices (Covers, Switches, Lights, Climates, MediaPlayers).
 * **v0.1.0**: Official Stable Release! Fixed HACS version tracking.
+
+</details>
 
 ## 📖 Introduction
 
