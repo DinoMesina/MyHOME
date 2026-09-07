@@ -4,7 +4,7 @@
 ## 🌟 Changelog
 * **v1.0.0**: **Major Release: Zero-Knowledge Wizard & Onboarding Redesign!**
   - **Zero-Knowledge Setup**: Automatic gateway discovery via SSDP. No manual IP or technical details required to get started.
-  - **🤓 MODALITÀ NERD**: Optional manual configuration switch for advanced users who want to manually specify IP, port, MAC, and gateway model.
+  - **🤓 NERD MODE**: Optional manual configuration switch for advanced users who want to manually specify IP, port, MAC, and gateway model.
   - **One-Click YAML Import**: Seamlessly import your existing `myhome.yaml` configuration into the UI during onboarding or from the Options menu, automatically renaming the old file to `myhome.yaml.old` to prevent conflicts.
   - **Ultra-Fast SCS Bus Discovery**: High-speed active scan (~4-7s) of lights, covers, and climate zones with strict frame matching, buffer draining, and zero ghost devices.
   - **Bilingual Support**: Complete Italian (🇮🇹) and English (🇬🇧) localization for all setup steps, options, and descriptions.
@@ -12,7 +12,7 @@
 * **v0.4.12**: **Documentation Update:** Added explicit instructions on how to migrate from the original `anotherjulien/MyHOME` integration without losing entities or configuration.
 
 <details>
-<summary><b>Changelog versioni precedenti (Click per espandere)</b></summary>
+<summary><b>Previous versions changelog (Click to expand)</b></summary>
 
 * **v0.4.11**: **Startup Crash Fix!** Fixed a critical `KeyError: entities` and `KeyError: entity_name` crash during startup on Home Assistant 2024.x when devices were configured via `myhome.yaml`. This was caused by the Voluptuous validation library silently bypassing our schema defaults during dictionary unwrapping. All schemas are now explicitly enforced.
 * **v0.4.10**: **Climate HVAC Action Fix!** Fixed a bug where `hvac_action` would constantly show as `idle` when actuator frames were received for zones that support both heating and cooling. Actuator frames (unlike valve frames) do not explicitly specify if they are heating or cooling, so the integration now correctly infers the action from the current `hvac_mode`.
@@ -27,7 +27,7 @@
 * **v0.4.1**: **Critical Hotfix!** Fixed a severe issue introduced in v0.4.0 where intercepting Load Management (WHO 3) messages crashed the integration's listening loop due to invalid notification ID characters. This crash caused the integration to rapidly reconnect to the BTicino gateway, effectively creating a Denial of Service (DoS) condition on the bus that prevented the hardware load management unit from successfully sending disconnect commands to appliances.
 * **v0.4.0**: **Features Galore!** 
   - **Smooth Transitions**: Native support for fade-in and fade-out transitions on dimmable lights (using software-based stepped dimming).
-  - **Load Management (Gestione Carichi) Discovery**: Added exploratory support for WHO=3. The integration now intercepts load management events and creates persistent notifications in Home Assistant to aid in mapping specific actuators.
+  - **Load Management Discovery**: Added exploratory support for WHO=3. The integration now intercepts load management events and creates persistent notifications in Home Assistant to aid in mapping specific actuators.
   - **Bugfix**: Fixed an issue where Scenario Modules (stateless devices without entities) were being incorrectly pruned/deleted on every Home Assistant restart.
 * **v0.3.2**: **Hotfix!** Fixed an issue where Scenario Module graphic device triggers were not showing up in the Automation UI on Home Assistant versions 2024.2+ due to a deprecated base schema import.
 * **v0.3.1**: **Hotfix!** Fixed a critical bug introduced in v0.2.2 where the gateway's MAC address capitalization could cause a `KeyError` during the reception of Instant Power broadcast events, triggering a bootloop/crash of the MyHOME integration.
@@ -42,16 +42,16 @@
 
 ## 📖 Introduction
 
-### What is it? (Cos'è?)
+### What is it?
 This is a custom Home Assistant integration that acts as a local bridge to Bticino / Legrand MyHome wired home automation (domotic) systems.
 
-### What does it do? (Cosa fa?)
+### What does it do?
 It communicates directly over the local network with your Bticino IP gateway (such as the F454, F453, F452, MH200, MH200N, MH201, MH202, or MyHomeServer1) using the OpenWebNet protocol. It enables Home Assistant to:
 - **Control** lights, dimmers, switches, motorized covers/shutters, and sound diffusion (WHO 22) zones/media players.
 - **Monitor** temperature sensors, energy/power meters, and binary sensors.
 - **Listen** to bus events (such as physical scenario button keypresses) to trigger complex automation routines.
 
-### What is it for? (A cosa serve?)
+### What is it for?
 If you have a wired Bticino MyHome SCS system, this integration brings all your physical devices into Home Assistant for unified control, dashboard visualization, and automation.
 - **100% Local & Offline**: It operates entirely within your local network (LAN) with zero cloud dependencies. Your smart home remains fully functional even without an internet connection, keeping it private, secure, and extremely fast.
 - **Legacy Hardware Support**: Gives a new lease of life to older Bticino gateways (like the F454) by integrating them with modern smart home tech.
