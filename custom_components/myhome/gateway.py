@@ -173,6 +173,14 @@ class MyHOMEGatewayHandler:
                 LOGGER.info("%s Listening session established.", self.log_id)
                 self._notify_connection_change()
 
+                # Active Discovery for supported subsystems (Lighting, Covers, Climate)
+                try:
+                    await self.send_status_request(OWNCommand.parse("*#1*0##"))   # WHO 1: Lighting
+                    await self.send_status_request(OWNCommand.parse("*#2*0##"))   # WHO 2: Automation / Covers
+                    await self.send_status_request(OWNCommand.parse("*#4*0##"))   # WHO 4: Climate
+                except Exception as disc_err:
+                    LOGGER.debug("%s Errore invio richieste discovery: %s", self.log_id, disc_err)
+
                 while not self._terminate_listener:
                     message = await _event_session.get_next()
                     if message is None:
@@ -183,7 +191,7 @@ class MyHOMEGatewayHandler:
                         break
 
                     try:
-                        LOGGER.debug("%s Message received: `%s`", self.log_id, message)
+                        LOGGER.warning("[BUS SNIFFER] %s (type=%s)", message, type(message).__name__)
 
                         if self.generate_events:
                             if isinstance(message, OWNMessage):
@@ -194,7 +202,67 @@ class MyHOMEGatewayHandler:
                                 self.hass.bus.async_fire("myhome_message_event", {"gateway": str(self.gateway.host), "message": str(message)})
 
                         if not isinstance(message, OWNMessage):
-                            if isinstance(message, str) and (message.startswith("*3*") or message.startswith("*#3*")):
+                            if isinstance(message, str) and (
+                                message.startswith("*22*")
+                                or message.startswith("*#22*")
+                                or message.startswith("*16*")
+                                or message.startswith("*#16*")
+                            ):
+                                LOGGER.debug("%s Intercettato messaggio grezzo Filodiffusione / Sound: %s", self.log_id, message)
+                                try:
+                                    clean = message.strip("#").split("*")
+                                    who_raw = clean[1].replace("#", "") if len(clean) >= 2 else None
+                                    where_raw = None
+                                    if len(clean) >= 3:
+                                        where_raw = clean[2] if message.startswith("*#") else (clean[3] if len(clean) > 3 else clean[2])
+
+                                    # Riconosci speaker fisici: '3#...' per WHO 22 o numerico per WHO 16
+                                    if where_raw and (where_raw.startswith("3#") or (who_raw == "16" and where_raw.isdigit())):
+                                        dev_id = f"{who_raw}-{where_raw}"
+
+                                        # 1. Creazione dinamica immediata a runtime (Zero YAML / Zero reload!)
+                                        add_fn = self.hass.data[DOMAIN].get(self.mac, {}).get("async_add_media_player")
+                                        if add_fn:
+                                            created_entity = add_fn(dev_id, who_raw, where_raw, f"Sound Zone {where_raw}")
+                                            if created_entity and hasattr(created_entity, "handle_event"):
+                                                created_entity.handle_event(message)
+
+                                        # 2. Persistenza nelle opzioni di configurazione per i riavvii successivi
+                                        new_options = dict(self.config_entry.options)
+                                        devices = new_options.get("devices", {})
+                                        if "media_player" not in devices:
+                                            devices["media_player"] = {}
+                                        if dev_id not in devices["media_player"]:
+                                            dev_conf = {
+                                                "who": who_raw,
+                                                "where": where_raw,
+                                                "name": f"Sound Zone {where_raw}",
+                                            }
+                                            devices["media_player"][dev_id] = dev_conf
+                                            new_options["devices"] = devices
+                                            LOGGER.info("Auto-learning discovered new sound device: %s (%s)", dev_id, "media_player")
+                                            self.hass.config_entries.async_update_entry(
+                                                self.config_entry,
+                                                options=new_options
+                                            )
+                                            self.hass.components.persistent_notification.async_create(
+                                                self.hass,
+                                                title="MyHOME Auto-learning",
+                                                message=f"Discovered and registered new `media_player` device: **{dev_conf['name']}** (address {where_raw})",
+                                                notification_id=f"myhome_learned_{dev_id}"
+                                            )
+                                except Exception as learn_ex:
+                                    LOGGER.debug("Errore auto-learning sound: %s", learn_ex)
+
+                                if "media_player" in self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS]:
+                                    for dev_id, dev_data in self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS]["media_player"].items():
+                                        if isinstance(dev_data, dict):
+                                            for _entity in dev_data.get(CONF_ENTITIES, {}).values():
+                                                if hasattr(_entity, "handle_event"):
+                                                    _entity.handle_event(message)
+                                continue
+
+                            elif isinstance(message, str) and (message.startswith("*3*") or message.startswith("*#3*")):
                                 LOGGER.info("Intercepted Load Management (WHO 3) raw message: %s", message)
                                 safe_msg_id = message.replace('*', '_').replace('#', '_')
                                 self.hass.components.persistent_notification.async_create(
@@ -203,6 +271,7 @@ class MyHOMEGatewayHandler:
                                     message=f"Nuovo messaggio di gestione carichi intercettato: `{message}`\nInvia questo log allo sviluppatore per integrarlo!",
                                     notification_id=f"myhome_load_management_{safe_msg_id}",
                                 )
+                                continue
                             else:
                                 LOGGER.warning(
                                     "%s Data received is not a message: `%s`",
@@ -281,7 +350,7 @@ class MyHOMEGatewayHandler:
                         or isinstance(message, OWNDryContactEvent)
                         or isinstance(message, OWNAuxEvent)
                         or isinstance(message, OWNHeatingEvent)
-                        or message.who in ["16", "22"]
+                        or str(getattr(message, "who", "")) in ["16", "22"]
                     ):
                         if not message.is_translation:
                             is_event = False
@@ -372,24 +441,45 @@ class MyHOMEGatewayHandler:
                                     ):
                                         await self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS][LIGHT][message.entity][CONF_ENTITIES][LIGHT].async_update()
                                 else:
+                                    msg_str = str(message)
+                                    who_prefix = str(getattr(message, "who", "")).replace("#", "")
+                                    if not who_prefix and ("*22*" in msg_str or "*#22*" in msg_str):
+                                        who_prefix = "22"
+                                    elif not who_prefix and ("*16*" in msg_str or "*#16*" in msg_str):
+                                        who_prefix = "16"
+
+                                    if who_prefix in ["22", "16"]:
+                                        LOGGER.info("%s [Sound Bus Sniffer] Ricevuto evento OpenWebNet: %s", self.log_id, msg_str)
+
                                     for _platform in self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS]:
-                                        if _platform != BUTTON and message.entity in self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS][_platform]:
-                                            for _entity in self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS][_platform][message.entity][CONF_ENTITIES]:
+                                        if _platform == BUTTON:
+                                            continue
+
+                                        matched_keys = []
+                                        platform_devices = self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS][_platform]
+                                        if message.entity in platform_devices:
+                                            matched_keys.append(message.entity)
+                                        if who_prefix:
+                                            combined_key = f"{who_prefix}-{message.entity}"
+                                            if combined_key in platform_devices and combined_key not in matched_keys:
+                                                matched_keys.append(combined_key)
+
+                                        # Per i messaggi Sound (WHO 22 / WHO 16), inoltra a tutte le zone media_player
+                                        # così che eventi Tuner (2#1) e cambi sorgente (#4#) siano ricevuti istantaneamente
+                                        if _platform == "media_player" and who_prefix in ["22", "16"]:
+                                            for p_key in platform_devices:
+                                                if p_key not in matched_keys:
+                                                    matched_keys.append(p_key)
+
+                                        for dev_key in matched_keys:
+                                            for _entity in platform_devices[dev_key].get(CONF_ENTITIES, {}):
+                                                ent = platform_devices[dev_key][CONF_ENTITIES][_entity]
                                                 if (
-                                                    isinstance(
-                                                        self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS][_platform][message.entity][CONF_ENTITIES][_entity],
-                                                        MyHOMEEntity,
-                                                    )
-                                                    and not isinstance(
-                                                        self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS][_platform][message.entity][CONF_ENTITIES][_entity],
-                                                        DisableCommandButtonEntity,
-                                                    )
-                                                    and not isinstance(
-                                                        self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS][_platform][message.entity][CONF_ENTITIES][_entity],
-                                                        EnableCommandButtonEntity,
-                                                    )
+                                                    isinstance(ent, MyHOMEEntity)
+                                                    and not isinstance(ent, DisableCommandButtonEntity)
+                                                    and not isinstance(ent, EnableCommandButtonEntity)
                                                 ):
-                                                    self.hass.data[DOMAIN][self.mac][CONF_PLATFORMS][_platform][message.entity][CONF_ENTITIES][_entity].handle_event(message)
+                                                    ent.handle_event(message)
 
                         else:
                             LOGGER.debug(
@@ -504,7 +594,7 @@ class MyHOMEGatewayHandler:
                                 LOGGER.info("Intercepted Climate Diagnostic frame (WHO 1004) for %s. Requesting standard status...", where)
                                 await self.send_status_request(OWNHeatingCommand.status(where))
                         else:
-                            LOGGER.info("%s Unsupported diagnostic message: `%s`", self.log_id, message)
+                            LOGGER.info("%s Diagnostic message: `%s`", self.log_id, message)
                     else:
                         LOGGER.info(
                             "%s Unsupported message type: `%s`",
@@ -581,7 +671,12 @@ class MyHOMEGatewayHandler:
                         self.send_buffer.task_done()
                     except Exception as task_err:
                         self.send_buffer.task_done()
-                        await self.send_buffer.put(task)
+                        task_retries = task.get("retries", 0)
+                        if task_retries < 2:
+                            task["retries"] = task_retries + 1
+                            await self.send_buffer.put(task)
+                        else:
+                            LOGGER.error("%s Dropping failed message `%s` after retries: %s", self.log_id, task.get("message"), task_err)
                         raise ConnectionError("Command sending failed, reconnecting...") from task_err
             except (OSError, asyncio.TimeoutError, ConnectionError) as err:
                 LOGGER.warning(
