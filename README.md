@@ -1,7 +1,14 @@
+<p align="center">
+  <img src="images/logo.png" alt="BTicino MyHOME SCS" width="600">
+</p>
+
 # MyHOME (Modernized Fork)
-**Version: v1.1.0**
+**Version: v1.2.0**
 
 ## 🌟 Changelog
+* **v1.2.0**: **Official BTicino MyHOME SCS Brand Assets!**
+  - **Brand & Logo Overhaul**: Added official high-resolution brand assets (`icon.png`, `icon@2x.png`, `logo.png`) featuring authentic BTicino typography, signature orange 'b', and SCS bus emblem.
+  - **Home Assistant & HACS Integration**: Direct asset support for local brand icons and prepared submission for `home-assistant/brands`.
 * **v1.1.0**: **Native Animated Progress Screens!**
   - **Animated Progress Feedback (`async_show_progress`)**: Active bus scanning and passive packet sniffing in the Options menu now run seamlessly as asynchronous background tasks with native animated spinners and live contextual status messages.
   - **Fluid Onboarding Experience**: The Zero-Knowledge setup wizard now displays a progress spinner during the initial automatic SCS bus scan instead of freezing the dialog.
@@ -12,11 +19,11 @@
   - **One-Click YAML Import**: Seamlessly import your existing `myhome.yaml` configuration into the UI during onboarding or from the Options menu, automatically renaming the old file to `myhome.yaml.old` to prevent conflicts.
   - **Ultra-Fast SCS Bus Discovery**: High-speed active scan (~4-7s) of lights, covers, and climate zones with strict frame matching, buffer draining, and zero ghost devices.
   - **Bilingual Support**: Complete Italian (🇮🇹) and English (🇬🇧) localization for all setup steps, options, and descriptions.
-* **v0.5.0**: **New Feature!** Added a "Import from YAML" button to the Config Flow options. Users can now securely migrate all their `myhome.yaml` configuration into the UI with one click. The script automatically converts the entities and renames the YAML file to `myhome.yaml.old` to prevent conflicts.
 
 <details>
 <summary><b>Previous versions changelog (Click to expand)</b></summary>
 
+* **v0.5.0**: **New Feature!** Added a "Import from YAML" button to the Config Flow options. Users can now securely migrate all their `myhome.yaml` configuration into the UI with one click. The script automatically converts the entities and renames the YAML file to `myhome.yaml.old` to prevent conflicts.
 * **v0.4.12**: **Documentation Update:** Added explicit instructions on how to migrate from the original `anotherjulien/MyHOME` integration without losing entities or configuration.
 
 * **v0.4.11**: **Startup Crash Fix!** Fixed a critical `KeyError: entities` and `KeyError: entity_name` crash during startup on Home Assistant 2024.x when devices were configured via `myhome.yaml`. This was caused by the Voluptuous validation library silently bypassing our schema defaults during dictionary unwrapping. All schemas are now explicitly enforced.
