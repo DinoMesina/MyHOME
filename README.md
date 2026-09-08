@@ -3,8 +3,8 @@
 [![Validate with hassfest](https://github.com/OpenWebNet-HA/MyHOME/actions/workflows/hassfest.yml/badge.svg)](https://github.com/OpenWebNet-HA/MyHOME/actions/workflows/hassfest.yml)
 [![HACS Validation](https://github.com/OpenWebNet-HA/MyHOME/actions/workflows/validate.yml/badge.svg)](https://github.com/OpenWebNet-HA/MyHOME/actions/workflows/validate.yml)
 [![test-coverage](https://github.com/OpenWebNet-HA/MyHOME/actions/workflows/test-coverage.yaml/badge.svg)](https://github.com/OpenWebNet-HA/MyHOME/actions/workflows/test-coverage.yaml)
-[![Coverage](coverage.svg)](https://app.codecov.io/gh/OpenWebNet-HA/MyHOME)
-[![Codecov](https://codecov.io/gh/OpenWebNet-HA/MyHOME/graph/badge.svg)](https://app.codecov.io/gh/OpenWebNet-HA/MyHOME)
+[![Coverage](coverage.svg)](https://app.codecov.io/gh/OpenWebNet-HA/MyHOME/tree/v2-phase1-architecture)
+[![Codecov](https://codecov.io/gh/OpenWebNet-HA/MyHOME/branch/v2-phase1-architecture/graph/badge.svg)](https://app.codecov.io/gh/OpenWebNet-HA/MyHOME/tree/v2-phase1-architecture)
 [![PyPI Standards & Packaging](https://github.com/OpenWebNet-HA/MyHOME/actions/workflows/pypi_standards.yml/badge.svg)](https://github.com/OpenWebNet-HA/MyHOME/actions/workflows/pypi_standards.yml)
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/)
@@ -185,7 +185,7 @@ The integration maintains over 500 automated tests covering core protocol handli
 | [`sensor.py`](custom_components/myhome/sensor.py) | **62%** | Power meters, energy counters, and pulse sensors |
 | [`media_player.py`](custom_components/myhome/media_player.py) | **62%** | F441/F441M sound system zones, volume normalization |
 
-> **Live Test Execution**: View the live code coverage dashboard directly on [**Codecov**](https://app.codecov.io/gh/OpenWebNet-HA/MyHOME) or download the interactive HTML report from the [**test-coverage GitHub Actions run**](https://github.com/OpenWebNet-HA/MyHOME/actions/workflows/test-coverage.yaml).
+> **Live Test Execution**: View the live code coverage dashboard directly on [**Codecov (v2-phase1-architecture)**](https://app.codecov.io/gh/OpenWebNet-HA/MyHOME/tree/v2-phase1-architecture) or download the interactive HTML report from the [**test-coverage GitHub Actions run**](https://github.com/OpenWebNet-HA/MyHOME/actions/workflows/test-coverage.yaml).
 
 ---
 
