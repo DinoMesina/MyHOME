@@ -3,6 +3,7 @@
 [![Validate with hassfest](https://github.com/OpenWebNet-HA/MyHOME/actions/workflows/hassfest.yml/badge.svg)](https://github.com/OpenWebNet-HA/MyHOME/actions/workflows/hassfest.yml)
 [![HACS Validation](https://github.com/OpenWebNet-HA/MyHOME/actions/workflows/validate.yml/badge.svg)](https://github.com/OpenWebNet-HA/MyHOME/actions/workflows/validate.yml)
 [![test-coverage](https://github.com/OpenWebNet-HA/MyHOME/actions/workflows/test-coverage.yaml/badge.svg)](https://github.com/OpenWebNet-HA/MyHOME/actions/workflows/test-coverage.yaml)
+[![Coverage](coverage.svg)](https://github.com/OpenWebNet-HA/MyHOME/actions/workflows/test-coverage.yaml)
 [![PyPI Standards & Packaging](https://github.com/OpenWebNet-HA/MyHOME/actions/workflows/pypi_standards.yml/badge.svg)](https://github.com/OpenWebNet-HA/MyHOME/actions/workflows/pypi_standards.yml)
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/)
@@ -155,8 +156,35 @@ check-wheel-contents dist/*.whl
 ### CI Workflows
 - **`hassfest`**: Official Home Assistant manifest and metadata validation.
 - **`validate`**: Official HACS compliance checks.
-- **`test-coverage`**: 501 automated tests with snapshot matching and coverage tracking.
+- **`test-coverage`**: 501 automated unit tests with snapshot matching and coverage tracking.
 - **`pypi_standards`**: Strict wheel hygiene, metadata verification, and packaging checks.
+
+### 📊 Code Coverage & Quality Assurance
+
+The integration maintains over 500 automated tests covering core protocol handling, hardware profiles, discovery, state reconciliation, and error boundaries.
+
+| Component / Module | Coverage | Notes |
+|---|:---:|---|
+| [`gateway_profile.py`](custom_components/myhome/gateway_profile.py) | **100%** | Hardware models (`MH200`, `F454`, etc.) and queue pacing limits |
+| [`const.py`](custom_components/myhome/const.py) | **100%** | Protocol commands, dimensions, and integration constants |
+| [`decoder_pool.py`](custom_components/myhome/decoder_pool.py) | **100%** | Thread-safe streaming proxy audio pool |
+| [`myhome_device.py`](custom_components/myhome/myhome_device.py) | **100%** | Home Assistant device registry schema compliance |
+| [`ownd/discovery.py`](custom_components/myhome/ownd/discovery.py) | **92%** | SSDP & UPnP gateway detection and descriptor parsing |
+| [`ownd/message.py`](custom_components/myhome/ownd/message.py) | **91%** | OpenWebNet frame parsers, encoders, and dimension decoders |
+| [`config_flow.py`](custom_components/myhome/config_flow.py) | **89%** | Step handlers, user entry, reauth, and options flow |
+| [`button.py`](custom_components/myhome/button.py) | **87%** | Scenario buttons and bus diagnostic pings |
+| [`binary_sensor.py`](custom_components/myhome/binary_sensor.py) | **86%** | Magnetic contacts, door/window sensors, motion sensors |
+| [`cover.py`](custom_components/myhome/cover.py) | **86%** | Motorized shutters, blinds, roll-ups with state tracking |
+| [`__init__.py`](custom_components/myhome/__init__.py) | **85%** | Setup lifecycle and zero-friction entity migration |
+| [`gateway.py`](custom_components/myhome/gateway.py) | **82%** | Token-bucket pacing queue and event dispatching |
+| [`switch.py`](custom_components/myhome/switch.py) | **81%** | Relay actuators, auxiliary switches, socket controllers |
+| [`climate.py`](custom_components/myhome/climate.py) | **80%** | Heating, cooling, 4-pipe systems, and thermostat controls |
+| [`ownd/connection.py`](custom_components/myhome/ownd/connection.py) | **68%** | Hardened TCP stream, fail-closed auth, watchdog loop |
+| [`light.py`](custom_components/myhome/light.py) | **65%** | Relays, auto-dimmer detection, and brightness transitions |
+| [`sensor.py`](custom_components/myhome/sensor.py) | **62%** | Power meters, energy counters, and pulse sensors |
+| [`media_player.py`](custom_components/myhome/media_player.py) | **62%** | F441/F441M sound system zones, volume normalization |
+
+> **Live Test Execution**: Inspect the full test execution log and download the interactive HTML coverage report from the [**test-coverage GitHub Actions run**](https://github.com/OpenWebNet-HA/MyHOME/actions/workflows/test-coverage.yaml).
 
 ---
 
