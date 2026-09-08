@@ -15,4 +15,4 @@ jobs:
         uses: "hacs/action@main"
         with:
           category: "integration"
-          ignore: ${{ github.repository != 'OpenWebNet-HA/MyHOME' && 'topics,issues' || '' }}
+          ignore: "topics issues"
