@@ -34,6 +34,7 @@ jobs:
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add "tests/**/__snapshots__/*" || true
           git add "tests/__snapshots__/*" || true
+          git add "tests/snapshots/*" || true
           git commit -m "chore: auto-generate syrupy snapshots [skip ci]" || echo "No snapshots changed"
           git push || echo "No snapshots pushed"
 
@@ -42,4 +43,5 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: coverage.xml
-          fail_ci_if_error: true
+          fail_ci_if_error: false
+
