@@ -14,6 +14,9 @@ Modern, async-native Home Assistant integration for **BTicino / Legrand MyHOME**
 
 Maintained by the **[OpenWebNet-HA](https://github.com/OpenWebNet-HA)** community organisation.
 
+> [!TIP]
+> **🧪 Community Testing Active**: The modernized Phase 1 architecture is currently undergoing community validation in **[PR #232](https://github.com/OpenWebNet-HA/MyHOME/pull/232)**. You can test it today via HACS by selecting the `v2-phase1-architecture` branch or following the testing instructions in [#229](https://github.com/OpenWebNet-HA/MyHOME/issues/229#issuecomment-5587215356)!
+
 ---
 
 ## 🌟 Key Features & Modern V2 Architecture
