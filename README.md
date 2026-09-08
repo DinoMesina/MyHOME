@@ -28,7 +28,7 @@ Maintained by the **[OpenWebNet-HA](https://github.com/OpenWebNet-HA)** communit
 - **Sound System 2.0 & Audio Matrix (WHO=16)**: Complete multi-room audio support for F441 / F441M matrices and amplifiers, including zone power, volume normalization (0–31 scale), software mute emulation, and dynamic streaming proxy.
 - **Streaming Audio Dynamic Proxy**: Seamlessly stream from **Music Assistant**, **Spotify Connect**, or any HA media player to wired BTicino audio zones using a thread-safe `DecoderPool` with analog gain-staging.
 - **Dimmable Light Detection**: Auto-detects dimming capabilities directly from bus events with transition support.
-- **Comprehensive Test Suite**: Over 540 automated unit tests (100% on validate.py, 88%+ core test coverage) executed across modern Python 3.12+ and Home Assistant core standards.
+- **Comprehensive Test Suite**: Over 660 automated unit tests (94% line coverage) (100% on validate.py, 88%+ core test coverage) executed across modern Python 3.12+ and Home Assistant core standards.
 
 ---
 
@@ -160,34 +160,44 @@ check-wheel-contents dist/*.whl
 ### CI Workflows
 - **`hassfest`**: Official Home Assistant manifest and metadata validation.
 - **`validate`**: Official HACS compliance checks.
-- **`test-coverage`**: 541 automated unit tests with snapshot matching and coverage tracking.
+- **`test-coverage`**: 662 automated unit tests with snapshot matching and coverage tracking.
 - **`pypi_standards`**: Strict wheel hygiene, metadata verification, and packaging checks.
 
 ### 📊 Code Coverage & Quality Assurance
 
-The integration maintains over 540 automated tests covering core protocol handling, hardware profiles, discovery, state reconciliation, and error boundaries.
+The integration maintains over 660 automated tests (94% line coverage) covering core protocol handling, hardware profiles, discovery, state reconciliation, and error boundaries.
+
+<!-- START_COVERAGE_TABLE -->
 
 | Component / Module | Coverage | Notes |
 |---|:---:|---|
-| [`validate.py`](custom_components/myhome/validate.py) | **100%** | Device & gateway schemas, custom WHERE validators, sensor injections |
-| [`gateway_profile.py`](custom_components/myhome/gateway_profile.py) | **100%** | Hardware models (`MH200`, `F454`, etc.) and queue pacing limits |
+| [`bus_monitor.py`](custom_components/myhome/bus_monitor.py) | **100%** | In-band 500-frame circular ring buffer tap (0 extra sockets) |
+| [`climate.py`](custom_components/myhome/climate.py) | **100%** | Heating, cooling, 4-pipe systems, and thermostat controls |
 | [`const.py`](custom_components/myhome/const.py) | **100%** | Protocol commands, dimensions, and integration constants |
+| [`core/transport/base.py`](custom_components/myhome/core/transport/base.py) | **100%** | Abstract transport layer defining OWN lifecycle contract |
+| [`core/transport/serial.py`](custom_components/myhome/core/transport/serial.py) | **100%** | Async Serial/USB transport for Legrand 3578 / OpenZigBee |
+| [`core/transport/tcp.py`](custom_components/myhome/core/transport/tcp.py) | **100%** | Modular TCP/IP socket transport with framed stream parsing |
 | [`decoder_pool.py`](custom_components/myhome/decoder_pool.py) | **100%** | Thread-safe streaming proxy audio pool |
+| [`device_trigger.py`](custom_components/myhome/device_trigger.py) | **100%** | Stateless CEN/CEN+ scenario device automation triggers |
+| [`diagnostics.py`](custom_components/myhome/diagnostics.py) | **100%** | Config entry diagnostics with sensitive data redaction |
+| [`gateway.py`](custom_components/myhome/gateway.py) | **100%** | Hardware handler, lockout prevention, token-bucket queue |
+| [`gateway_profile.py`](custom_components/myhome/gateway_profile.py) | **100%** | Hardware models (`MH200`, `F454`, etc.) and queue pacing limits |
+| [`media_player.py`](custom_components/myhome/media_player.py) | **100%** | F441/F441M sound system zones, dynamic proxy, gain-staging |
 | [`myhome_device.py`](custom_components/myhome/myhome_device.py) | **100%** | Home Assistant device registry schema compliance |
+| [`ownd/connection.py`](custom_components/myhome/ownd/connection.py) | **100%** | Hardened TCP stream, fail-closed auth, watchdog loop |
 | [`sensor.py`](custom_components/myhome/sensor.py) | **100%** | Power meters, energy counters, and pulse sensors |
+| [`validate.py`](custom_components/myhome/validate.py) | **100%** | Device & gateway schemas, custom WHERE validators, sensor injections |
 | [`light.py`](custom_components/myhome/light.py) | **98%** | Relays, auto-dimmer detection, and brightness transitions |
 | [`ownd/discovery.py`](custom_components/myhome/ownd/discovery.py) | **92%** | SSDP & UPnP gateway detection and descriptor parsing |
 | [`ownd/message.py`](custom_components/myhome/ownd/message.py) | **91%** | OpenWebNet frame parsers, encoders, and dimension decoders |
-| [`config_flow.py`](custom_components/myhome/config_flow.py) | **89%** | Step handlers, user entry, reauth, and options flow |
-| [`button.py`](custom_components/myhome/button.py) | **87%** | Scenario buttons and bus diagnostic pings |
-| [`binary_sensor.py`](custom_components/myhome/binary_sensor.py) | **86%** | Magnetic contacts, door/window sensors, motion sensors |
-| [`cover.py`](custom_components/myhome/cover.py) | **86%** | Motorized shutters, blinds, roll-ups with state tracking |
-| [`__init__.py`](custom_components/myhome/__init__.py) | **85%** | Setup lifecycle and zero-friction entity migration |
-| [`gateway.py`](custom_components/myhome/gateway.py) | **82%** | Token-bucket pacing queue and event dispatching |
-| [`switch.py`](custom_components/myhome/switch.py) | **81%** | Relay actuators, auxiliary switches, socket controllers |
-| [`climate.py`](custom_components/myhome/climate.py) | **80%** | Heating, cooling, 4-pipe systems, and thermostat controls |
-| [`ownd/connection.py`](custom_components/myhome/ownd/connection.py) | **68%** | Hardened TCP stream, fail-closed auth, watchdog loop |
-| [`media_player.py`](custom_components/myhome/media_player.py) | **62%** | F441/F441M sound system zones, volume normalization |
+| [`config_flow.py`](custom_components/myhome/config_flow.py) | 89% | Step handlers, user entry, reauth, and options flow |
+| [`button.py`](custom_components/myhome/button.py) | 87% | Scenario buttons and bus diagnostic pings |
+| [`binary_sensor.py`](custom_components/myhome/binary_sensor.py) | 86% | Magnetic contacts, door/window sensors, motion sensors |
+| [`cover.py`](custom_components/myhome/cover.py) | 86% | Motorized shutters, blinds, roll-ups with state tracking |
+| [`__init__.py`](custom_components/myhome/__init__.py) | 85% | Setup lifecycle and zero-friction entity migration |
+| [`switch.py`](custom_components/myhome/switch.py) | 81% | Relay actuators, auxiliary switches, socket controllers |
+
+<!-- END_COVERAGE_TABLE -->
 
 > **Live Test Execution**: View the live code coverage dashboard directly on [**Codecov (v2-phase1-architecture)**](https://app.codecov.io/gh/OpenWebNet-HA/MyHOME/tree/v2-phase1-architecture) or download the interactive HTML report from the [**test-coverage GitHub Actions run**](https://github.com/OpenWebNet-HA/MyHOME/actions/workflows/test-coverage.yaml).
 

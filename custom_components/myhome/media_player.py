@@ -168,10 +168,6 @@ async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entitie
                     )
             return
 
-        # Hide global source events (101, 102, etc.) from entity discovery
-        if getattr(message, "is_source_event", False):
-            return
-
 
         unique_id = f"{zone}#16"
 

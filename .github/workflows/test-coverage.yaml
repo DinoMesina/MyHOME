@@ -2,7 +2,7 @@ name: test-coverage
 
 on:
   push:
-    branches: [main, master]
+    branches: [main, master, v2-phase1-architecture]
   pull_request:
 
 permissions:
@@ -30,22 +30,15 @@ jobs:
       - name: Test coverage & Snapshot generation
         run: |
           PYTHONPATH=. pytest tests/ --snapshot-update --cov=custom_components.myhome --cov-report=xml --cov-report=html --cov-report=term
-          python -c "
-          import xml.etree.ElementTree as ET
-          tree = ET.parse('coverage.xml')
-          rate = round(float(tree.getroot().attrib.get('line-rate', 0)) * 100)
-          color = '#4c1' if rate >= 80 else ('#dfb317' if rate >= 60 else '#e05d44')
-          svg = f'''<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"98\" height=\"20\"><linearGradient id=\"b\" x2=\"0\" y2=\"100%\"><stop offset=\"0\" stop-color=\"#bbb\" stop-opacity=\".1\"/><stop offset=\"1\" stop-opacity=\".1\"/></linearGradient><mask id=\"a\"><rect width=\"98\" height=\"20\" rx=\"3\" fill=\"#fff\"/></mask><g mask=\"url(#a)\"><path fill=\"#555\" d=\"M0 0h61v20H0z\"/><path fill=\"{color}\" d=\"M61 0h37v20H61z\"/><path fill=\"url(#b)\" d=\"M0 0h98v20H0z\"/></g><g fill=\"#fff\" text-anchor=\"middle\" font-family=\"DejaVu Sans,Verdana,Geneva,sans-serif\" font-size=\"11\"><text x=\"30.5\" y=\"15\" fill=\"#010101\" fill-opacity=\".3\">coverage</text><text x=\"30.5\" y=\"14\">coverage</text><text x=\"79.5\" y=\"15\" fill=\"#010101\" fill-opacity=\".3\">{rate}%</text><text x=\"79.5\" y=\"14\">{rate}%</text></g></svg>'''
-          with open('coverage.svg', 'w') as f:
-              f.write(svg)
-          "
+          python scripts/update_readme_coverage.py
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add "tests/**/__snapshots__/*" || true
           git add "tests/__snapshots__/*" || true
           git add "tests/snapshots/*" || true
           git add coverage.svg || true
-          git commit -m "chore: auto-generate coverage badge & syrupy snapshots [skip ci]" || echo "No files changed"
+          git add README.md || true
+          git commit -m "chore: auto-generate coverage badge & README table [skip ci]" || echo "No files changed"
           git push || echo "No files pushed"
 
       - name: Upload HTML coverage report
