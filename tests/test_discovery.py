@@ -246,3 +246,16 @@ async def test_get_gateway():
         
         gw_none = await get_gateway("192.168.1.100")
         assert gw_none is None
+
+    # Test direct HTTP fetch success (Attempt 1, lines 334-339)
+    direct_details = {
+        "modelName": "F454",
+        "serialNumber": "00:03:50:00:12:34",
+        "port": 20000,
+    }
+    with patch('custom_components.myhome.ownd.discovery._get_scpd_details', return_value=direct_details):
+        gw_direct = await get_gateway("192.168.1.50")
+        assert gw_direct["address"] == "192.168.1.50"
+        assert gw_direct["serialNumber"] == "00:03:50:00:12:34"
+        assert gw_direct["ssdp_location"] == "http://192.168.1.50:49153/description.xml"
+        assert gw_direct["ssdp_st"] is None

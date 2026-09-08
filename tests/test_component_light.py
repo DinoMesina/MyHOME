@@ -625,3 +625,36 @@ async def test_flash_variants_and_fade_exceptions(hass, caplog):
             await light._async_fade_to(0, 100, 0.5, fade_id=11)
 
 
+async def test_fade_stale_step_and_worker_count_exception(hass):
+    """Test worker count exception handling and mid-step stale fade cancellation."""
+    gateway = MagicMock()
+    gateway.send = AsyncMock()
+    gateway.config_entry = MagicMock()
+    # Cause int(wc) to raise ValueError in worker count check
+    gateway.config_entry.options = {CONF_WORKER_COUNT: "not_a_number"}
+
+    light = MyHOMELight(
+        hass=hass, name="L", entity_name="L", icon=None, icon_on=None,
+        device_id="31", who="1", where="31", interface=None, dimmable=True,
+        manufacturer="B", model="M", gateway=gateway
+    )
+    light.hass = hass
+    light.async_schedule_update_ha_state = MagicMock()
+
+    # Step 1: worker count exception handled gracefully (no crash)
+    light._fade_id = 20
+    # Step 2: mid-loop fade invalidation (mutating _fade_id during sleep or execution)
+    original_set_brightness = light._set_brightness_instant
+
+    async def side_effect_change_fade(pct):
+        # Invalidate fade id during first step to trigger line 388-389
+        light._fade_id = 999
+        await original_set_brightness(pct)
+
+    with patch.object(light, "_set_brightness_instant", side_effect=side_effect_change_fade):
+        await light._async_fade_to(start_pct=0, target_pct=100, duration=0.2, fade_id=20)
+
+    # It aborted after the first step and did not complete
+    assert light._fade_id == 999
+
+

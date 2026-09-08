@@ -377,8 +377,6 @@ class MyHOMELight(MyHOMEEntity, LightEntity):
                 int(duration / SOFTWARE_TRANSITION_STEP_INTERVAL + 0.5),
             ),
         )
-        if num_steps < 1:
-            num_steps = 1
         step_time = duration / num_steps
         delta = (target_pct - start_pct) / num_steps
 

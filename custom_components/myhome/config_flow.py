@@ -118,14 +118,6 @@ class MyhomeFlowHandler(ConfigFlow, domain=DOMAIN):
         except asyncio.TimeoutError:
             return self.async_abort(reason="discovery_timeout")
 
-        # Find already configured hosts
-        already_configured = self._async_current_ids(False)
-        if user_input is not None:
-            local_gateways = [gateway for gateway in local_gateways if dr.format_mac(f'{MACAddress(user_input["serialNumber"])}') not in already_configured]
-
-        # if not local_gateways:
-        #     return self.async_abort(reason="all_configured")
-
         self.discovered_gateways = {gateway["serialNumber"]: gateway for gateway in local_gateways}
 
         return self.async_show_form(
@@ -142,7 +134,7 @@ class MyhomeFlowHandler(ConfigFlow, domain=DOMAIN):
             ),
         )
 
-    async def async_step_custom(self, user_input=None, errors={}):  # pylint: disable=dangerous-default-value
+    async def async_step_custom(self, user_input=None, errors=None):
         """Handle manual gateway setup — auto-discovers MAC from IP when possible.
 
         Step 1: User provides only IP and port.
@@ -150,6 +142,8 @@ class MyhomeFlowHandler(ConfigFlow, domain=DOMAIN):
         automatically.  If discovery succeeds the user never needs to type the MAC.
         If it fails we fall through to async_step_custom_manual.
         """
+        if errors is None:
+            errors = {}
 
         if user_input is not None:
             try:
@@ -206,12 +200,14 @@ class MyhomeFlowHandler(ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
-    async def async_step_custom_manual(self, user_input=None, errors={}):  # pylint: disable=dangerous-default-value
+    async def async_step_custom_manual(self, user_input=None, errors=None):
         """Fallback manual entry when UPnP auto-discovery fails.
 
         Shown only when the gateway could not be discovered by IP.
         The address and port are carried over from the previous step.
         """
+        if errors is None:
+            errors = {}
 
         if user_input is not None:
             user_input["address"] = getattr(self, "_custom_address", user_input.get("address", ""))
@@ -370,11 +366,14 @@ class MyhomeFlowHandler(ConfigFlow, domain=DOMAIN):
             else:
                 return self.async_abort(reason=test_result["Message"])
 
-    async def async_step_port(self, user_input=None, errors={}):  # pylint: disable=dangerous-default-value
+    async def async_step_port(self, user_input=None, errors=None):
         """Port information for the gateway is missing.
 
         Asking user to provide the port on which the gateway is listening.
         """
+        if errors is None:
+            errors = {}
+
         if user_input is not None:
             # Validate user input
             if 1 <= int(user_input[CONF_PORT]) <= 65535:
@@ -397,11 +396,14 @@ class MyhomeFlowHandler(ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
-    async def async_step_password(self, user_input=None, errors={}):  # pylint: disable=dangerous-default-value
+    async def async_step_password(self, user_input=None, errors=None):
         """Password is required to connect the gateway.
 
         Asking user to provide the gateway's password.
         """
+        if errors is None:
+            errors = {}
+
         if user_input is not None:
             # Validate user input
             self.gateway_handler.password = str(user_input[CONF_OWN_PASSWORD])
@@ -496,10 +498,10 @@ class MyhomeOptionsFlowHandler(OptionsFlow):
             self.options[CONF_TRANSITION_MODE] = DEFAULT_TRANSITION_MODE
         return await self.async_step_user()
 
-    async def async_step_user(self, user_input=None, errors={}):  # pylint: disable=dangerous-default-value
+    async def async_step_user(self, user_input=None, errors=None):
         """Manage general settings and decoder mapping."""
 
-        errors = {}
+        errors = errors or {}
 
         if self.options is None:
             self.options = dict(self.config_entry.options) if self.config_entry else {}

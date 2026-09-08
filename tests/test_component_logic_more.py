@@ -136,7 +136,103 @@ class TestSwitchEntity:
         await switch.async_update()
         switch._gateway_handler.send_status_request.assert_called()
 
+    def test_handle_event_outlet(self, mock_hass, mock_gateway, mock_entity_base_init):
+        from custom_components.myhome.switch import MyHOMESwitch
+        s = MyHOMESwitch(
+            hass=mock_hass,
+            name="Outlet 1",
+            entity_name="Outlet 1",
+            device_id="1#23",
+            who="1",
+            where="23",
+            interface=None,
+            device_class="outlet",
+            icon=None,
+            icon_on=None,
+            manufacturer="BTicino",
+            model="Relay",
+            gateway=mock_gateway,
+        )
+        s.async_schedule_update_ha_state = MagicMock()
+        msg = OWNEvent.parse("*1*1*23##")
+        s.handle_event(msg)
+        assert s._attr_is_on is True
+
+    def test_handle_event_other_device_class_and_runtime_error(self, mock_hass, mock_gateway, mock_entity_base_init):
+        from custom_components.myhome.switch import MyHOMESwitch
+        s = MyHOMESwitch(
+            hass=mock_hass,
+            name="Generic 1",
+            entity_name="Generic 1",
+            device_id="1#24",
+            who="1",
+            where="24",
+            interface=None,
+            device_class="custom_class",
+            icon="mdi:icon",
+            icon_on="mdi:icon-on",
+            manufacturer="BTicino",
+            model="Relay",
+            gateway=mock_gateway,
+        )
+        # Force a non-standard device class to trigger the `else:` branch in handle_event
+        s._attr_device_class = "other"
+        # Make async_schedule_update_ha_state raise RuntimeError
+        s.async_schedule_update_ha_state = MagicMock(side_effect=RuntimeError("Loop closing"))
+        msg = OWNEvent.parse("*1*0*24##")
+        s.handle_event(msg)
+        assert s._attr_is_on is False
+        assert s._attr_icon == "mdi:icon"
+
+    @pytest.mark.asyncio
+    async def test_async_setup_and_unload_entry(self, mock_hass, mock_gateway):
+        from custom_components.myhome.switch import async_setup_entry, async_unload_entry
+        from custom_components.myhome.const import DOMAIN, CONF_PLATFORMS, CONF_ENTITY
+
+        config_entry = MagicMock()
+        config_entry.data = {"mac": "00:03:50:00:12:34"}
+
+        # 1. PLATFORM not configured -> returns True
+        mock_hass.data = {
+            DOMAIN: {
+                "00:03:50:00:12:34": {
+                    CONF_PLATFORMS: {},
+                    CONF_ENTITY: mock_gateway,
+                }
+            }
+        }
+        res_setup = await async_setup_entry(mock_hass, config_entry, MagicMock())
+        assert res_setup is True
+        res_unload = await async_unload_entry(mock_hass, config_entry)
+        assert res_unload is True
+
+        # 2. PLATFORM configured -> sets up and unloads
+        mock_hass.data[DOMAIN]["00:03:50:00:12:34"][CONF_PLATFORMS] = {
+            "switch": {
+                "sw1": {
+                    "who": "1",
+                    "where": "21",
+                    "icon": "mdi:toggle-switch",
+                    "icon_on": "mdi:toggle-switch-off",
+                    "name": "Switch 1",
+                    "entity_name": "Switch 1",
+                    "device_class": "outlet",
+                    "manufacturer": "BTicino",
+                    "model": "F411",
+                }
+            }
+        }
+        async_add_entities = MagicMock()
+        await async_setup_entry(mock_hass, config_entry, async_add_entities)
+        async_add_entities.assert_called_once()
+        assert len(async_add_entities.call_args[0][0]) == 1
+
+        # Unload
+        await async_unload_entry(mock_hass, config_entry)
+        assert "sw1" not in mock_hass.data[DOMAIN]["00:03:50:00:12:34"][CONF_PLATFORMS]["switch"]
+
 # ── Cover Entity ─────────────────────────────────────────────────────────
+
 
 class TestCoverEntity:
 
@@ -194,6 +290,173 @@ class TestCoverEntity:
     async def test_async_update(self, cover):
         await cover.async_update()
         cover._gateway_handler.send_status_request.assert_called()
+
+    @pytest.mark.asyncio
+    async def test_cover_advanced_and_set_position(self, mock_hass, mock_gateway, mock_entity_base_init):
+        from custom_components.myhome.cover import MyHOMECover
+        from homeassistant.components.cover import CoverEntityFeature
+        c = MyHOMECover(
+            hass=mock_hass,
+            name="Advanced Cover",
+            entity_name=None,
+            device_id="23#4#1",
+            who="2",
+            where="23",
+            interface="1",
+            advanced=True,
+            manufacturer="BTicino",
+            model="Shutter",
+            gateway=mock_gateway,
+        )
+        assert c._attr_supported_features & CoverEntityFeature.SET_POSITION
+
+        # Call async_set_cover_position with position
+        await c.async_set_cover_position(position=75)
+        mock_gateway.send.assert_called_once()
+        assert "*2*1000#75*23#4#1##" in str(mock_gateway.send.call_args[0][0]) or "75" in str(mock_gateway.send.call_args[0][0])
+
+        # Call async_set_cover_position without position (no-op)
+        mock_gateway.send.reset_mock()
+        await c.async_set_cover_position()
+        mock_gateway.send.assert_not_called()
+
+    def test_handle_event_closed_and_position_and_runtime_error(self, cover):
+        msg = MagicMock()
+        msg.is_opening = False
+        msg.is_closing = False
+        msg.is_closed = True
+        msg.current_position = 0
+        msg.human_readable_log = "Cover closed at 0%"
+
+        cover.async_schedule_update_ha_state = MagicMock(side_effect=RuntimeError("Bus disconnected"))
+        cover.handle_event(msg)
+        assert cover._attr_is_closed is True
+        assert cover._attr_current_cover_position == 0
+
+    @pytest.mark.asyncio
+    async def test_cover_async_setup_and_unload_entry(self, mock_hass, mock_gateway):
+        from custom_components.myhome.cover import async_setup_entry, async_unload_entry
+        from custom_components.myhome.const import DOMAIN, CONF_ENTITY
+        from custom_components.myhome.ownd.message import OWNAutomationEvent
+
+        config_entry = MagicMock()
+        config_entry.data = {"mac": "00:03:50:00:12:34"}
+        config_entry.entry_id = "test_entry"
+        listeners = []
+        config_entry.async_on_unload = MagicMock(side_effect=lambda cb: listeners.append(cb))
+
+        mock_hass.data = {
+            DOMAIN: {
+                "00:03:50:00:12:34": {
+                    CONF_ENTITY: mock_gateway,
+                }
+            }
+        }
+
+        # 1. Mock entity registry with an existing entry having #4# and one without #4# (lines 62-68)
+        mock_er = MagicMock()
+        entry_with_int = MagicMock()
+        entry_with_int.domain = "cover"
+        entry_with_int.unique_id = "00:03:50:00:12:34-2-18#4#02"
+
+        entry_plain = MagicMock()
+        entry_plain.domain = "cover"
+        entry_plain.unique_id = "00:03:50:00:12:34-2-19"
+
+        mock_er.entities = {"test1": entry_with_int, "test2": entry_plain}
+
+        with patch("homeassistant.helpers.entity_registry.async_get", return_value=mock_er), \
+             patch("homeassistant.helpers.entity_registry.async_entries_for_config_entry", return_value=[entry_with_int, entry_plain]):
+            async_add_entities = MagicMock()
+            await async_setup_entry(mock_hass, config_entry, async_add_entities)
+            async_add_entities.assert_called_once()
+            restored = async_add_entities.call_args[0][0]
+            assert len(restored) == 2
+            assert restored[0]._where == "18"
+            assert restored[0]._interface == "02"
+            assert restored[1]._where == "19"
+            assert restored[1]._interface is None
+
+            # 2. Test message listener handling
+            assert config_entry.async_on_unload.called
+            assert len(listeners) == 1
+
+        # Test async_unload_entry
+        assert await async_unload_entry(mock_hass, config_entry) is True
+
+    @pytest.mark.asyncio
+    async def test_cover_discovery_message_branches(self, mock_hass, mock_gateway):
+        from custom_components.myhome.cover import async_setup_entry
+        from custom_components.myhome.const import DOMAIN, CONF_ENTITY
+        from custom_components.myhome.ownd.message import OWNEvent, OWNAutomationEvent
+
+        config_entry = MagicMock()
+        config_entry.data = {"mac": "00:03:50:00:12:34"}
+        config_entry.entry_id = "test_entry"
+        dispatched_handlers = {}
+
+        def fake_dispatcher_connect(hass, signal, target):
+            dispatched_handlers[signal] = target
+            return MagicMock()
+
+        mock_hass.data = {
+            DOMAIN: {
+                "00:03:50:00:12:34": {
+                    CONF_ENTITY: mock_gateway,
+                }
+            }
+        }
+
+        with patch("homeassistant.helpers.entity_registry.async_get", return_value=MagicMock()), \
+             patch("homeassistant.helpers.entity_registry.async_entries_for_config_entry", return_value=[]), \
+             patch("custom_components.myhome.cover.async_dispatcher_connect", side_effect=fake_dispatcher_connect):
+            async_add_entities = MagicMock()
+            await async_setup_entry(mock_hass, config_entry, async_add_entities)
+
+            # Handler registered for myhome_message_00:03:50:00:12:34
+            msg_handler = dispatched_handlers[f"myhome_message_{config_entry.data['mac']}"]
+
+            # Non-automation message is ignored by _handle_cover_message (line 129)
+            non_auto_msg = OWNEvent.parse("*1*1*21##")
+            msg_handler(non_auto_msg)
+
+            # Case A: message without where attribute (line 93-94)
+            empty_msg = MagicMock(spec=OWNAutomationEvent)
+            empty_msg.where = None
+            msg_handler(empty_msg)
+
+            # Case B: group/area/general message (lines 97-98)
+            group_msg = MagicMock(spec=OWNAutomationEvent)
+            group_msg.where = "1"
+            group_msg.is_group = True
+            msg_handler(group_msg)
+
+            area_msg = MagicMock(spec=OWNAutomationEvent)
+            area_msg.where = "1"
+            area_msg.is_area = True
+            msg_handler(area_msg)
+
+            gen_msg = MagicMock(spec=OWNAutomationEvent)
+            gen_msg.where = "1"
+            gen_msg.is_general = True
+            msg_handler(gen_msg)
+
+            # Case C: Valid new cover discovery (lines 104-124)
+            valid_msg = OWNEvent.parse("*2*1*55##")
+            valid_msg.handle_event = MagicMock()
+            msg_handler(valid_msg)
+
+            assert async_add_entities.called
+            # Send same message again to hit `if unique_id not in known_covers:` False branch
+            msg_handler(valid_msg)
+
+    @pytest.mark.asyncio
+    async def test_cover_async_added_to_hass(self, cover, mock_hass):
+        cover.hass = mock_hass
+        cover.async_on_remove = MagicMock()
+        await cover.async_added_to_hass()
+        cover.async_on_remove.assert_called_once()
+
 
 # ── Button Entities ────────────────────────────────────────────────────────
 

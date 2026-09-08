@@ -178,3 +178,87 @@ async def test_enable_button_entity(hass):
     
     await btn1.async_will_remove_from_hass()
     assert "enable" not in hass.data[DOMAIN]["mac"]["platforms"]["button"]["device_1"]["entities"]
+
+
+async def test_button_platform_not_in_platforms(hass):
+    """Test setup and unload when button platform is not configured."""
+    mock_gateway = MagicMock()
+    mock_gateway.mac = "mac"
+    hass.data = {
+        DOMAIN: {
+            "mac": {
+                "platforms": {},
+                "entity": mock_gateway,
+            }
+        }
+    }
+    config_entry = MagicMock()
+    config_entry.data = {"mac": "mac"}
+
+    assert await async_setup_entry(hass, config_entry, MagicMock()) is True
+    assert await async_unload_entry(hass, config_entry) is True
+
+
+async def test_button_entities_lifecycle_edge_cases(hass):
+    """Test exception branches and missing entities dict in button lifecycle."""
+    mock_gateway = MagicMock()
+    mock_gateway.mac = "mac"
+
+    # 1. Test when device_dict has no "entities" key (triggers device_dict[CONF_ENTITIES] = {})
+    hass.data = {
+        DOMAIN: {
+            "mac": {
+                "platforms": {
+                    "button": {
+                        "device_1": {}
+                    }
+                }
+            }
+        }
+    }
+
+    dis_btn = DisableCommandButtonEntity(
+        hass=hass,
+        platform="button",
+        name="Device",
+        device_id="device_1",
+        who="1",
+        where="12",
+        interface=None,
+        manufacturer="B",
+        model="A",
+        gateway=mock_gateway,
+    )
+    en_btn = EnableCommandButtonEntity(
+        hass=hass,
+        platform="button",
+        name="Device",
+        device_id="device_1",
+        who="1",
+        where="12",
+        interface=None,
+        manufacturer="B",
+        model="A",
+        gateway=mock_gateway,
+    )
+
+    await dis_btn.async_added_to_hass()
+    assert "disable" in hass.data[DOMAIN]["mac"]["platforms"]["button"]["device_1"]["entities"]
+
+    # Delete entities so en_btn also triggers line 218
+    del hass.data[DOMAIN]["mac"]["platforms"]["button"]["device_1"]["entities"]
+    await en_btn.async_added_to_hass()
+    assert "enable" in hass.data[DOMAIN]["mac"]["platforms"]["button"]["device_1"]["entities"]
+
+    await dis_btn.async_will_remove_from_hass()
+    await en_btn.async_will_remove_from_hass()
+    assert "disable" not in hass.data[DOMAIN]["mac"]["platforms"]["button"]["device_1"]["entities"]
+    assert "enable" not in hass.data[DOMAIN]["mac"]["platforms"]["button"]["device_1"]["entities"]
+
+    # 2. Test when hass.data raises KeyError/TypeError
+    hass.data = {}
+    # Both add and remove should gracefully swallow KeyError without raising
+    await dis_btn.async_added_to_hass()
+    await dis_btn.async_will_remove_from_hass()
+    await en_btn.async_added_to_hass()
+    await en_btn.async_will_remove_from_hass()

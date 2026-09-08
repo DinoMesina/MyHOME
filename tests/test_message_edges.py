@@ -730,3 +730,226 @@ class TestGatewayCommandEdgeCases:
     def test_gateway_command_time_no_tz(self):
         cmd = OWNCommand.parse("*#13**#0*12*30*45**##")
         assert isinstance(cmd, OWNGatewayCommand)
+
+
+# ── Exhaustive Message Edge Coverage ──────────────────────────────────────
+
+class TestMoreEdgeCoverage:
+    """Target remaining uncovered branches in ownd/message.py."""
+
+    def test_message_properties_and_family(self):
+        msg_event = OWNMessage.parse("*1*1*21##")
+        assert msg_event.is_event is True
+        assert msg_event.is_command is False
+        assert msg_event.is_request is False
+        assert msg_event.is_translation is False
+        assert msg_event.entity == "1-21"
+        assert msg_event.unique_id == "1-21"
+        assert repr(msg_event) == "*1*1*21##"
+
+        msg_cmd = OWNMessage("*#1*21*#1*150*0##")
+        assert msg_cmd.is_command is True
+
+        msg_req = OWNMessage("*#1*21##")
+        assert msg_req.is_request is True
+
+        msg_trans = OWNMessage("*1*1000*21##")
+        assert msg_trans.is_translation is True
+
+        # Test unique_id with interface
+        msg_iface = OWNMessage.parse("*1*1*21#4#02##")
+        assert msg_iface.unique_id == "1-21#4#02"
+
+        # Test event_content
+        ec = msg_iface.event_content
+        assert ec["who"] == 1
+        assert ec["where"] == "21"
+        assert ec["interface"] == "02"
+
+        # event_content with dimensions and where_param
+        msg_dim = OWNMessage.parse("*#4*1#1#99*1*0215##")
+        ec_dim = msg_dim.event_content
+        assert ec_dim["dimension"] == 1
+        assert "dimension values" in ec_dim
+
+    def test_message_routing_scopes(self):
+        # is_general
+        gen = OWNMessage.parse("*1*1*0##")
+        assert gen.is_general is True
+        not_gen = OWNMessage.parse("*1*1*21##")
+        assert not_gen.is_general is False
+        who4 = OWNMessage.parse("*4*1*0##")
+        assert who4.is_general is False
+
+        # is_group and group property
+        grp = OWNMessage.parse("*1*1*#3##")
+        assert grp.is_group is True
+        assert grp.group == 3
+        assert not_gen.is_group is False
+        assert not_gen.group is None
+        assert who4.is_group is False
+
+        # is_area and area property
+        area_00 = OWNMessage.parse("*1*1*00##")
+        assert area_00.is_area is True
+        assert area_00.area == 0
+
+        area_100 = OWNMessage.parse("*1*1*100##")
+        assert area_100.is_area is True
+        assert area_100.area == 10
+
+        area_single = OWNMessage.parse("*1*1*5##")
+        assert area_single.is_area is True
+        assert area_single.area == 5
+
+        area_invalid = OWNMessage("*1*1*abc##")
+        assert area_invalid.is_area is False
+        assert area_invalid.area is None
+        assert who4.is_area is False
+
+    def test_lighting_automation_edge_properties(self):
+        light = OWNLightingEvent("*1*1*21##")
+        assert light.transition is None
+
+        auto = OWNAutomationEvent("*2*1*21##")
+        assert auto.state == 1
+
+    def test_heating_edge_properties(self):
+        heat_z0 = OWNHeatingEvent("*#4*#0*0*0215##")
+        assert heat_z0.unique_id == "4-#0"
+
+        heat_sensor = OWNHeatingEvent("*#4*101*0*0215##")
+        assert heat_sensor.unique_id == "4-101"
+        assert heat_sensor._sensor == 1
+
+        heat_z1 = OWNHeatingEvent("*#4*1*0*0215##")
+        assert heat_z1.unique_id == "4-1"
+        assert heat_z1.is_active() is None
+        assert heat_z1.is_heating() is None
+        assert heat_z1.is_cooling() is None
+
+    def test_alarm_edge_properties(self):
+        alarm = OWNAlarmEvent("*5*1*1##")
+        assert alarm.sensor is None
+
+    def test_scene_edge_properties(self):
+        scen = OWNSceneEvent("*0*1*21##")
+        assert scen.scenario == "21"
+        assert scen.state == 1
+
+    def test_energy_event_dimensions(self):
+        # 511 hourly consumption
+        msg_hourly = OWNEnergyEvent("*#18*51#0*511#10#15*1*50##")
+        assert msg_hourly.hourly_consumption["value"] == 50
+        assert msg_hourly.human_readable_log is not None
+
+        # 511 daily consumption
+        msg_daily = OWNEnergyEvent("*#18*51#0*511#10#15*25*500##")
+        assert msg_daily.daily_consumption["value"] == 500
+
+        # 513 daily consumption
+        msg_513 = OWNEnergyEvent("*#18*51#0*513#10*20*150##")
+        assert msg_513.daily_consumption["value"] == 150
+
+        # 514 daily consumption
+        msg_514 = OWNEnergyEvent("*#18*51#0*514#10*20*250##")
+        assert msg_514.daily_consumption["value"] == 250
+
+        # 52 monthly consumption
+        msg_monthly = OWNEnergyEvent("*#18*51#0*52#26#10*100##")
+        assert msg_monthly.monthly_consumption["value"] == 100
+
+        # 53 current month consumption
+        msg_cur_m = OWNEnergyEvent("*#18*51#0*53*100##")
+        assert msg_cur_m.current_month_partial_consumption == 100
+
+    def test_dry_contact_edge_properties(self):
+        dry_on = OWNDryContactEvent("*25*31#1*51##")
+        assert dry_on.is_on is True
+        assert dry_on.is_detection is True
+        assert "detected ON" in dry_on.human_readable_log
+
+        dry_off = OWNDryContactEvent("*25*30#0*51##")
+        assert dry_off.is_on is False
+        assert dry_off.is_detection is False
+        assert "reported OFF" in dry_off.human_readable_log
+
+        cmd = OWNDryContactCommand.status("1")
+        assert "*#25*1##" in str(cmd)
+
+    def test_cen_plus_edge_properties(self):
+        cen = OWNCENPlusEvent("*25*21#1*51##")
+        assert cen.human_readable_log is not None
+
+    def test_sound_edge_cases(self):
+        snd_src = OWNSoundEvent("*16*5*101##")
+        assert "Audio Source 1 received command" in snd_src.human_readable_log
+
+        snd_dim_err = OWNSoundEvent("*#16*1*1*##")
+        assert snd_dim_err._volume is None
+
+        cmd_cycle = OWNSoundCommand.source_cycle()
+        assert "*16*23*100##" in str(cmd_cycle)
+
+    def test_heating_command_central_local(self):
+        cmd = OWNHeatingCommand.set_temperature("#0#2", 21.0, CLIMATE_MODE_HEAT)
+        assert "*#4*#0#2*#14*0210*1##" in str(cmd)
+
+    def test_gateway_broadcasting_no_tz(self):
+        # Empty tz field in dimension 22
+        evt = OWNGatewayEvent("*#13**#22*12*14*58**03*15*04*2026##")
+        assert evt._timezone == ""
+
+    def test_energy_commands(self):
+        now = datetime.date.today()
+        c_hourly = OWNEnergyCommand.get_hourly_consumption("51", now)
+        assert c_hourly is not None
+
+        c_hourly_old = OWNEnergyCommand.get_hourly_consumption("51", datetime.date(2000, 1, 1))
+        assert c_hourly_old is None
+
+        c_part_d = OWNEnergyCommand.get_partial_daily_consumption("51")
+        assert c_part_d is not None
+
+        c_daily = OWNEnergyCommand.get_daily_consumption("51", now.year, now.month)
+        assert c_daily is not None
+
+        c_daily_future = OWNEnergyCommand.get_daily_consumption("51", now.year + 2, 1)
+        assert c_daily_future is None
+
+        c_daily_too_old = OWNEnergyCommand.get_daily_consumption("51", now.year - 5, 1)
+        assert c_daily_too_old is None
+
+        c_part_m = OWNEnergyCommand.get_partial_monthly_consumption("51")
+        assert c_part_m is not None
+
+        c_month = OWNEnergyCommand.get_monthly_consumption("51", 2026, 3)
+        assert c_month is not None
+
+        c_tot = OWNEnergyCommand.get_total_consumption("51")
+        assert c_tot is not None
+
+    def test_signaling_methods(self):
+        ack = OWNSignaling("*#*1##")
+        assert ack.is_ack() is True
+        assert ack.is_nack() is False
+        assert ack.is_nonce() is False
+        assert ack.is_sha() is False
+        assert ack.nonce is None
+        assert ack.sha_version is None
+
+        nack = OWNSignaling("*#*0##")
+        assert nack.is_nack() is True
+
+        nonce = OWNSignaling("*#1234567890##")
+        if nonce.is_nonce():
+            assert nonce.nonce is not None
+
+        sha = OWNSignaling("*98*1##")
+        assert sha.is_sha() is True
+        assert sha.is_sha_1() is True
+        assert sha.is_sha_256() is False
+
+        sha256 = OWNSignaling("*98*2##")
+        assert sha256.is_sha_256() is True
+

@@ -11,7 +11,7 @@ license = "GPL-3.0-or-later"
 authors = [
     {name = "MyHOME Integration Contributors"}
 ]
-requires-python = ">=3.12"
+requires-python = ">=3.11"
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -55,4 +55,16 @@ filterwarnings = [
     "ignore::PendingDeprecationWarning",
     "ignore::aiohttp.web_exceptions.NotAppKeyWarning",
     "ignore::pluggy.PluggyTeardownRaisedWarning",
+]
+
+[tool.coverage.run]
+omit = [
+    "custom_components/myhome/ownd/__main__.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
 ]

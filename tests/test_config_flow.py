@@ -478,3 +478,259 @@ async def test_password_required_and_error(hass: HomeAssistant) -> None:
             {"password": "correct_password"}
         )
         assert result5["type"] == FlowResultType.CREATE_ENTRY
+
+
+def test_mac_address_unit():
+    """Test MACAddress validation and repr."""
+    import pytest
+    from custom_components.myhome.config_flow import MACAddress
+
+    mac = MACAddress("00:03:50:00:12:34")
+    assert repr(mac) == "00:03:50:00:12:34"
+    assert str(mac) == "00:03:50:00:12:34"
+
+    with pytest.raises(ValueError):
+        MACAddress("invalid_mac")
+
+    with pytest.raises(ValueError):
+        MACAddress("00:03:50:00:12:ZZ")
+
+
+async def test_user_step_discovery_timeout(hass: HomeAssistant) -> None:
+    """Test user step aborts with discovery_timeout on timeout."""
+    import asyncio
+    with patch(
+        "custom_components.myhome.config_flow.find_gateways",
+        side_effect=asyncio.TimeoutError("SSDP timeout"),
+    ):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": config_entries.SOURCE_USER}
+        )
+        assert result["type"] == FlowResultType.ABORT
+        assert result["reason"] == "discovery_timeout"
+
+
+async def test_custom_step_validation_and_timeout(hass: HomeAssistant) -> None:
+    """Test custom step error on invalid IP and timeout fallback to custom_manual."""
+    import asyncio
+    with patch("custom_components.myhome.config_flow.find_gateways", return_value=[]):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": config_entries.SOURCE_USER}
+        )
+        result2 = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {"serial": "00:00:00:00:00:00"},
+        )
+        assert result2["step_id"] == "custom"
+
+        # 1. Invalid IP
+        result_err = await hass.config_entries.flow.async_configure(
+            result2["flow_id"],
+            {"address": "999.999.999.999", "port": 20000},
+        )
+        assert result_err["type"] == FlowResultType.FORM
+        assert result_err["errors"]["address"] == "invalid_ip"
+
+        # 2. Timeout in get_gateway -> falls back to custom_manual (lines 165-166)
+        with patch("custom_components.myhome.config_flow.get_gateway", side_effect=asyncio.TimeoutError()):
+            result_manual = await hass.config_entries.flow.async_configure(
+                result_err["flow_id"],
+                {"address": "192.168.1.50", "port": 20000},
+            )
+            assert result_manual["type"] == FlowResultType.FORM
+            assert result_manual["step_id"] == "custom_manual"
+
+
+async def test_custom_manual_step_invalid_inputs(hass: HomeAssistant) -> None:
+    """Test custom_manual step errors on invalid IP and invalid MAC address."""
+    with patch("custom_components.myhome.config_flow.find_gateways", return_value=[]), \
+         patch("custom_components.myhome.config_flow.get_gateway", return_value=None):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": config_entries.SOURCE_USER}
+        )
+        result2 = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {"serial": "00:00:00:00:00:00"},
+        )
+        result3 = await hass.config_entries.flow.async_configure(
+            result2["flow_id"],
+            {"address": "192.168.1.50", "port": 20000},
+        )
+        assert result3["step_id"] == "custom_manual"
+
+        # Pass invalid MAC (lines 227-228)
+        result_bad_mac = await hass.config_entries.flow.async_configure(
+            result3["flow_id"],
+            {"serialNumber": "not_a_mac", "modelName": "F454"},
+        )
+        assert result_bad_mac["errors"]["serialNumber"] == "invalid_mac"
+
+
+async def test_step_port_and_ssdp_missing_port(hass: HomeAssistant) -> None:
+    """Test step_port validation and ssdp step when port is missing."""
+    from custom_components.myhome.config_flow import MyhomeFlowHandler
+    handler = MyhomeFlowHandler()
+    handler.hass = hass
+    handler.context = {
+        "host": "192.168.1.50",
+        "name": "F454",
+        "mac": "00:03:50:00:12:34",
+    }
+    handler.gateway_handler = MagicMock()
+
+    # Invalid port (lines 383-384)
+    res_bad = await handler.async_step_port({"port": 99999})
+    assert res_bad["type"] == FlowResultType.FORM
+    assert res_bad["errors"]["port"] == "invalid_port"
+
+    # Valid port (lines 380-382)
+    with patch.object(handler, "async_step_test_connection", return_value={"type": "create_entry"}):
+        res_ok = await handler.async_step_port({"port": 20000})
+        assert handler.gateway_handler.port == 20000
+
+    # Test ssdp with missing port (line 465)
+    discovery_info = MagicMock()
+    discovery_info.upnp = {"serialNumber": "00:03:50:00:12:34", "modelName": "F454"}
+    discovery_info.ssdp_st = "st"
+    discovery_info.ssdp_location = "http://192.168.1.50/desc.xml"
+    discovery_info.ssdp_headers = {"_host": "192.168.1.50"}
+
+    mock_gw = MagicMock()
+    mock_gw.port = None
+    mock_gw.address = "192.168.1.50"
+    mock_gw.unique_id = "00:03:50:00:12:34"
+    mock_gw.model_name = "F454"
+    mock_gw.friendly_name = "F454"
+    mock_gw.udn = "udn"
+    mock_gw.firmware = "1.0"
+
+    with patch("custom_components.myhome.config_flow.OWNGateway.build_from_discovery_info", return_value=mock_gw), \
+         patch.object(handler, "async_step_port", return_value={"type": "form", "step_id": "port"}):
+        res_ssdp = await handler.async_step_ssdp(discovery_info)
+        assert res_ssdp["step_id"] == "port"
+
+
+async def test_reauth_with_config_dict(hass: HomeAssistant) -> None:
+    """Test async_step_reauth when entry_id is missing and config dict is provided."""
+    from custom_components.myhome.config_flow import MyhomeFlowHandler
+    from homeassistant.const import CONF_MAC
+
+    handler = MyhomeFlowHandler()
+    handler.hass = hass
+    handler.context = {}
+
+    config = {
+        CONF_MAC: "00:03:50:00:12:34",
+        "address": "192.168.1.50",
+        "port": 20000,
+        "modelName": "F454",
+    }
+    with patch.object(handler, "async_step_password", return_value={"type": "form", "step_id": "password"}):
+        res = await handler.async_step_reauth(config=config)
+        assert res["step_id"] == "password"
+
+
+async def test_options_flow_existing_decoders_and_handler_lookup(hass: HomeAssistant) -> None:
+    """Test options flow with existing decoders (line 602) and handler property (line 485)."""
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+    from custom_components.myhome.config_flow import MyhomeOptionsFlowHandler
+    from custom_components.myhome.const import CONF_DECODER_ENTITY, CONF_DECODER_SOURCE
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={"mac": "00:03:50:00:12:34", "host": "192.168.1.50", "port": 20000},
+        options={
+            CONF_DECODER_ENTITY.format(1): "media_player.living_room",
+            CONF_DECODER_SOURCE.format(1): 1,
+        },
+        unique_id="00:03:50:00:12:34",
+    )
+    entry.add_to_hass(hass)
+
+    # 1. Options flow with config_entry passed
+    opt_flow = MyhomeOptionsFlowHandler(entry)
+    opt_flow.hass = hass
+    form = await opt_flow.async_step_init()
+    assert form["type"] == FlowResultType.FORM
+    assert form["step_id"] == "user"
+
+    # 2. Options flow with handler attribute (line 485)
+    opt_flow2 = MyhomeOptionsFlowHandler(None)
+    opt_flow2.hass = hass
+    opt_flow2.handler = entry.entry_id
+    assert opt_flow2.config_entry == entry
+
+    # 3. Options flow with None config_entry and no handler (line 495)
+    opt_flow3 = MyhomeOptionsFlowHandler(None)
+    assert opt_flow3.config_entry is None
+
+    # 4. Direct call to async_step_user without init (lines 515, 517)
+    opt_flow4 = MyhomeOptionsFlowHandler(entry)
+    opt_flow4.hass = hass
+    assert opt_flow4.options is None
+    form4 = await opt_flow4.async_step_user()
+    assert form4["type"] == FlowResultType.FORM
+
+    # 5. Options submission validation: not_a_media_player and mass_entity_not_allowed (lines 528-534)
+    from custom_components.myhome.const import (
+        CONF_ADDRESS,
+        CONF_OWN_PASSWORD,
+        CONF_WORKER_COUNT,
+        CONF_GENERATE_EVENTS,
+        CONF_TRANSITION_MODE,
+        CONF_DECODER_PRE_GAIN,
+    )
+    mock_reg = MagicMock()
+    mass_entry = MagicMock()
+    mass_entry.platform = "mass"
+    mock_reg.async_get.side_effect = lambda eid: mass_entry if "mass" in eid else MagicMock(platform="sonos")
+
+    with patch("homeassistant.helpers.entity_registry.async_get", return_value=mock_reg):
+        # Invalid: not starting with media_player.
+        res_not_mp = await opt_flow.async_step_user({
+            CONF_WORKER_COUNT: 1,
+            CONF_GENERATE_EVENTS: False,
+            CONF_TRANSITION_MODE: "software",
+            CONF_DECODER_ENTITY.format(1): "light.living_room",
+            CONF_DECODER_SOURCE.format(1): 1,
+            CONF_DECODER_PRE_GAIN.format(1): 0,
+        })
+        assert res_not_mp["errors"][CONF_DECODER_ENTITY.format(1)] == "not_a_media_player"
+
+        # Invalid: Music Assistant clone entity (lines 533-534)
+        res_mass = await opt_flow.async_step_user({
+            CONF_WORKER_COUNT: 1,
+            CONF_GENERATE_EVENTS: False,
+            CONF_TRANSITION_MODE: "software",
+            CONF_DECODER_ENTITY.format(1): "media_player.mass_zone",
+            CONF_DECODER_SOURCE.format(1): 1,
+            CONF_DECODER_PRE_GAIN.format(1): 0,
+        })
+        assert res_mass["errors"][CONF_DECODER_ENTITY.format(1)] == "mass_entity_not_allowed"
+
+        # Valid options submission (lines 536-550)
+        res_valid = await opt_flow.async_step_user({
+            CONF_ADDRESS: "192.168.1.50",
+            CONF_OWN_PASSWORD: None,
+            CONF_WORKER_COUNT: 2,
+            CONF_GENERATE_EVENTS: True,
+            CONF_TRANSITION_MODE: "native",
+            CONF_DECODER_ENTITY.format(1): "media_player.sonos_zone",
+            CONF_DECODER_SOURCE.format(1): 2,
+            CONF_DECODER_PRE_GAIN.format(1): 10,
+        })
+        assert res_valid["type"] == FlowResultType.CREATE_ENTRY
+
+
+async def test_custom_manual_invalid_address(hass: HomeAssistant) -> None:
+    """Test custom_manual step with invalid IP address (lines 222-223)."""
+    from custom_components.myhome.config_flow import MyhomeFlowHandler
+    handler = MyhomeFlowHandler()
+    handler.hass = hass
+    handler._custom_address = "999.999.999.999"  # Invalid IP triggers lines 222-223
+    handler._custom_port = 20000
+
+    res = await handler.async_step_custom_manual(user_input={"serialNumber": "00:03:50:00:12:34", "modelName": "F454"})
+    assert res["type"] == FlowResultType.FORM
+    assert res["errors"]["address"] == "invalid_ip"
+

@@ -273,10 +273,8 @@ class OWNMessage:
     @property
     def is_general(self) -> bool:
         if self.who == 1 or self.who == 2:
-            if self._where == "0":
-                return True
-        else:
-            return False
+            return self._where == "0"
+        return False
 
     @property
     def is_group(self) -> bool:
@@ -1457,7 +1455,7 @@ class OWNEnergyEvent(OWNEvent):
             elif self._dimension == 52:
                 self._type = MESSAGE_TYPE_MONTHLY_CONSUMPTION
                 _message_date = datetime.date(
-                    int(f"20{self._dimension_param[0]}"), self._dimension_param[1], 1
+                    int(f"20{self._dimension_param[0]}"), int(self._dimension_param[1]), 1
                 )
                 self._monthly_consumption["date"] = _message_date
                 self._monthly_consumption["value"] = int(self._dimension_value[0])
@@ -2271,7 +2269,7 @@ class OWNSignaling(OWNMessage):
     @property
     def nonce(self):
         """Return the authentication nonce IF the message is a nonce message"""
-        if self.is_nonce:  # pylint: disable=using-constant-test
+        if self.is_nonce():
             return self._match.group(1)
         else:
             return None
@@ -2279,7 +2277,7 @@ class OWNSignaling(OWNMessage):
     @property
     def sha_version(self):
         """Return the authentication SHA version IF the message is a SHA challenge message"""
-        if self.is_sha:  # pylint: disable=using-constant-test
+        if self.is_sha():
             return self._match.group(1)
         else:
             return None

@@ -220,3 +220,126 @@ async def test_motion_sensor(hass):
     
     # Test async_will_remove_from_hass
     await sensor.async_will_remove_from_hass()
+
+
+async def test_binary_sensor_platform_not_in_platforms(hass):
+    """Test setup and unload when binary_sensor is not in platforms."""
+    mock_gateway = MagicMock()
+    mock_gateway.mac = "mac"
+    hass.data = {
+        DOMAIN: {
+            "mac": {
+                "platforms": {},
+                "entity": mock_gateway,
+            }
+        }
+    }
+    config_entry = MagicMock()
+    config_entry.data = {"mac": "mac"}
+
+    assert await async_setup_entry(hass, config_entry, MagicMock()) is True
+    assert await async_unload_entry(hass, config_entry) is True
+
+
+async def test_binary_sensor_lifecycle_edge_cases(hass):
+    """Test exception handling and missing CONF_ENTITIES dict across all binary sensor entities."""
+    mock_gateway = MagicMock()
+    mock_gateway.mac = "mac"
+
+    # Setup device_dict without "entities" key to trigger line 234 and line 314
+    hass.data = {
+        DOMAIN: {
+            "mac": {
+                "platforms": {
+                    "binary_sensor": {
+                        "d1": {},
+                        "a1": {},
+                        "m1": {},
+                    }
+                }
+            }
+        }
+    }
+
+    dry = MyHOMEDryContact(
+        hass=hass, name="D", entity_name="D", device_id="d1",
+        who="25", where="12", inverted=False, device_class=BinarySensorDeviceClass.WINDOW,
+        manufacturer="M", model="M", gateway=mock_gateway,
+    )
+    aux = MyHOMEAuxiliary(
+        hass=hass, name="A", entity_name="A", device_id="a1",
+        who="9", where="13", inverted=False, device_class=BinarySensorDeviceClass.DOOR,
+        manufacturer="M", model="M", gateway=mock_gateway,
+    )
+    motion = MyHOMEMotionSensor(
+        hass=hass, name="M", entity_name="M", device_id="m1",
+        who="1", where="14", inverted=False, device_class=BinarySensorDeviceClass.MOTION,
+        manufacturer="M", model="M", gateway=mock_gateway,
+    )
+    motion.async_get_last_state = AsyncMock(return_value=None)
+    mock_gateway.send_status_request = AsyncMock()
+
+    # Trigger async_added_to_hass with device_dict lacking CONF_ENTITIES
+    await dry.async_added_to_hass()
+    await aux.async_added_to_hass()
+    await motion.async_added_to_hass()
+
+    assert "window" in hass.data[DOMAIN]["mac"]["platforms"]["binary_sensor"]["d1"]["entities"]
+    assert "door" in hass.data[DOMAIN]["mac"]["platforms"]["binary_sensor"]["a1"]["entities"]
+    assert "motion" in hass.data[DOMAIN]["mac"]["platforms"]["binary_sensor"]["m1"]["entities"]
+
+    await dry.async_will_remove_from_hass()
+    await aux.async_will_remove_from_hass()
+    await motion.async_will_remove_from_hass()
+
+    # Trigger KeyError branches when hass.data is empty
+    hass.data = {}
+    await dry.async_added_to_hass()
+    await dry.async_will_remove_from_hass()
+    await aux.async_added_to_hass()
+    await aux.async_will_remove_from_hass()
+    await motion.async_added_to_hass()
+    await motion.async_will_remove_from_hass()
+
+
+async def test_motion_sensor_restore_state_and_timeout_expiration(hass):
+    """Test motion sensor state restore from last state and timeout expiration in async_update."""
+    from datetime import datetime, timezone
+    from homeassistant.const import STATE_ON
+
+    mock_gateway = MagicMock()
+    mock_gateway.mac = "mac"
+    mock_gateway.send_status_request = AsyncMock()
+
+    hass.data = {
+        DOMAIN: {
+            "mac": {
+                "platforms": {
+                    "binary_sensor": {
+                        "m1": {"entities": {}}
+                    }
+                }
+            }
+        }
+    }
+
+    motion = MyHOMEMotionSensor(
+        hass=hass, name="M", entity_name="M", device_id="m1",
+        who="1", where="14", inverted=False, device_class=BinarySensorDeviceClass.MOTION,
+        manufacturer="M", model="M", gateway=mock_gateway,
+    )
+    motion.async_schedule_update_ha_state = MagicMock()
+
+    # 1. Test restore state (lines 322-323)
+    mock_state = MagicMock()
+    mock_state.state = STATE_ON
+    # Past timestamp older than timeout (e.g. 500 seconds ago)
+    past_time = datetime.now(timezone.utc) - timedelta(seconds=500)
+    mock_state.last_updated = past_time
+    motion.async_get_last_state = AsyncMock(return_value=mock_state)
+
+    await motion.async_added_to_hass()
+    # During async_added_to_hass, it calls async_update(), which notices timeout expired!
+    # lines 341-343: _attr_is_on becomes False, _last_updated updated, async_schedule_update_ha_state called
+    assert motion._attr_is_on is False
+    motion.async_schedule_update_ha_state.assert_called()
