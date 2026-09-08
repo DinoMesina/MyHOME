@@ -45,6 +45,7 @@ Maintained by the **[OpenWebNet-HA](https://github.com/OpenWebNet-HA)** communit
 | **MH200N** | OpenWebNet | 2 workers | 80 ms | ❌ Manual | Second-generation scenario programmer |
 | **MH200** *(Legacy)* | OpenWebNet | 1 worker | 150 ms | ❌ Manual | Strict single-session pacing; watchdog hardened |
 | **AM4890** | OpenWebNet | 2 workers | 100 ms | ❌ Manual | Compact residential gateway |
+| **Legrand 3578** | OpenWebNet (Serial) | 2 workers | 50 ms | ❌ Manual (Serial) | USB / Serial gateway & OpenZigBee interface |
 
 ### Supported Entity Domains
 
@@ -140,6 +141,32 @@ This integration includes a **Dynamic Proxy** that lets you stream IP audio (via
 
 ---
 
+## 📡 Real-Time Bus Monitor & Diagnostics
+
+The integration includes an in-band real-time bus monitor operating over the existing gateway event stream with zero extra socket connections:
+
+### Lovelace Bus Monitor Card (`<myhome-bus-card>`)
+
+A modern custom Lovelace element is automatically registered with zero configuration:
+
+- **Live Bus Stream**: High-performance scrolling feed with color-coded badges for subsystems (Lighting `WHO=1`, Automation `WHO=2`, Climate `WHO=4`, Sound `WHO=16`, Energy `WHO=18`, CEN `WHO=15/25`) and ACK (`*#*1##`) / NACK (`*#*0##`) highlighting.
+- **Interactive Controls**: Live Pause/Resume, buffer clearing, and instant filtering by subsystem, WHERE address, and Direction (RX/TX).
+- **Manual Frame Injector**: Send raw OpenWebNet diagnostic frames directly to the bus with syntax validation.
+- **One-Click Diagnostic Bug Reporter**: Click **"📋 Copy Diagnostic Report"** to copy a sanitized, GitHub-ready Markdown bundle containing:
+  - Home Assistant Core & integration versions
+  - Hardware gateway profile, firmware, connection type, queue pacing, and worker counts
+  - Live buffer depth and RX/TX counters
+  - Collapsible OpenWebNet bus trace (`<details><summary>OpenWebNet Bus Trace</summary>`)
+  - Direct link opening pre-filled GitHub Issue Forms!
+
+### 📝 Structured GitHub Issue Forms
+
+When reporting issues or requesting new device support on GitHub, interactive forms ensure complete diagnostics:
+- **Bug Report**: Gateway profile dropdown, connection type, HA version, diagnostics JSON attachment, and pre-formatted bus trace.
+- **Device Support Request**: Structured form for adding new BTicino/Legrand modular components with WHO codes and frame samples.
+
+---
+
 ## 🛠️ Development & Quality Standards
 
 This project enforces strict code quality and packaging standards:
@@ -212,11 +239,13 @@ The integration maintains over 720 automated tests (100% line coverage) covering
   - [x] Token-bucket bus pacing and sentinel worker lifecycle.
   - [x] Synthetic mock TCP test harness with 723+ unit tests (100% coverage).
   - [x] PyPI packaging pipeline & GitHub Actions CI green across all workflows.
-- [ ] **Phase 2: Monitoring & Real-time Diagnostics**
-  - [ ] In-band Unified Bus Listener (500-frame circular ring buffer, 0 extra sockets).
-  - [ ] Native Home Assistant Diagnostics (`diagnostics.py`).
-  - [ ] WebSocket streaming API & real-time Lovelace bus monitor card.
-  - [ ] Stateless CEN/CEN+ scenario device triggers (`device_trigger.py`).
+- [x] **Phase 2: Monitoring & Real-time Diagnostics**
+  - [x] In-band Unified Bus Listener (500-frame circular ring buffer, 0 extra sockets).
+  - [x] Native Home Assistant Diagnostics (`diagnostics.py`).
+  - [x] WebSocket streaming API & real-time Lovelace bus monitor card.
+  - [x] One-click diagnostic bundle & GitHub Issue Forms.
+  - [x] USB / Serial Gateway support (Legrand 3578 / OpenZigBee).
+  - [x] Stateless CEN/CEN+ scenario device triggers (`device_trigger.py`).
 
 ---
 
