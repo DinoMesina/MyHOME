@@ -50,7 +50,44 @@ async def _async_register_frontend(hass: HomeAssistant):
             ])
         except Exception as err:
             LOGGER.debug(f"Static path registration: {err}")
-        add_extra_js_url(hass, "/myhome_static/myhome-monitor-card.js?v=1.3.0")
+
+        card_url = "/myhome_static/myhome-monitor-card.js?v=1.3.2"
+        add_extra_js_url(hass, card_url)
+
+        # Automatically register into Lovelace resources so it appears in the visual Card Picker and all dashboards
+        async def _async_register_lovelace_resource(_event=None):
+            try:
+                lovelace = hass.data.get("lovelace")
+                if lovelace and hasattr(lovelace, "resources"):
+                    resources = lovelace.resources
+                    if resources:
+                        if not getattr(resources, "loaded", True):
+                            await resources.async_load()
+                            resources.loaded = True
+
+                        registered = any(
+                            "/myhome_static/myhome-monitor-card.js" in r.get("url", "")
+                            for r in resources.async_items()
+                        )
+                        if not registered:
+                            if hasattr(resources, "async_create_item"):
+                                await resources.async_create_item({
+                                    "res_type": "module",
+                                    "url": card_url,
+                                })
+                            elif hasattr(resources, "data") and hasattr(resources.data, "append"):
+                                resources.data.append({
+                                    "type": "module",
+                                    "url": card_url,
+                                })
+                            LOGGER.info("Successfully registered MyHOME Monitor Card in Lovelace resources")
+            except Exception as res_err:
+                LOGGER.debug("Could not auto-register Lovelace resource: %s", res_err)
+
+        if hass.is_running:
+            hass.async_create_task(_async_register_lovelace_resource())
+        else:
+            hass.bus.async_listen_once("homeassistant_started", _async_register_lovelace_resource)
 
 
 async def async_setup(hass, config):
