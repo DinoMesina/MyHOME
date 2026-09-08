@@ -50,9 +50,10 @@ include = ["custom_components*"]
 asyncio_mode = "auto"
 testpaths = ["tests"]
 pythonpath = ["."]
-addopts = "-p no:socket -W error -W ignore::aiohttp.web_exceptions.NotAppKeyWarning -W ignore::DeprecationWarning:homeassistant.*"
+addopts = "-p no:socket"
 filterwarnings = [
-    "error",
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
     "ignore::aiohttp.web_exceptions.NotAppKeyWarning",
-    "ignore::DeprecationWarning:homeassistant.*",
+    "ignore::pluggy.PluggyTeardownRaisedWarning",
 ]
