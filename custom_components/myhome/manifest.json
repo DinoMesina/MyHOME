@@ -1,6 +1,10 @@
 {
   "domain": "myhome",
   "name": "MyHOME",
+  "after_dependencies": [
+    "frontend",
+    "http"
+  ],
   "codeowners": [
     "@anotherjulien",
     "@GreenGrassBlueOcean"
