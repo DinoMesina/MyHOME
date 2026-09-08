@@ -1,13 +1,17 @@
 {
   "domain": "myhome",
-  "integration_type": "hub",
   "name": "MyHOME",
   "version": "1.0.0-beta",
+  "codeowners": [
+    "@anotherjulien",
+    "@GreenGrassBlueOcean"
+  ],
   "iot_class": "local_push",
   "homeassistant": "2024.4.0",
   "config_flow": true,
-  "documentation": "https://github.com/anotherjulien/MyHOME",
-  "issue_tracker": "https://github.com/anotherjulien/MyHOME/issues",
+  "documentation": "https://github.com/OpenWebNet-HA/MyHOME",
+  "integration_type": "hub",
+  "issue_tracker": "https://github.com/OpenWebNet-HA/MyHOME/issues",
   "requirements": [],
   "ssdp": [
     {
@@ -65,8 +69,5 @@
       "manufacturer": "BTicino S.p.A.",
       "modelName": "MH201"
     }
-  ],
-  "codeowners": [
-    "@anotherjulien"
   ]
 }

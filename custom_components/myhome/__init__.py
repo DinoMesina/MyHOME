@@ -7,7 +7,7 @@ from .gateway import MyHOMEGatewayHandler
 from homeassistant.config_entries import SOURCE_REAUTH, ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
-from homeassistant.helpers import device_registry as dr, entity_registry as er
+from homeassistant.helpers import device_registry as dr, entity_registry as er, config_validation as cv
 from homeassistant.const import CONF_HOST, CONF_MAC
 
 from .const import (
@@ -27,6 +27,7 @@ from .const import (
     DOMAIN,
     LOGGER,
 )
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 PLATFORMS = ["light", "switch", "cover", "climate", "binary_sensor", "sensor", "media_player", "button"]
 
 

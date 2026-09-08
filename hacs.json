@@ -1,8 +1,10 @@
 {
   "name": "MyHome",
   "render_readme": true,
+  "zip_release": true,
+  "filename": "myhome.zip",
   "country": [
-    "EN",
+    "GB",
     "FR",
     "NL",
     "IT"
