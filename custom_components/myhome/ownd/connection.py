@@ -6,6 +6,7 @@ import hashlib
 import string
 import random
 import logging
+from typing import Optional, List, Dict, Tuple, Any
 from urllib.parse import urlparse
 
 from .discovery import find_gateways, get_gateway, get_port
@@ -327,7 +328,10 @@ class OWNSession:
         """Closes the connection to the OpenWebNet gateway"""
         if self._stream_writer:
             self._stream_writer.close()
-            await self._stream_writer.wait_closed()
+            try:
+                await self._stream_writer.wait_closed()
+            except (TypeError, AttributeError, Exception):
+                pass
         self._logger.debug(
             "%s %s session closed.", self._gateway.log_id, self._type.capitalize()
         )
@@ -349,11 +353,23 @@ class OWNSession:
         # self._logger.debug("%s Reply: `%s`", self._gateway.log_id, resulting_message)
 
         if resulting_message.is_nack():
-            self._logger.error(
-                "%s Error while opening %s session.", self._gateway.log_id, self._type
-            )
-            error = True
-            error_message = "connection_refused"
+            if self._type == "command":
+                # Fallback for newer Legrand gateways (F455, Classe 300) requiring *99*9## (CMD_SESSION_ALT)
+                # Credit: Massimo Valla (@mvalla / openwebnet4j)
+                self._logger.info(
+                    "%s *99*0## was NACKed; attempting *99*9## alternate command session (openwebnet4j fallback by @mvalla).",
+                    self._gateway.log_id,
+                )
+                self._stream_writer.write(b"*99*9##")
+                await self._stream_writer.drain()
+                raw_response = await self._stream_reader.readuntil(OWNSession.SEPARATOR)
+                resulting_message = OWNSignaling(raw_response.decode())
+
+            if resulting_message.is_nack():
+                self._logger.error(
+                    "%s Error while opening %s session.", self._gateway.log_id, self._type
+                )
+                return {"Success": False, "Message": "connection_refused"}
 
         raw_response = await self._stream_reader.readuntil(OWNSession.SEPARATOR)
         resulting_message = OWNSignaling(raw_response.decode())
@@ -649,13 +665,67 @@ class OWNSession:
 
 
 class OWNEventSession(OWNSession):
+    """Event (MON) session receiving asynchronous bus updates (*99*1##).
+
+    In physical gateways (F454, MH200N), an inactivity watchdog closes MON sessions
+    after 105 seconds of silence. Based on openwebnet4j by Massimo Valla (@mvalla),
+    we maintain a 90-second keepalive task sending *#*1## to keep the socket alive.
+    """
+
     def __init__(self, gateway: OWNGateway = None, logger: logging.Logger = None):
         super().__init__(gateway=gateway, connection_type="event", logger=logger)
+        self._keepalive_task: Optional[asyncio.Task] = None
+        self._is_active: bool = False
 
     @classmethod
     async def connect_to_gateway(cls, gateway: OWNGateway):
         connection = cls(gateway)
         await connection.connect()
+
+    async def connect(self):
+        self._cancel_keepalive()
+        res = await super().connect()
+        if res and res.get("Success", False):
+            self._is_active = True
+            self._keepalive_task = asyncio.create_task(self._keepalive_loop())
+        return res
+
+    def _cancel_keepalive(self):
+        if self._keepalive_task and not self._keepalive_task.done():
+            self._keepalive_task.cancel()
+        self._keepalive_task = None
+
+    async def _keepalive_loop(self):
+        """Send periodic *#*1## keepalive frames on the event/MON session.
+
+        Physical gateways (F454, MH200N) enforce a 105-second inactivity timeout.
+        openwebnet4j (@mvalla) sends *#*1## every 90 seconds to keep the socket alive.
+        """
+        try:
+            while self._is_active:
+                await asyncio.sleep(90)
+                if (
+                    self._is_active
+                    and self._stream_writer
+                    and not self._stream_writer.is_closing()
+                ):
+                    self._logger.debug(
+                        "%s Sending 90s MON keepalive (*#*1##) [openwebnet4j pattern by @mvalla]",
+                        self._gateway.log_id,
+                    )
+                    self._stream_writer.write(b"*#*1##")
+                    await self._stream_writer.drain()
+        except asyncio.CancelledError:
+            pass
+        except Exception as ex:
+            self._logger.debug(
+                "%s Keepalive loop exception: %s", self._gateway.log_id, ex
+            )
+
+    async def close(self) -> None:
+        self._is_active = False
+        self._cancel_keepalive()
+        await super().close()
 
     async def get_next(self):
         """Acts as an entry point to read messages on the event bus.
@@ -713,44 +783,89 @@ class OWNCommandSession(OWNSession):
         connection = cls(gateway)
         await connection.connect()
 
+    @classmethod
+    async def probe_gateway(cls, gateway: OWNGateway, logger: logging.Logger = None) -> bool:
+        """Active watchdog probe sending *#13**15## (requestModel) on command session.
+
+        Credit: Massimo Valla (@mvalla / openwebnet4j GatewayMgmt.requestModel)
+        Returns True if gateway responds with ACK.
+        """
+        try:
+            session = cls(gateway=gateway, logger=logger or logging.getLogger(__name__))
+            res = await session.connect()
+            if not res or not res.get("Success", False):
+                return False
+            result = await session.send("*#13**15##", is_status_request=True)
+            await session.close()
+            return result is not None
+        except Exception:
+            return False
+
     async def send(self, message: str, is_status_request: bool = False):
         """Send the attached message on an existing 'command' connection,
-        actively reconnecting it if it had been reset."""
+        actively reconnecting it if it had been reset.
 
+        Handles multi-frame responses (status and dimension queries) ending with
+        ACK (*#*1##) or NACK (*#*0##), preventing TCP buffer desynchronization.
+        Credit: Massimo Valla (@mvalla / openwebnet4j).
+        """
         try:
             self._stream_writer.write(str(message).encode())
             await self._stream_writer.drain()
-            raw_response = await self._stream_reader.readuntil(OWNSession.SEPARATOR)
-            resulting_message = OWNMessage.parse(raw_response.decode())
-            if (
-                isinstance(resulting_message, OWNSignaling)
-                and resulting_message.is_nack()
-            ):
+
+            collected = []
+            terminal_ack = False
+            max_frames = 20
+            for _ in range(max_frames):
+                raw_response = await self._stream_reader.readuntil(OWNSession.SEPARATOR)
+                msg = OWNMessage.parse(raw_response.decode())
+                if isinstance(msg, OWNSignaling):
+                    if msg.is_ack():
+                        terminal_ack = True
+                        break
+                    elif msg.is_nack():
+                        terminal_ack = False
+                        break
+                elif raw_response.decode() in ("*#*1##", "*#*0##"):
+                    terminal_ack = (raw_response.decode() == "*#*1##")
+                    break
+                else:
+                    collected.append(msg if msg else raw_response.decode())
+
+            # If immediate NACK and no data collected, retry once (standard OWN behavior)
+            if not terminal_ack and not collected:
+                self._logger.debug(
+                    "%s Immediate NACK for `%s`, retrying once...",
+                    self._gateway.log_id,
+                    message,
+                )
                 self._stream_writer.write(str(message).encode())
                 await self._stream_writer.drain()
-                raw_response = await self._stream_reader.readuntil(OWNSession.SEPARATOR)
-                resulting_message = OWNSignaling(raw_response.decode())
-                if resulting_message.is_nack():
-                    self._logger.error(
-                        "%s Could not send message `%s`.", self._gateway.log_id, message
-                    )
-                elif resulting_message.is_ack():
-                    if not is_status_request:
-                        self._logger.info(
-                            "%s Message `%s` was successfully sent.",
-                            self._gateway.log_id,
-                            message,
-                        )
+                for _ in range(max_frames):
+                    raw_response = await self._stream_reader.readuntil(OWNSession.SEPARATOR)
+                    msg = OWNMessage.parse(raw_response.decode())
+                    if isinstance(msg, OWNSignaling):
+                        if msg.is_ack():
+                            terminal_ack = True
+                            break
+                        elif msg.is_nack():
+                            terminal_ack = False
+                            break
+                    elif raw_response.decode() in ("*#*1##", "*#*0##"):
+                        terminal_ack = (raw_response.decode() == "*#*1##")
+                        break
                     else:
-                        self._logger.debug(
-                            "%s Message `%s` was successfully sent.",
-                            self._gateway.log_id,
-                            message,
-                        )
-            elif (
-                isinstance(resulting_message, OWNSignaling)
-                and resulting_message.is_ack()
-            ):
+                        collected.append(msg if msg else raw_response.decode())
+
+            if terminal_ack:
+                if collected:
+                    self._logger.debug(
+                        "%s Message `%s` collected %s responses: %s",
+                        self._gateway.log_id,
+                        message,
+                        len(collected),
+                        collected,
+                    )
                 if not is_status_request:
                     self._logger.info(
                         "%s Message `%s` was successfully sent.",
@@ -763,39 +878,19 @@ class OWNCommandSession(OWNSession):
                         self._gateway.log_id,
                         message,
                     )
+                return collected or True
             else:
-                self._logger.debug(
-                    "%s Message `%s` received response `%s`.",
-                    self._gateway.log_id,
-                    message,
-                    resulting_message,
+                self._logger.error(
+                    "%s Could not send message `%s`.", self._gateway.log_id, message
                 )
-                raw_response = await self._stream_reader.readuntil(OWNSession.SEPARATOR)
-                resulting_message = OWNSignaling(raw_response.decode())
-                if resulting_message.is_nack():
-                    self._logger.error(
-                        "%s Could not send message `%s`.", self._gateway.log_id, message
-                    )
-                elif resulting_message.is_ack():
-                    if not is_status_request:
-                        self._logger.info(
-                            "%s Message `%s` was successfully sent.",
-                            self._gateway.log_id,
-                            message,
-                        )
-                    else:
-                        self._logger.debug(
-                            "%s Message `%s` was successfully sent.",
-                            self._gateway.log_id,
-                            message,
-                        )
+                return None
 
         except (ConnectionResetError, asyncio.IncompleteReadError):
             self._logger.debug(
                 "%s Command session connection reset, retrying...", self._gateway.log_id
             )
             await self.connect()
-            await self.send(message=message, is_status_request=is_status_request)
+            return await self.send(message=message, is_status_request=is_status_request)
         except Exception:  # pylint: disable=broad-except
             self._logger.exception("%s Command session crashed.", self._gateway.log_id)
             return None

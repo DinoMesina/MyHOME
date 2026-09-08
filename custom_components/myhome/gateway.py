@@ -153,7 +153,16 @@ class MyHOMEGatewayHandler:
         LOGGER.debug("%s Creating listening worker.", self.log_id)
 
         _event_session = OWNEventSession(gateway=self.gateway, logger=LOGGER)
-        await _event_session.connect()
+        res = await _event_session.connect()
+        if isinstance(res, dict) and not res.get("Success", True):
+            if res.get("Message") in ("password_error", "password_required", "negotiation_refused", "connection_refused"):
+                LOGGER.error(
+                    "%s Event session authentication or connection refused (%s). Terminating event listener to prevent gateway lockout.",
+                    self.log_id,
+                    res.get("Message"),
+                )
+                self.is_connected = False
+                return
         self.is_connected = True
 
         # Active Discovery
@@ -354,7 +363,16 @@ class MyHOMEGatewayHandler:
         )
 
         _command_session = OWNCommandSession(gateway=self.gateway, logger=LOGGER)
-        await _command_session.connect()
+        res = await _command_session.connect()
+        if isinstance(res, dict) and not res.get("Success", True):
+            if res.get("Message") in ("password_error", "password_required", "negotiation_refused", "connection_refused"):
+                LOGGER.error(
+                    "%s Command session authentication or connection refused (%s). Terminating sending worker %s to prevent gateway lockout.",
+                    self.log_id,
+                    res.get("Message"),
+                    worker_id,
+                )
+                return
 
         while not self._terminate_sender:
             task = await self.send_buffer.get()
@@ -368,7 +386,11 @@ class MyHOMEGatewayHandler:
                 task["message"],
                 worker_id,
             )
-            await _command_session.send(message=task["message"], is_status_request=task["is_status_request"])
+            collected = await _command_session.send(message=task["message"], is_status_request=task["is_status_request"])
+            if collected and isinstance(collected, list):
+                for resp in collected:
+                    if isinstance(resp, OWNMessage):
+                        async_dispatcher_send(self.hass, f"myhome_message_{self.mac}", resp)
             self.send_buffer.task_done()
 
             if hasattr(self.gateway, "profile") and self.gateway.profile.command_queue_delay > 0:

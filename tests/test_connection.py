@@ -347,8 +347,128 @@ class TestOWNCommandSession:
                 session._stream_writer = MagicMock()
                 session._stream_writer.drain = AsyncMock()
                 session._stream_reader = AsyncMock()
-                session._stream_reader.readuntil.return_value = b"*1*1*12##"
+                session._stream_reader.readuntil.return_value = b"*#*1##"
                 return {"Success": True}
             mock_connect.side_effect = restore_network
             await session.send("*1*1*12##")
             mock_connect.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_send_multi_frame_response(self, session):
+        """Verify openwebnet4j multi-frame response draining: collects intermediate frames until terminal ACK."""
+        session._stream_writer = MagicMock()
+        session._stream_writer.drain = AsyncMock()
+        session._stream_reader = AsyncMock()
+        session._stream_reader.readuntil.side_effect = [
+            b"*1*1*12##",
+            b"*1*0*13##",
+            b"*#*1##",
+        ]
+
+        collected = await session.send("*#1*0##", is_status_request=True)
+        assert isinstance(collected, list)
+        assert len(collected) == 2
+        assert session._stream_reader.readuntil.call_count == 3
+
+    @pytest.mark.asyncio
+    async def test_send_nack_retry_failure(self, session):
+        """Verify that immediate NACK triggers a single retry, and if still NACK, returns None."""
+        session._stream_writer = MagicMock()
+        session._stream_writer.drain = AsyncMock()
+        session._stream_reader = AsyncMock()
+        session._stream_reader.readuntil.side_effect = [
+            b"*#*0##",
+            b"*#*0##",
+        ]
+
+        result = await session.send("*1*1*99##")
+        assert result is None
+        assert session._stream_writer.write.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_probe_gateway(self):
+        """Verify active watchdog probe sending *#13**15## (openwebnet4j GatewayMgmt.requestModel by @mvalla)."""
+        gw = OWNGateway({"address": "127.0.0.1", "port": 20000})
+        with patch.object(OWNCommandSession, 'connect', new_callable=AsyncMock, return_value={"Success": True}):
+            with patch.object(OWNCommandSession, 'send', new_callable=AsyncMock, return_value=True) as mock_send:
+                with patch.object(OWNCommandSession, 'close', new_callable=AsyncMock):
+                    alive = await OWNCommandSession.probe_gateway(gw)
+                    assert alive is True
+                    mock_send.assert_called_once_with("*#13**15##", is_status_request=True)
+
+
+class TestOpenWebNet4jHardening:
+    """Test suite specifically validating openwebnet4j protocol hardening from Massimo Valla (@mvalla)."""
+
+    @pytest.fixture
+    def command_session(self):
+        gw = OWNGateway({"address": "127.0.0.1", "port": 20000})
+        return OWNSession(gateway=gw, connection_type="command", logger=logging.getLogger("test"))
+
+    @pytest.fixture
+    def event_session(self):
+        gw = OWNGateway({"address": "127.0.0.1", "port": 20000})
+        return OWNEventSession(gateway=gw, logger=logging.getLogger("test"))
+
+    @pytest.mark.asyncio
+    async def test_negotiate_fallback_to_cmd_session_alt(self, command_session):
+        """Verify *99*9## fallback when *99*0## receives NACK on newer Legrand firmware."""
+        mock_reader = AsyncMock()
+        mock_writer = MagicMock()
+        mock_writer.drain = AsyncMock()
+
+        # Gateway replies: NACK to *99*0##, then ACK to *99*9##, then ACK for open session
+        mock_reader.readuntil.side_effect = [
+            b"*#*0##",
+            b"*#*1##",
+            b"*#*1##",
+        ]
+        command_session._stream_reader = mock_reader
+        command_session._stream_writer = mock_writer
+
+        res = await command_session._negotiate()
+        assert res["Success"] is True
+        # Verify both *99*0## and *99*9## were written
+        written_bytes = [call[0][0] for call in mock_writer.write.call_args_list]
+        assert b"*99*0##" in written_bytes
+        assert b"*99*9##" in written_bytes
+
+    @pytest.mark.asyncio
+    async def test_negotiate_fail_closed_both_nacked(self, command_session):
+        """Verify negotiation fails closed if both *99*0## and *99*9## are NACKed."""
+        mock_reader = AsyncMock()
+        mock_writer = MagicMock()
+        mock_writer.drain = AsyncMock()
+
+        mock_reader.readuntil.side_effect = [
+            b"*#*0##",
+            b"*#*0##",
+        ]
+        command_session._stream_reader = mock_reader
+        command_session._stream_writer = mock_writer
+
+        res = await command_session._negotiate()
+        assert res["Success"] is False
+        assert res["Message"] == "connection_refused"
+
+    @pytest.mark.asyncio
+    async def test_event_session_keepalive_lifecycle(self, event_session):
+        """Verify that connecting an event session schedules 90s keepalive and closing cancels it."""
+        mock_reader = AsyncMock()
+        mock_writer = MagicMock()
+        mock_writer.drain = AsyncMock()
+        mock_writer.wait_closed = AsyncMock()
+        mock_writer.is_closing.return_value = False
+
+        with patch('asyncio.open_connection', return_value=(mock_reader, mock_writer)):
+            with patch.object(OWNSession, '_negotiate', return_value={"Success": True}):
+                await event_session.connect()
+                assert event_session._is_active is True
+                assert event_session._keepalive_task is not None
+                assert not event_session._keepalive_task.done()
+
+                # Closing session should cleanly cancel keepalive task
+                await event_session.close()
+                assert event_session._is_active is False
+                assert event_session._keepalive_task is None
+
