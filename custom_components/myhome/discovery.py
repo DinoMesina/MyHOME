@@ -4,7 +4,7 @@ import logging
 from typing import List, Dict
 
 from OWNd.connection import OWNSession, OWNCommandSession, OWNEventSession
-from OWNd.message import OWNMessage
+from OWNd.message import OWNMessage, OWNSignaling
 
 from .const import LOGGER
 
@@ -28,14 +28,26 @@ async def async_scan_bus(gateway, who: str, addresses: List[str]) -> List[str]:
                     break
 
             cmd = f"*#{who}*{addr}##"
-            session._stream_writer.write(cmd.encode())
-            await session._stream_writer.drain()
+            try:
+                session._stream_writer.write(cmd.encode())
+                await session._stream_writer.drain()
+            except (OSError, ConnectionResetError, BrokenPipeError):
+                LOGGER.warning("Connection dropped before sending to %s. Reconnecting...", addr)
+                try:
+                    await session.close()
+                except Exception:
+                    pass
+                await asyncio.sleep(0.5)
+                session = OWNCommandSession(gateway=gateway, logger=LOGGER)
+                await session.connect()
+                session._stream_writer.write(cmd.encode())
+                await session._stream_writer.drain()
 
             has_state = False
-            deadline = asyncio.get_event_loop().time() + 0.08
+            deadline = asyncio.get_event_loop().time() + 0.20
             try:
                 while asyncio.get_event_loop().time() < deadline:
-                    remaining = max(0.005, deadline - asyncio.get_event_loop().time())
+                    remaining = max(0.01, deadline - asyncio.get_event_loop().time())
                     raw_response = await asyncio.wait_for(
                         session._stream_reader.readuntil(OWNSession.SEPARATOR),
                         timeout=remaining
@@ -56,6 +68,16 @@ async def async_scan_bus(gateway, who: str, addresses: List[str]) -> List[str]:
                         break
             except asyncio.TimeoutError:
                 pass
+            except (ConnectionResetError, asyncio.IncompleteReadError, BrokenPipeError, OSError) as conn_err:
+                LOGGER.warning("Connection lost scanning %s: %s. Reconnecting...", addr, conn_err)
+                try:
+                    await session.close()
+                except Exception:
+                    pass
+                await asyncio.sleep(0.5)
+                session = OWNCommandSession(gateway=gateway, logger=LOGGER)
+                await session.connect()
+                continue
             except Exception as err:
                 LOGGER.warning("Error scanning address %s: %s", addr, err)
                 continue
@@ -64,7 +86,7 @@ async def async_scan_bus(gateway, who: str, addresses: List[str]) -> List[str]:
                 discovered.append(addr)
                 LOGGER.info("Discovered device at WHO %s, WHERE %s", who, addr)
 
-            await asyncio.sleep(0.005)
+            await asyncio.sleep(0.03)
     finally:
         try:
             await session.close()
@@ -89,12 +111,14 @@ async def async_sniff_bus(gateway, duration_seconds: int) -> Dict[str, Dict[str,
                 if message is None:
                     continue
                 
-                if isinstance(message, OWNMessage):
-                    who = message.who
-                    where = message.where
+                if isinstance(message, OWNMessage) and not isinstance(message, OWNSignaling):
+                    who = getattr(message, "who", None)
+                    where = getattr(message, "where", None)
                     
-                    if not who or not where:
+                    if who is None or where is None:
                         continue
+                    who = str(who)
+                    where = str(where)
                         
                     platform = None
                     dev_conf = {"who": who, "where": where}

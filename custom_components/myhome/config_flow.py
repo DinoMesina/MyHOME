@@ -498,7 +498,15 @@ class MyhomeFlowHandler(ConfigFlow, domain=DOMAIN):
             discovered = await self._onboarding_scan_task
             current_devices = self._new_entry_options.setdefault("devices", {})
             for platform, devs in discovered.items():
-                current_devices.setdefault(platform, {}).update(devs)
+                target_platform = current_devices.setdefault(platform, {})
+                for dev_id, dev_conf in devs.items():
+                    if dev_id not in target_platform:
+                        target_platform[dev_id] = dev_conf
+                    else:
+                        LOGGER.info(
+                            "Device %s already configured (e.g. from YAML import), keeping existing custom configuration",
+                            dev_id,
+                        )
         except Exception as err:
             LOGGER.warning("Bus discovery during onboarding encountered an issue: %s", err)
         finally:

@@ -47,6 +47,7 @@ from OWNd.message import (
     OWNGatewayCommand,
     OWNScenarioEvent,
     OWNCommand,
+    OWNSignaling,
 )
 
 from .const import (
@@ -212,6 +213,11 @@ class MyHOMEGatewayHandler:
                     try:
                         LOGGER.warning("[BUS SNIFFER] %s (type=%s)", message, type(message).__name__)
 
+                        # Ignore OpenWebNet signaling / handshake frames (ACK, NACK, Nonce, SHA, Session)
+                        if isinstance(message, OWNSignaling):
+                            LOGGER.debug("%s Ignoring OpenWebNet signaling frame: %s", self.log_id, message)
+                            continue
+
                         if self.generate_events:
                             if isinstance(message, OWNMessage):
                                 _event_content = {"gateway": str(self.gateway.host)}
@@ -304,10 +310,11 @@ class MyHOMEGatewayHandler:
 
                     # Auto-learning logic
                     if self.config_entry.options.get("enable_auto_learning", False):
-                        who = str(message.who)
-                        where = str(message.where)
+                        who = str(getattr(message, "who", "") or "")
+                        where = str(getattr(message, "where", "") or "")
                         platform = None
-                        dev_conf = {"who": who, "where": where}
+                        if who and where:
+                            dev_conf = {"who": who, "where": where}
                         if who == "1":
                             platform = "light"
                             dev_conf["dimmable"] = hasattr(message, "brightness") and message.brightness is not None

@@ -3,9 +3,13 @@
 </p>
 
 # MyHOME (Modernized Fork)
-**Version: v1.3.1**
+**Version: v1.3.2**
 
 ## 🌟 Changelog
+* **v1.3.2**: **MHS1 Gateway Stability, OWNSignaling Fix & YAML Import Preservation!**
+  - **`OWNSignaling` Crash Loop Fixed**: Fixed `AttributeError: 'OWNSignaling' object has no attribute '_who'` which caused a continuous 1-second crash/reconnect loop whenever protocol signaling frames (ACK, NACK, Nonce, handshake) arrived from gateways (particularly MyHomeServer1).
+  - **MHS1 & Embedded Gateway Scan Reliability**: Increased response deadline to 200ms and inter-command spacing to 30ms to accommodate slower embedded gateways like MHS1 on physical 9600-baud SCS buses. Added automatic socket reconnection and recovery during active bus scans.
+  - **YAML Metadata Preservation during Onboarding**: When both "Import YAML" and "Auto Scan" are enabled, existing YAML-imported devices (custom entity names, models, manufacturers) are preserved and never overwritten by generic scan names.
 * **v1.3.1**: **Critical Gateway Anti-Flooding Fix & Sound Diffusion Upgrades!**
   - **Eliminated Command Queue Flooding & Delay**: Fixed an issue where periodic actuator diagnostic frames (`WHO 1001` / `WHO 1004`) triggered an infinite storm of status queries on unconfigured hardware addresses, causing up to 2-minute delays on light switches.
   - **Entity Validation & 60s Throttling**: Diagnostic status queries now strictly verify that the target device exists in Home Assistant and rate-limit queries to a maximum of once every 60 seconds per device.
@@ -17,13 +21,14 @@
     - `sensor.<gateway>_configured_devices` (reports total configured devices with attributes breakdown: lights, covers, climate zones, switches, sensors, and scenarios).
     - **100% Passive & Safe**: Zero bus polling, zero pinging, and zero frame flooding — completely safe for legacy and resource-constrained gateways (AM4890, F454, MH200N).
   - **Dedicated "MyHOME Monitor" Custom Lovelace Card**: Built-in, ultra-responsive Lovelace card (`custom:myhome-monitor-card`) featuring gateway status badge, hardware metrics, and interactive device counters grid with dark/light mode support. Automatically registered with Home Assistant frontend.
+
+<details>
+<summary><b>Previous versions changelog (Click to expand)</b></summary>
+
 * **v1.2.0**: **Official BTicino MyHOME SCS Brand Assets & Clean Alpha Packaging!**
   - **Brand & Logo Overhaul**: Added official high-resolution brand assets (`icon.png`, `icon@2x.png`, `logo.png`) featuring authentic BTicino typography, signature orange 'b', and SCS bus emblem.
   - **Native Local Brand Packaging & Clean Alpha Channel**: Packaged official brand icons with 32-bit RGBA smooth anti-aliased transparency inside `custom_components/myhome/brand/` ensuring Home Assistant Core automatically loads and serves custom integration icons under *Settings > Devices & Services* without white square corner artifacts.
   - **HACS Markdown Rendering Fix**: Switched README image URLs to absolute GitHub raw links so logos and screenshots render properly inside HACS.
-
-<details>
-<summary><b>Previous versions changelog (Click to expand)</b></summary>
 
 * **v1.1.0**: **Native Animated Progress Screens!**
   - **Animated Progress Feedback (`async_show_progress`)**: Active bus scanning and passive packet sniffing in the Options menu now run seamlessly as asynchronous background tasks with native animated spinners and live contextual status messages.
