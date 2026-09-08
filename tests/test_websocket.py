@@ -472,3 +472,38 @@ def test_extract_gateway_info_edge_cases():
     gw_buf_err.send_buffer.qsize.side_effect = RuntimeError("Buffer failure")
     gw_buf_err.config_entry = None
     assert _extract_gateway_info(gw_buf_err)["queue_depth"] == 0
+
+    # 8. Real serial config entry from config_flow (transport_type='serial', host='/dev/ttyUSB0')
+    real_serial_gw = MagicMock()
+    real_serial_gw.gateway = None
+    real_serial_gw.config_entry.data = {
+        "name": "Legrand 3578 Dongle",
+        "host": "/dev/ttyUSB0",
+        "port": 19200,
+        "transport_type": "serial",
+        "baudrate": 19200,
+    }
+    real_serial_gw.mac = None
+    real_serial_gw.sending_workers = []
+    rs_info = _extract_gateway_info(real_serial_gw)
+    assert rs_info["model"] == "Legrand 3578 Dongle"
+    assert rs_info["serial_port"] == "/dev/ttyUSB0"
+    assert rs_info["host"] == ""
+    assert rs_info["port"] is None
+    assert rs_info["integration_version"] == "1.0.0-beta"
+
+    # 9. String port on raw_gw (e.g. COM3)
+    com_gw = MagicMock()
+    com_gw.gateway.model_name = "Legrand 3578"
+    com_gw.gateway.port = "COM3"
+    com_gw.config_entry = None
+    com_info = _extract_gateway_info(com_gw)
+    assert com_info["serial_port"] == "COM3"
+    assert com_info["host"] == ""
+    assert com_info["port"] is None
+
+    # 10. String port in config_data without transport_type
+    gw_port_str = MagicMock()
+    gw_port_str.gateway = None
+    gw_port_str.config_entry.data = {"port": "/dev/ttyACM0"}
+    assert _extract_gateway_info(gw_port_str)["serial_port"] == "/dev/ttyACM0"

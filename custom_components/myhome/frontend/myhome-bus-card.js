@@ -33,6 +33,10 @@ class MyHomeBusCard extends HTMLElement {
     this._render();
   }
 
+  get hass() {
+    return this._hass;
+  }
+
   set hass(hass) {
     const oldHass = this._hass;
     this._hass = hass;
@@ -348,10 +352,10 @@ class MyHomeBusCard extends HTMLElement {
         <div id="feedback-banner" class="feedback-banner"></div>
 
         <div class="stats-bar">
-          <div>Captured: <span id="stat-captured" class="stat-val">0</span></div>
+          <div>Buffered: <span id="stat-buffer" class="stat-val">0</span>/<span id="stat-max">${this._maxDisplayFrames}</span></div>
           <div>RX: <span id="stat-rx" class="stat-val">0</span></div>
           <div>TX: <span id="stat-tx" class="stat-val">0</span></div>
-          <div>Buffer Depth: <span id="stat-queue" class="stat-val">0</span></div>
+          <div>Queue: <span id="stat-queue" class="stat-val">0</span></div>
         </div>
 
         <div class="controls">
@@ -460,11 +464,13 @@ class MyHomeBusCard extends HTMLElement {
   _updateStats() {
     const root = this.shadowRoot;
     if (!root) return;
-    const cap = root.getElementById("stat-captured");
+    const buf = root.getElementById("stat-buffer");
+    const max = root.getElementById("stat-max");
     const rx = root.getElementById("stat-rx");
     const tx = root.getElementById("stat-tx");
     const queue = root.getElementById("stat-queue");
-    if (cap) cap.textContent = this._stats.captured;
+    if (buf) buf.textContent = this._frames.length;
+    if (max) max.textContent = this._maxDisplayFrames;
     if (rx) rx.textContent = this._stats.total_rx;
     if (tx) tx.textContent = this._stats.total_tx;
     if (queue) queue.textContent = (this._gatewayInfo && this._gatewayInfo.queue_depth != null) ? this._gatewayInfo.queue_depth : 0;
@@ -498,20 +504,25 @@ class MyHomeBusCard extends HTMLElement {
   }
 
   _generateDiagnosticPayload() {
-    const haVersion = (this._hass && this._hass.config && this._hass.config.version) || "Unknown";
-    const integrationVersion = "1.0.0-beta";
-    const userAgent = (navigator && navigator.userAgent) || "Unknown";
+    const haVersion =
+      (this._hass && this._hass.config && this._hass.config.version) ||
+      (this.hass && this.hass.config && this.hass.config.version) ||
+      "Unknown";
+    const gw = this._gatewayInfo || {};
+    const integrationVersion = gw.integration_version || "1.0.0-beta";
+    const userAgent = (typeof navigator !== "undefined" && navigator.userAgent) ? navigator.userAgent : "Unknown";
     const timestamp = new Date().toISOString();
 
-    const gw = this._gatewayInfo || {};
     const model = gw.model || "Unknown";
     const manufacturer = gw.manufacturer || "BTicino";
     const firmware = gw.firmware || "Unknown";
-    const macPrefix = gw.mac_prefix || (this._config && this._config.mac ? this._config.mac.substring(0, 8) : "Unknown");
+    const macPrefix =
+      gw.mac_prefix ||
+      (this._config && this._config.mac ? this._config.mac.substring(0, 8) : "Unknown");
 
     let conn = "Unknown";
     if (gw.serial_port) {
-      conn = `Serial (${gw.serial_port})`;
+      conn = `USB / Serial (${gw.serial_port})`;
     } else if (gw.host) {
       conn = `Ethernet TCP (${gw.host}:${gw.port || 20000})`;
     }
@@ -519,21 +530,35 @@ class MyHomeBusCard extends HTMLElement {
     const queuePacing = gw.queue_pacing != null ? `${gw.queue_pacing}s` : "0.0s";
     const workerCount = gw.worker_count != null ? gw.worker_count : 1;
     const queueDepth = gw.queue_depth != null ? gw.queue_depth : 0;
-    const isConnected = gw.is_connected != null ? (gw.is_connected ? "Connected" : "Disconnected") : "Unknown";
+    const isConnected =
+      gw.is_connected != null ? (gw.is_connected ? "Connected" : "Disconnected") : "Unknown";
 
-    const totalRx = (this._stats && this._stats.total_rx != null) ? this._stats.total_rx : 0;
-    const totalTx = (this._stats && this._stats.total_tx != null) ? this._stats.total_tx : 0;
-    const captured = (this._stats && this._stats.captured != null) ? this._stats.captured : this._frames.length;
+    const totalRx = this._stats && this._stats.total_rx != null ? this._stats.total_rx : 0;
+    const totalTx = this._stats && this._stats.total_tx != null ? this._stats.total_tx : 0;
+    const captured = this._stats && this._stats.captured != null ? this._stats.captured : this._frames.length;
+    const bufferDepth = `${this._frames.length} / ${this._maxDisplayFrames}`;
+
+    const activeFilter = [];
+    if (this._filterWho !== "all") activeFilter.push(`WHO=${this._filterWho}`);
+    if (this._filterWhere) activeFilter.push(`WHERE=${this._filterWhere}`);
+    if (this._filterDir !== "all") activeFilter.push(`DIR=${this._filterDir.toUpperCase()}`);
+    const filterDesc = activeFilter.length > 0 ? activeFilter.join(", ") : "None (All frames)";
 
     const frameLines = this._frames.map((f) => {
-      const timeStr = f.iso_time ? f.iso_time.split("T")[1].substring(0, 12) : "";
+      let timeStr = "";
+      if (f.iso_time && f.iso_time.includes("T")) {
+        timeStr = f.iso_time.split("T")[1].substring(0, 12);
+      } else if (f.timestamp) {
+        timeStr = new Date(f.timestamp * 1000).toISOString().split("T")[1].substring(0, 12);
+      }
       const dir = (f.direction || "rx").toUpperCase();
-      return `[${timeStr}] [${dir}] ${f.raw}`;
+      return `[${timeStr}] [${dir}] ${f.raw || ""}`;
     });
 
-    const framesText = frameLines.length > 0
-      ? frameLines.join("\n")
-      : "(No bus frames recorded in buffer)";
+    const framesText =
+      frameLines.length > 0
+        ? frameLines.join("\n")
+        : "(No bus frames recorded in buffer)";
 
     return `### MyHOME Diagnostic Bundle
 
@@ -556,9 +581,11 @@ class MyHomeBusCard extends HTMLElement {
 - **Total RX Frames:** ${totalRx}
 - **Total TX Frames:** ${totalTx}
 - **Total Captured:** ${captured}
-- **Buffer Depth:** ${queueDepth}
+- **Buffer Depth:** ${bufferDepth}
+- **Gateway Queue Depth:** ${queueDepth}
+- **Active Card Filter:** ${filterDesc}
 
-<details><summary>OpenWebNet Bus Trace (${this._frames.length} frames)</summary>
+<details><summary>OpenWebNet Bus Trace</summary>
 
 \`\`\`
 ${framesText}
@@ -593,28 +620,46 @@ ${framesText}
 
     const payload = this._generateDiagnosticPayload();
     const copied = await this._copyToClipboard(payload);
-    const issueUrl = "https://github.com/OpenWebNet-HA/MyHOME/issues/new?template=bug_report.yml";
+
+    const haVersion =
+      (this._hass && this._hass.config && this._hass.config.version) ||
+      (this.hass && this.hass.config && this.hass.config.version) ||
+      "";
+    const integrationVersion = (this._gatewayInfo && this._gatewayInfo.integration_version) || "1.0.0-beta";
+
+    const issueUrl = `https://github.com/OpenWebNet-HA/MyHOME/issues/new?template=bug_report.yml&ha_version=${encodeURIComponent(haVersion)}&integration_version=${encodeURIComponent(integrationVersion)}`;
 
     const banner = this.shadowRoot.getElementById("feedback-banner");
+    if (this._bannerTimeout) {
+      clearTimeout(this._bannerTimeout);
+      this._bannerTimeout = null;
+    }
+
     if (banner) {
       if (copied) {
         banner.className = "feedback-banner banner-success";
         banner.innerHTML = `
-          <span>✅ Copied diagnostic payload to clipboard! Opening GitHub issue form...</span>
-          <a href="${issueUrl}" target="_blank" rel="noopener noreferrer" class="banner-link">Click here if form didn't open</a>
+          <div style="display: flex; flex-direction: column; gap: 4px;">
+            <span><strong>✅ Copied diagnostic payload to clipboard!</strong> Opening GitHub issue form...</span>
+            <span style="font-size: 0.75rem; opacity: 0.9;">Paste the clipboard contents directly into the <em>Bus Monitor Diagnostic Payload / Bus Trace</em> field.</span>
+          </div>
+          <a href="${issueUrl}" target="_blank" rel="noopener noreferrer" class="banner-link">Open GitHub Form ↗</a>
         `;
       } else {
         banner.className = "feedback-banner banner-warning";
         banner.innerHTML = `
-          <span>⚠️ Could not automatically copy to clipboard. Payload printed to browser console.</span>
-          <a href="${issueUrl}" target="_blank" rel="noopener noreferrer" class="banner-link">Open GitHub form</a>
+          <div style="display: flex; flex-direction: column; gap: 4px;">
+            <span><strong>⚠️ Clipboard write failed.</strong> Diagnostic payload printed to browser console.</span>
+            <span style="font-size: 0.75rem; opacity: 0.9;">Copy the payload from your browser console (F12) and open the issue form below.</span>
+          </div>
+          <a href="${issueUrl}" target="_blank" rel="noopener noreferrer" class="banner-link">Open GitHub Form ↗</a>
         `;
         console.log("MyHOME Diagnostic Payload:\n", payload);
       }
       banner.style.display = "flex";
-      setTimeout(() => {
+      this._bannerTimeout = setTimeout(() => {
         if (banner) banner.style.display = "none";
-      }, 7000);
+      }, 9000);
     }
 
     if (btn) {
@@ -652,6 +697,15 @@ ${framesText}
     container.scrollTop = container.scrollHeight;
   }
 
+  _escapeHtml(text) {
+    return String(text || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+
   _createFrameNode(frame) {
     const div = document.createElement("div");
     div.className = "frame-line";
@@ -670,7 +724,7 @@ ${framesText}
       <span class="col-time">${timeStr}</span>
       <span class="col-dir ${dirClass}">${dirLabel}</span>
       <span class="col-who ${whoClass}">${whoLabel}</span>
-      <span class="${rawClass}">${frame.raw}</span>
+      <span class="${rawClass}">${this._escapeHtml(frame.raw)}</span>
     `;
     return div;
   }

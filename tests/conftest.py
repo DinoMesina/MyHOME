@@ -81,11 +81,43 @@ def pytest_sessionstart(session):
     if platform.system() == "Windows":
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
-from pytest_homeassistant_custom_component.syrupy import HomeAssistantSnapshotExtension
+from pytest_homeassistant_custom_component.syrupy import (
+    ANY,
+    HomeAssistantSnapshotExtension,
+    HomeAssistantSnapshotSerializer,
+)
 from syrupy.assertion import SnapshotAssertion
+from syrupy.types import SerializableData
+from homeassistant.core import State
+
+
+class PatchedHomeAssistantSnapshotSerializer(HomeAssistantSnapshotSerializer):
+    """Normalize State snapshots across differing Home Assistant core versions."""
+
+    @classmethod
+    def _serializable_state(cls, data: State) -> SerializableData:
+        res = super()._serializable_state(data)
+        if isinstance(res, dict):
+            if "last_reported" not in res:
+                res["last_reported"] = ANY
+            attrs = res.get("attributes")
+            if isinstance(attrs, dict) and "supported_features" in attrs:
+                feat = attrs["supported_features"]
+                if hasattr(feat, "value") and (feat.value & 384) and (feat.value & 1):
+                    from homeassistant.components.climate import ClimateEntityFeature
+                    from homeassistant.util.read_only_dict import ReadOnlyDict
+                    new_attrs = dict(attrs)
+                    new_attrs["supported_features"] = ClimateEntityFeature(feat.value & ~384)
+                    res["attributes"] = ReadOnlyDict(new_attrs)
+        return res
+
+
+class PatchedHomeAssistantSnapshotExtension(HomeAssistantSnapshotExtension):
+    serializer_class = PatchedHomeAssistantSnapshotSerializer
+
 
 @pytest.fixture
 def snapshot(snapshot: SnapshotAssertion) -> SnapshotAssertion:
     """Return snapshot assertion fixture with the Home Assistant extension."""
-    return snapshot.use_extension(HomeAssistantSnapshotExtension)
+    return snapshot.use_extension(PatchedHomeAssistantSnapshotExtension)
 

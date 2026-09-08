@@ -81,7 +81,7 @@ def _extract_gateway_info(gw: Optional[Any]) -> dict[str, Any]:
     manufacturer = "BTicino"
     firmware = ""
     host = ""
-    port = 20000
+    port: Optional[int] = 20000
     profile = None
 
     if raw_gw is not None:
@@ -123,9 +123,31 @@ def _extract_gateway_info(gw: Optional[Any]) -> dict[str, Any]:
     if not firmware and isinstance(config_data.get(CONF_FIRMWARE), str):
         firmware = config_data[CONF_FIRMWARE]
 
-    serial_port = config_data.get("serial_port") or config_data.get("device")
-    if not isinstance(serial_port, str):
-        serial_port = None
+    transport_type = config_data.get("transport_type") or getattr(gw, "transport_type", None)
+    is_serial = isinstance(transport_type, str) and transport_type == "serial"
+
+    raw_serial = (
+        config_data.get("serial_port")
+        or config_data.get("device")
+        or getattr(raw_gw, "serial_port", None)
+        or getattr(gw, "serial_port", None)
+    )
+    serial_port: Optional[str] = raw_serial if isinstance(raw_serial, str) else None
+
+    # Check if host or port was used to store serial device path (e.g. /dev/ttyUSB0 or COM3)
+    raw_port = getattr(raw_gw, "port", None)
+    cfg_port = config_data.get(CONF_PORT)
+    if not serial_port:
+        if isinstance(cfg_port, str) and not cfg_port.isdigit():
+            serial_port = cfg_port
+        elif isinstance(raw_port, str) and not raw_port.isdigit():
+            serial_port = raw_port
+        elif is_serial and isinstance(host, str) and host:
+            serial_port = host
+
+    if is_serial or serial_port:
+        host = ""
+        port = None
 
     mac_val = getattr(gw, "mac", None)
     if not isinstance(mac_val, str):
@@ -173,6 +195,7 @@ def _extract_gateway_info(gw: Optional[Any]) -> dict[str, Any]:
         "worker_count": worker_count,
         "queue_depth": queue_depth,
         "is_connected": is_connected,
+        "integration_version": "1.0.0-beta",
     }
 
 
@@ -216,18 +239,20 @@ def _matches_filter(
     direction: Optional[str] = None,
 ) -> bool:
     """Check if a frame matches filter criteria."""
-    f_who = str(getattr(frame, "who", None) if isinstance(frame, BusFrame) else frame.get("who"))
-    f_where = str(getattr(frame, "where", None) if isinstance(frame, BusFrame) else frame.get("where"))
+    raw_who = getattr(frame, "who", None) if isinstance(frame, BusFrame) else frame.get("who")
+    raw_where = getattr(frame, "where", None) if isinstance(frame, BusFrame) else frame.get("where")
     f_dir = (getattr(frame, "direction", "") if isinstance(frame, BusFrame) else frame.get("direction", "")).lower()
 
     if direction and direction != "all" and f_dir != direction.lower():
         return False
 
-    if who is not None and str(who) != f_who:
-        return False
+    if who is not None and str(who) != "all":
+        if raw_who is None or str(who) != str(raw_who):
+            return False
 
-    if where is not None and str(where) != f_where:
-        return False
+    if where is not None and str(where) != "":
+        if raw_where is None or str(where) != str(raw_where):
+            return False
 
     return True
 
