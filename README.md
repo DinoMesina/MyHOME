@@ -3,9 +3,14 @@
 </p>
 
 # MyHOME (Modernized Fork)
-**Version: v1.3.0**
+**Version: v1.3.1**
 
 ## 🌟 Changelog
+* **v1.3.1**: **Critical Gateway Anti-Flooding Fix & Sound Diffusion Upgrades!**
+  - **Eliminated Command Queue Flooding & Delay**: Fixed an issue where periodic actuator diagnostic frames (`WHO 1001` / `WHO 1004`) triggered an infinite storm of status queries on unconfigured hardware addresses, causing up to 2-minute delays on light switches.
+  - **Entity Validation & 60s Throttling**: Diagnostic status queries now strictly verify that the target device exists in Home Assistant and rate-limit queries to a maximum of once every 60 seconds per device.
+  - **Zero Retries for Status Queries**: Failed status requests are dropped immediately instead of blocking the gateway sender queue.
+  - **Sound Diffusion Improvements (WHO 22/16)**: Integrated full support for F441 audio matrices, H4562 wall controls with bidirectional sync, 3-frame source switching, FM Tuner metadata tracking (frequencies & presets), and gateway freeze prevention (contributed by @bboykaos).
 * **v1.3.0**: **Gateway Diagnostics & Sleek "MyHOME Monitor" Lovelace Card!**
   - **Zero-Overhead Gateway Diagnostics**: Added native diagnostic entities for BTicino gateways:
     - `binary_sensor.<gateway>_connectivity` (tracks active OpenWebNet connection status, IP, port, hardware model, firmware version, session uptime, and reconnection counter).
@@ -16,13 +21,14 @@
   - **Brand & Logo Overhaul**: Added official high-resolution brand assets (`icon.png`, `icon@2x.png`, `logo.png`) featuring authentic BTicino typography, signature orange 'b', and SCS bus emblem.
   - **Native Local Brand Packaging & Clean Alpha Channel**: Packaged official brand icons with 32-bit RGBA smooth anti-aliased transparency inside `custom_components/myhome/brand/` ensuring Home Assistant Core automatically loads and serves custom integration icons under *Settings > Devices & Services* without white square corner artifacts.
   - **HACS Markdown Rendering Fix**: Switched README image URLs to absolute GitHub raw links so logos and screenshots render properly inside HACS.
+
+<details>
+<summary><b>Previous versions changelog (Click to expand)</b></summary>
+
 * **v1.1.0**: **Native Animated Progress Screens!**
   - **Animated Progress Feedback (`async_show_progress`)**: Active bus scanning and passive packet sniffing in the Options menu now run seamlessly as asynchronous background tasks with native animated spinners and live contextual status messages.
   - **Fluid Onboarding Experience**: The Zero-Knowledge setup wizard now displays a progress spinner during the initial automatic SCS bus scan instead of freezing the dialog.
   - **Full Bilingual Localization**: Progress indicators and completion summaries fully translated in Italian (🇮🇹) and English (🇬🇧).
-
-<details>
-<summary><b>Previous versions changelog (Click to expand)</b></summary>
 
 * **v1.0.0**: **Major Release: Zero-Knowledge Wizard & Onboarding Redesign!**
   - **Zero-Knowledge Setup**: Automatic gateway discovery via SSDP. No manual IP or technical details required to get started.

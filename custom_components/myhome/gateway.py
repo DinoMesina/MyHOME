@@ -104,6 +104,25 @@ class MyHOMEGatewayHandler:
         self.listening_worker: asyncio.tasks.Task = None
         self.sending_workers: List[asyncio.tasks.Task] = []
         self.send_buffer = asyncio.Queue()
+        self._last_diagnostic_query: Dict[str, float] = {}
+
+    def _is_configured_device(self, platform_name: str, target_where: str) -> bool:
+        """Check if a given 'where' address is configured under a specific platform."""
+        try:
+            platform_devices = (
+                self.hass.data.get(DOMAIN, {})
+                .get(self.mac, {})
+                .get(CONF_PLATFORMS, {})
+                .get(platform_name, {})
+            )
+            if target_where in platform_devices:
+                return True
+            for dev_conf in platform_devices.values():
+                if isinstance(dev_conf, dict) and dev_conf.get(CONF_WHERE) == target_where:
+                    return True
+        except Exception:
+            pass
+        return False
 
     def register_connection_callback(self, callback: Callable[[], None]) -> None:
         """Register callback for connection state changes."""
@@ -587,14 +606,42 @@ class MyHOMEGatewayHandler:
                         if match:
                             who_diag = match.group(1)
                             where = match.group(2)
+                            platform = LIGHT if who_diag == "1001" else CLIMATE
+
+                            # Only query if this device is actually configured in Home Assistant
+                            if not self._is_configured_device(platform, where):
+                                LOGGER.debug(
+                                    "%s Diagnostic frame for unconfigured %s device %s (WHO %s). Skipping status request.",
+                                    self.log_id,
+                                    platform,
+                                    where,
+                                    who_diag,
+                                )
+                                continue
+
+                            # Rate-limit: do not query the same device more than once every 60 seconds
+                            now_ts = asyncio.get_running_loop().time()
+                            diag_key = f"{who_diag}-{where}"
+                            last_query = self._last_diagnostic_query.get(diag_key, 0)
+                            if now_ts - last_query < 60:
+                                LOGGER.debug(
+                                    "%s Throttling diagnostic status request for %s (last queried %.1fs ago).",
+                                    self.log_id,
+                                    diag_key,
+                                    now_ts - last_query,
+                                )
+                                continue
+
+                            self._last_diagnostic_query[diag_key] = now_ts
+
                             if who_diag == "1001":
-                                LOGGER.info("Intercepted Lighting Diagnostic frame (WHO 1001) for %s. Requesting standard status...", where)
+                                LOGGER.info("%s Intercepted Lighting Diagnostic frame (WHO 1001) for %s. Requesting standard status...", self.log_id, where)
                                 await self.send_status_request(OWNLightingCommand.status(where))
                             elif who_diag == "1004":
-                                LOGGER.info("Intercepted Climate Diagnostic frame (WHO 1004) for %s. Requesting standard status...", where)
+                                LOGGER.info("%s Intercepted Climate Diagnostic frame (WHO 1004) for %s. Requesting standard status...", self.log_id, where)
                                 await self.send_status_request(OWNHeatingCommand.status(where))
                         else:
-                            LOGGER.info("%s Diagnostic message: `%s`", self.log_id, message)
+                            LOGGER.debug("%s Diagnostic message: `%s`", self.log_id, message)
                     else:
                         LOGGER.info(
                             "%s Unsupported message type: `%s`",
@@ -672,11 +719,11 @@ class MyHOMEGatewayHandler:
                     except Exception as task_err:
                         self.send_buffer.task_done()
                         task_retries = task.get("retries", 0)
-                        if task_retries < 2:
+                        if not task.get("is_status_request") and task_retries < 2:
                             task["retries"] = task_retries + 1
                             await self.send_buffer.put(task)
                         else:
-                            LOGGER.error("%s Dropping failed message `%s` after retries: %s", self.log_id, task.get("message"), task_err)
+                            LOGGER.error("%s Dropping failed message `%s` (status_request=%s, retries=%d): %s", self.log_id, task.get("message"), task.get("is_status_request"), task_retries, task_err)
                         raise ConnectionError("Command sending failed, reconnecting...") from task_err
             except (OSError, asyncio.TimeoutError, ConnectionError) as err:
                 LOGGER.warning(
