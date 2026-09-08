@@ -17,6 +17,7 @@ class MyHomeBusCard extends HTMLElement {
     this._filterDir = "all";
     this._unsub = null;
     this._stats = { captured: 0, total_rx: 0, total_tx: 0 };
+    this._gatewayInfo = {};
   }
 
   setConfig(config) {
@@ -68,6 +69,7 @@ class MyHomeBusCard extends HTMLElement {
       if (res && res.frames) {
         this._frames = res.frames;
         if (res.stats) this._stats = res.stats;
+        if (res.gateway) this._gatewayInfo = res.gateway;
         this._updateFrameList();
         this._updateStats();
       }
@@ -281,6 +283,51 @@ class MyHomeBusCard extends HTMLElement {
           margin-top: 12px;
         }
         .sender-bar input { flex-grow: 1; }
+        .actions {
+          display: flex;
+          gap: 6px;
+          align-items: center;
+          flex-wrap: wrap;
+        }
+        .btn-report {
+          background: #ff9800;
+          color: #fff;
+          font-weight: 600;
+          font-size: 0.8rem;
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+        }
+        .btn-report:hover {
+          background: #f57c00;
+        }
+        .feedback-banner {
+          display: none;
+          justify-content: space-between;
+          align-items: center;
+          padding: 8px 12px;
+          margin-bottom: 12px;
+          border-radius: 6px;
+          font-size: 0.82rem;
+          line-height: 1.4;
+          gap: 8px;
+        }
+        .banner-success {
+          background: rgba(76, 175, 80, 0.15);
+          color: #2e7d32;
+          border: 1px solid rgba(76, 175, 80, 0.35);
+        }
+        .banner-warning {
+          background: rgba(255, 152, 0, 0.15);
+          color: #e65100;
+          border: 1px solid rgba(255, 152, 0, 0.35);
+        }
+        .banner-link {
+          color: inherit;
+          font-weight: 600;
+          text-decoration: underline;
+          white-space: nowrap;
+        }
       </style>
 
       <ha-card>
@@ -289,16 +336,22 @@ class MyHomeBusCard extends HTMLElement {
             <span>📡 ${this._config.title}</span>
             <span id="badge" class="badge badge-live">LIVE</span>
           </div>
-          <div>
+          <div class="actions">
+            <button id="btn-report" class="btn-report" title="Bundle system diagnostics & bus trace to clipboard, then open GitHub issue form">
+              📋 Report Issue / Copy Trace
+            </button>
             <button id="btn-pause" class="btn-secondary">Pause</button>
             <button id="btn-clear" class="btn-secondary">Clear</button>
           </div>
         </div>
 
+        <div id="feedback-banner" class="feedback-banner"></div>
+
         <div class="stats-bar">
           <div>Captured: <span id="stat-captured" class="stat-val">0</span></div>
           <div>RX: <span id="stat-rx" class="stat-val">0</span></div>
           <div>TX: <span id="stat-tx" class="stat-val">0</span></div>
+          <div>Buffer Depth: <span id="stat-queue" class="stat-val">0</span></div>
         </div>
 
         <div class="controls">
@@ -336,6 +389,7 @@ class MyHomeBusCard extends HTMLElement {
 
   _bindEvents() {
     const root = this.shadowRoot;
+    root.getElementById("btn-report").addEventListener("click", () => this._handleReportIssue());
     root.getElementById("btn-pause").addEventListener("click", () => this._togglePause());
     root.getElementById("btn-clear").addEventListener("click", () => this._clearBuffer());
     root.getElementById("filter-who").addEventListener("change", (e) => {
@@ -409,9 +463,173 @@ class MyHomeBusCard extends HTMLElement {
     const cap = root.getElementById("stat-captured");
     const rx = root.getElementById("stat-rx");
     const tx = root.getElementById("stat-tx");
+    const queue = root.getElementById("stat-queue");
     if (cap) cap.textContent = this._stats.captured;
     if (rx) rx.textContent = this._stats.total_rx;
     if (tx) tx.textContent = this._stats.total_tx;
+    if (queue) queue.textContent = (this._gatewayInfo && this._gatewayInfo.queue_depth != null) ? this._gatewayInfo.queue_depth : 0;
+  }
+
+  async _copyToClipboard(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      try {
+        await navigator.clipboard.writeText(text);
+        return true;
+      } catch (err) {
+        console.warn("MyHOME Bus Monitor: navigator.clipboard.writeText failed, trying fallback", err);
+      }
+    }
+    try {
+      const textArea = document.createElement("textarea");
+      textArea.value = text;
+      textArea.style.position = "fixed";
+      textArea.style.left = "-999999px";
+      textArea.style.top = "-999999px";
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      const success = document.execCommand("copy");
+      document.body.removeChild(textArea);
+      return success;
+    } catch (e) {
+      console.error("MyHOME Bus Monitor: clipboard copy failed", e);
+      return false;
+    }
+  }
+
+  _generateDiagnosticPayload() {
+    const haVersion = (this._hass && this._hass.config && this._hass.config.version) || "Unknown";
+    const integrationVersion = "1.0.0-beta";
+    const userAgent = (navigator && navigator.userAgent) || "Unknown";
+    const timestamp = new Date().toISOString();
+
+    const gw = this._gatewayInfo || {};
+    const model = gw.model || "Unknown";
+    const manufacturer = gw.manufacturer || "BTicino";
+    const firmware = gw.firmware || "Unknown";
+    const macPrefix = gw.mac_prefix || (this._config && this._config.mac ? this._config.mac.substring(0, 8) : "Unknown");
+
+    let conn = "Unknown";
+    if (gw.serial_port) {
+      conn = `Serial (${gw.serial_port})`;
+    } else if (gw.host) {
+      conn = `Ethernet TCP (${gw.host}:${gw.port || 20000})`;
+    }
+
+    const queuePacing = gw.queue_pacing != null ? `${gw.queue_pacing}s` : "0.0s";
+    const workerCount = gw.worker_count != null ? gw.worker_count : 1;
+    const queueDepth = gw.queue_depth != null ? gw.queue_depth : 0;
+    const isConnected = gw.is_connected != null ? (gw.is_connected ? "Connected" : "Disconnected") : "Unknown";
+
+    const totalRx = (this._stats && this._stats.total_rx != null) ? this._stats.total_rx : 0;
+    const totalTx = (this._stats && this._stats.total_tx != null) ? this._stats.total_tx : 0;
+    const captured = (this._stats && this._stats.captured != null) ? this._stats.captured : this._frames.length;
+
+    const frameLines = this._frames.map((f) => {
+      const timeStr = f.iso_time ? f.iso_time.split("T")[1].substring(0, 12) : "";
+      const dir = (f.direction || "rx").toUpperCase();
+      return `[${timeStr}] [${dir}] ${f.raw}`;
+    });
+
+    const framesText = frameLines.length > 0
+      ? frameLines.join("\n")
+      : "(No bus frames recorded in buffer)";
+
+    return `### MyHOME Diagnostic Bundle
+
+**Environment:**
+- **Home Assistant Version:** ${haVersion}
+- **Integration Version:** ${integrationVersion}
+- **Browser / User Agent:** ${userAgent}
+- **Timestamp:** ${timestamp}
+
+**Active Gateway Configuration:**
+- **Model:** ${model} (${manufacturer})
+- **Firmware:** ${firmware}
+- **Connection:** ${conn}
+- **MAC Prefix:** ${macPrefix}
+- **Queue Pacing:** ${queuePacing}
+- **Worker Count:** ${workerCount}
+- **Connection Status:** ${isConnected}
+
+**Buffer Telemetry:**
+- **Total RX Frames:** ${totalRx}
+- **Total TX Frames:** ${totalTx}
+- **Total Captured:** ${captured}
+- **Buffer Depth:** ${queueDepth}
+
+<details><summary>OpenWebNet Bus Trace (${this._frames.length} frames)</summary>
+
+\`\`\`
+${framesText}
+\`\`\`
+</details>`;
+  }
+
+  async _handleReportIssue() {
+    const btn = this.shadowRoot.getElementById("btn-report");
+    const origText = btn ? btn.innerHTML : "📋 Report Issue / Copy Trace";
+    if (btn) btn.innerHTML = "⏳ Generating...";
+
+    // Try fetching the freshest gateway & buffer telemetry from backend
+    if (this._hass) {
+      try {
+        const infoRes = await this._hass.callWS({
+          type: "myhome/bus_monitor/info",
+          mac: this._config.mac,
+        });
+        if (infoRes) {
+          if (infoRes.gateway) this._gatewayInfo = infoRes.gateway;
+          if (infoRes.stats) {
+            this._stats = Object.assign({}, this._stats, infoRes.stats);
+            this._updateStats();
+          }
+        }
+      } catch (err) {
+        // Continue with available state if backend call fails
+        console.debug("MyHOME Bus Monitor: Falling back to cached gateway telemetry", err);
+      }
+    }
+
+    const payload = this._generateDiagnosticPayload();
+    const copied = await this._copyToClipboard(payload);
+    const issueUrl = "https://github.com/OpenWebNet-HA/MyHOME/issues/new?template=bug_report.yml";
+
+    const banner = this.shadowRoot.getElementById("feedback-banner");
+    if (banner) {
+      if (copied) {
+        banner.className = "feedback-banner banner-success";
+        banner.innerHTML = `
+          <span>✅ Copied diagnostic payload to clipboard! Opening GitHub issue form...</span>
+          <a href="${issueUrl}" target="_blank" rel="noopener noreferrer" class="banner-link">Click here if form didn't open</a>
+        `;
+      } else {
+        banner.className = "feedback-banner banner-warning";
+        banner.innerHTML = `
+          <span>⚠️ Could not automatically copy to clipboard. Payload printed to browser console.</span>
+          <a href="${issueUrl}" target="_blank" rel="noopener noreferrer" class="banner-link">Open GitHub form</a>
+        `;
+        console.log("MyHOME Diagnostic Payload:\n", payload);
+      }
+      banner.style.display = "flex";
+      setTimeout(() => {
+        if (banner) banner.style.display = "none";
+      }, 7000);
+    }
+
+    if (btn) {
+      btn.innerHTML = copied ? "✅ Copied & Opened!" : "⚠️ Check Console";
+      setTimeout(() => {
+        if (btn) btn.innerHTML = origText;
+      }, 3000);
+    }
+
+    // Automatically open GitHub issue form in a new tab
+    try {
+      window.open(issueUrl, "_blank", "noopener,noreferrer");
+    } catch (e) {
+      console.warn("MyHOME Bus Monitor: window.open blocked by browser", e);
+    }
   }
 
   _updateFrameList() {

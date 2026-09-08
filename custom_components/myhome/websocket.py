@@ -11,11 +11,12 @@ from typing import Any, Callable, Optional
 import voluptuous as vol
 
 from homeassistant.components import websocket_api
+from homeassistant.const import CONF_HOST, CONF_MAC, CONF_NAME, CONF_PORT
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import config_validation as cv, device_registry as dr
 
 from .bus_monitor import BusFrame, BusMonitor
-from .const import CONF_ENTITY, DOMAIN
+from .const import CONF_ENTITY, CONF_FIRMWARE, CONF_WORKER_COUNT, DOMAIN
 from .ownd.message import OWNMessage
 
 _LOGGER = logging.getLogger(__name__)
@@ -24,6 +25,14 @@ WS_TYPE_HISTORY = "myhome/bus_monitor/history"
 WS_TYPE_STREAM = "myhome/bus_monitor/stream"
 WS_TYPE_SEND = "myhome/bus_monitor/send"
 WS_TYPE_CLEAR = "myhome/bus_monitor/clear"
+WS_TYPE_INFO = "myhome/bus_monitor/info"
+
+SCHEMA_WS_INFO = websocket_api.BASE_COMMAND_MESSAGE_SCHEMA.extend(
+    {
+        vol.Required("type"): WS_TYPE_INFO,
+        vol.Optional("mac"): cv.string,
+    }
+)
 
 SCHEMA_WS_HISTORY = websocket_api.BASE_COMMAND_MESSAGE_SCHEMA.extend(
     {
@@ -60,6 +69,111 @@ SCHEMA_WS_CLEAR = websocket_api.BASE_COMMAND_MESSAGE_SCHEMA.extend(
         vol.Optional("mac"): cv.string,
     }
 )
+
+
+def _extract_gateway_info(gw: Optional[Any]) -> dict[str, Any]:
+    """Safely extract JSON-serializable gateway runtime and hardware configuration."""
+    if gw is None:
+        return {}
+
+    raw_gw = getattr(gw, "gateway", None)
+    model = ""
+    manufacturer = "BTicino"
+    firmware = ""
+    host = ""
+    port = 20000
+    profile = None
+
+    if raw_gw is not None:
+        m_name = getattr(raw_gw, "model_name", None)
+        if isinstance(m_name, str):
+            model = m_name
+        elif isinstance(getattr(raw_gw, "model", None), str):
+            model = raw_gw.model
+        m_manuf = getattr(raw_gw, "manufacturer", None)
+        if isinstance(m_manuf, str):
+            manufacturer = m_manuf
+        m_fw = getattr(raw_gw, "firmware", None)
+        if isinstance(m_fw, str):
+            firmware = m_fw
+        m_host = getattr(raw_gw, "host", None)
+        if isinstance(m_host, str):
+            host = m_host
+        m_port = getattr(raw_gw, "port", None)
+        if isinstance(m_port, int):
+            port = m_port
+        profile = getattr(raw_gw, "profile", None)
+
+    config_entry = getattr(gw, "config_entry", None)
+    config_data = getattr(config_entry, "data", {}) if config_entry else {}
+    if not isinstance(config_data, dict):
+        config_data = {}
+
+    if not model and isinstance(config_data.get(CONF_NAME), str):
+        model = config_data[CONF_NAME]
+    if not model and isinstance(getattr(gw, "model", None), str):
+        model = gw.model
+    if not model:
+        model = "Generic"
+
+    if not host and isinstance(config_data.get(CONF_HOST), str):
+        host = config_data[CONF_HOST]
+    if port == 20000 and isinstance(config_data.get(CONF_PORT), int):
+        port = config_data[CONF_PORT]
+    if not firmware and isinstance(config_data.get(CONF_FIRMWARE), str):
+        firmware = config_data[CONF_FIRMWARE]
+
+    serial_port = config_data.get("serial_port") or config_data.get("device")
+    if not isinstance(serial_port, str):
+        serial_port = None
+
+    mac_val = getattr(gw, "mac", None)
+    if not isinstance(mac_val, str):
+        mac_val = config_data.get(CONF_MAC)
+    mac_addr = mac_val if isinstance(mac_val, str) else ""
+
+    mac_prefix = (
+        ":".join(mac_addr.split(":")[:3])
+        if ":" in mac_addr
+        else (mac_addr[:8] if mac_addr else "Unknown")
+    )
+
+    queue_pacing = 0.0
+    if profile is not None and isinstance(getattr(profile, "command_queue_delay", None), (int, float)):
+        queue_pacing = float(profile.command_queue_delay)
+
+    workers = getattr(gw, "sending_workers", None)
+    worker_count = len(workers) if isinstance(workers, list) else 0
+    if worker_count == 0 and isinstance(config_data.get(CONF_WORKER_COUNT), int):
+        worker_count = config_data[CONF_WORKER_COUNT]
+    if worker_count == 0:
+        worker_count = 1
+
+    send_buffer = getattr(gw, "send_buffer", None)
+    queue_depth = 0
+    if send_buffer is not None:
+        try:
+            q_size = send_buffer.qsize()
+            if isinstance(q_size, int):
+                queue_depth = q_size
+        except Exception:
+            queue_depth = 0
+
+    is_connected = bool(getattr(gw, "is_connected", False))
+
+    return {
+        "model": model,
+        "manufacturer": manufacturer,
+        "firmware": firmware,
+        "host": host,
+        "port": port,
+        "serial_port": serial_port,
+        "mac_prefix": mac_prefix,
+        "queue_pacing": queue_pacing,
+        "worker_count": worker_count,
+        "queue_depth": queue_depth,
+        "is_connected": is_connected,
+    }
 
 
 def _get_gateway_and_monitor(
@@ -125,7 +239,7 @@ async def ws_bus_monitor_history(
     msg: dict[str, Any],
 ) -> None:
     """Return historical bus frames from the circular ring buffer."""
-    _, monitor = _get_gateway_and_monitor(hass, msg.get("mac"))
+    gw, monitor = _get_gateway_and_monitor(hass, msg.get("mac"))
     if monitor is None:
         connection.send_error(
             msg["id"],
@@ -153,6 +267,7 @@ async def ws_bus_monitor_history(
         {
             "frames": filtered,
             "stats": monitor.get_stats(),
+            "gateway": _extract_gateway_info(gw),
         },
     )
 
@@ -254,6 +369,31 @@ async def ws_bus_monitor_clear(
     connection.send_result(msg["id"], {"success": True})
 
 
+@websocket_api.async_response
+async def ws_bus_monitor_info(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Return runtime gateway telemetry and buffer stats."""
+    gw, monitor = _get_gateway_and_monitor(hass, msg.get("mac"))
+    if monitor is None and gw is None:
+        connection.send_error(
+            msg["id"],
+            websocket_api.ERR_NOT_FOUND,
+            "No active MyHOME gateway or bus monitor found",
+        )
+        return
+
+    connection.send_result(
+        msg["id"],
+        {
+            "stats": monitor.get_stats() if monitor else {},
+            "gateway": _extract_gateway_info(gw),
+        },
+    )
+
+
 @callback
 def async_setup_websocket_api(hass: HomeAssistant) -> None:
     """Register all MyHOME WebSocket commands."""
@@ -280,6 +420,11 @@ def async_setup_websocket_api(hass: HomeAssistant) -> None:
         hass,
         ws_bus_monitor_clear,
         SCHEMA_WS_CLEAR,
+    )
+    websocket_api.async_register_command(
+        hass,
+        ws_bus_monitor_info,
+        SCHEMA_WS_INFO,
     )
 
     domain_data["_ws_registered"] = True

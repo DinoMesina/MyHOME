@@ -9,11 +9,13 @@ from custom_components.myhome.bus_monitor import BusFrame, BusMonitor
 from custom_components.myhome.const import CONF_ENTITY, DOMAIN
 from custom_components.myhome.ownd.message import OWNEvent, OWNMessage
 from custom_components.myhome.websocket import (
+    _extract_gateway_info,
     _get_gateway_and_monitor,
     _matches_filter,
     async_setup_websocket_api,
     ws_bus_monitor_clear,
     ws_bus_monitor_history,
+    ws_bus_monitor_info,
     ws_bus_monitor_send,
     ws_bus_monitor_stream,
 )
@@ -296,3 +298,177 @@ def test_matches_filter_helpers():
     frame_dict = frame.to_dict()
     assert _matches_filter(frame_dict, who=1, where="12", direction="rx") is True
     assert _matches_filter(frame_dict, who=4) is False
+
+
+async def test_ws_history_returns_gateway_info(hass: HomeAssistant, mock_ws_connection):
+    """Test history request returns enriched gateway parameters."""
+    monitor = BusMonitor(maxlen=100)
+    mock_gw = MagicMock()
+    mock_gw.gateway.model_name = "F454"
+    mock_gw.gateway.manufacturer = "BTicino S.p.A."
+    mock_gw.gateway.firmware = "1.0.42"
+    mock_gw.gateway.host = "192.168.1.50"
+    mock_gw.gateway.port = 20000
+    mock_gw.mac = "00:03:50:ab:cd:ef"
+    mock_gw.is_connected = True
+    mock_profile = MagicMock()
+    mock_profile.command_queue_delay = 0.05
+    mock_gw.gateway.profile = mock_profile
+    mock_gw.sending_workers = [MagicMock()]
+    mock_send_buffer = MagicMock()
+    mock_send_buffer.qsize.return_value = 2
+    mock_gw.send_buffer = mock_send_buffer
+    mock_gw.config_entry.data = {}
+
+    mac = "00:03:50:ab:cd:ef"
+    hass.data[DOMAIN] = {
+        mac: {
+            CONF_ENTITY: mock_gw,
+            "bus_monitor": monitor,
+        }
+    }
+
+    ws_bus_monitor_history(
+        hass,
+        mock_ws_connection,
+        {"id": 4, "type": "myhome/bus_monitor/history"},
+    )
+    await hass.async_block_till_done()
+    mock_ws_connection.send_result.assert_called_once()
+    msg_id, result = mock_ws_connection.send_result.call_args[0]
+    assert msg_id == 4
+    assert "gateway" in result
+    gw_info = result["gateway"]
+    assert gw_info["model"] == "F454"
+    assert gw_info["manufacturer"] == "BTicino S.p.A."
+    assert gw_info["firmware"] == "1.0.42"
+    assert gw_info["host"] == "192.168.1.50"
+    assert gw_info["port"] == 20000
+    assert gw_info["mac_prefix"] == "00:03:50"
+    assert gw_info["queue_pacing"] == 0.05
+    assert gw_info["worker_count"] == 1
+    assert gw_info["queue_depth"] == 2
+    assert gw_info["is_connected"] is True
+
+
+async def test_ws_info_endpoint(hass: HomeAssistant, mock_ws_connection):
+    """Test ws_bus_monitor_info endpoint returns runtime stats and gateway info."""
+    monitor = BusMonitor(maxlen=100)
+    monitor.record_frame("rx", "*1*1*12##")
+    mock_gw = MagicMock()
+    mock_gw.gateway.model_name = "MH200N"
+    mock_gw.gateway.firmware = "2.0.1"
+    mock_gw.mac = "00:03:50:11:22:33"
+    mock_gw.gateway.host = "10.0.0.1"
+    mock_gw.gateway.port = 20000
+    mock_gw.is_connected = True
+    mock_gw.sending_workers = [MagicMock(), MagicMock()]
+    mock_gw.send_buffer = None
+    mock_gw.config_entry.data = {}
+
+    mac = "00:03:50:11:22:33"
+    hass.data[DOMAIN] = {
+        mac: {
+            CONF_ENTITY: mock_gw,
+            "bus_monitor": monitor,
+        }
+    }
+
+    ws_bus_monitor_info(
+        hass,
+        mock_ws_connection,
+        {"id": 40, "type": "myhome/bus_monitor/info"},
+    )
+    await hass.async_block_till_done()
+    mock_ws_connection.send_result.assert_called_once()
+    msg_id, result = mock_ws_connection.send_result.call_args[0]
+    assert msg_id == 40
+    assert result["stats"]["captured"] == 1
+    assert result["gateway"]["model"] == "MH200N"
+    assert result["gateway"]["worker_count"] == 2
+
+
+async def test_ws_info_no_gateway(hass: HomeAssistant, mock_ws_connection):
+    """Test ws_bus_monitor_info endpoint returns ERR_NOT_FOUND when no gateway is configured."""
+    hass.data[DOMAIN] = {}
+    ws_bus_monitor_info(
+        hass,
+        mock_ws_connection,
+        {"id": 41, "type": "myhome/bus_monitor/info"},
+    )
+    await hass.async_block_till_done()
+    mock_ws_connection.send_error.assert_called_once_with(
+        41, websocket_api.ERR_NOT_FOUND, "No active MyHOME gateway or bus monitor found"
+    )
+
+
+def test_extract_gateway_info_edge_cases():
+    """Test _extract_gateway_info with edge cases and serial connections."""
+    # 1. None
+    assert _extract_gateway_info(None) == {}
+
+    # 2. Unconfigured MagicMock
+    raw_mock = MagicMock()
+    info = _extract_gateway_info(raw_mock)
+    assert isinstance(info, dict)
+    assert info["model"] == "Generic"
+    assert info["queue_depth"] == 0
+    assert info["queue_pacing"] == 0.0
+
+    # 3. Serial Gateway
+    serial_gw = MagicMock()
+    serial_gw.gateway = None
+    serial_gw.config_entry.data = {
+        "name": "Legrand 3578 USB/Serial",
+        "serial_port": "/dev/ttyUSB0",
+        "firmware": "3.1.0",
+        "mac": "SERIAL_GW_12345",
+        "command_worker_count": 2,
+    }
+    serial_gw.mac = "SERIAL_GW_12345"
+    serial_gw.sending_workers = []
+    serial_gw.send_buffer = None
+    serial_gw.is_connected = True
+
+    s_info = _extract_gateway_info(serial_gw)
+    assert s_info["model"] == "Legrand 3578 USB/Serial"
+    assert s_info["serial_port"] == "/dev/ttyUSB0"
+    assert s_info["mac_prefix"] == "SERIAL_G"
+    assert s_info["worker_count"] == 2
+
+    # 4. raw_gw.model attribute fallback
+    gw_with_model_attr = MagicMock()
+    gw_with_model_attr.gateway.model_name = None
+    gw_with_model_attr.gateway.model = "MH200"
+    gw_with_model_attr.config_entry = None
+    assert _extract_gateway_info(gw_with_model_attr)["model"] == "MH200"
+
+    # 5. gw.model attribute fallback
+    gw_with_gw_model = MagicMock()
+    gw_with_gw_model.gateway = None
+    gw_with_gw_model.model = "F452"
+    gw_with_gw_model.config_entry.data = {}
+    assert _extract_gateway_info(gw_with_gw_model)["model"] == "F452"
+
+    # 6. config_data host, port, worker count fallback
+    gw_cfg = MagicMock()
+    gw_cfg.gateway = None
+    gw_cfg.config_entry.data = {
+        "host": "192.168.1.99",
+        "port": 20000,
+        "firmware": "2.1",
+        "command_worker_count": 3,
+    }
+    gw_cfg.mac = None
+    gw_cfg.sending_workers = []
+    cfg_info = _extract_gateway_info(gw_cfg)
+    assert cfg_info["host"] == "192.168.1.99"
+    assert cfg_info["port"] == 20000
+    assert cfg_info["worker_count"] == 3
+
+    # 7. send_buffer.qsize exception branch
+    gw_buf_err = MagicMock()
+    gw_buf_err.gateway = None
+    gw_buf_err.send_buffer.qsize.side_effect = RuntimeError("Buffer failure")
+    gw_buf_err.config_entry = None
+    assert _extract_gateway_info(gw_buf_err)["queue_depth"] == 0
