@@ -31,9 +31,48 @@ CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 PLATFORMS = ["light", "switch", "cover", "climate", "binary_sensor", "sensor", "media_player", "button"]
 
 
+async def _async_register_frontend(hass: HomeAssistant) -> None:
+    """Register the Lovelace bus monitor card static resource and script."""
+    import os
+    domain_data = hass.data.setdefault(DOMAIN, {})
+    if domain_data.get("_frontend_registered"):
+        return
+
+    http = getattr(hass, "http", None)
+    if http is None:
+        return
+
+    card_path = os.path.join(os.path.dirname(__file__), "frontend", "myhome-bus-card.js")
+    url_path = "/myhome_static/myhome-bus-card.js"
+
+    if os.path.isfile(card_path):
+        if hasattr(http, "async_register_static_paths"):
+            try:
+                from homeassistant.components.http import StaticPathConfig
+                await http.async_register_static_paths([
+                    StaticPathConfig(url_path, card_path, False)
+                ])
+            except Exception:
+                http.register_static_path(url_path, card_path, False)
+        elif hasattr(http, "register_static_path"):
+            http.register_static_path(url_path, card_path, False)
+
+        try:
+            from homeassistant.components import frontend
+            frontend.add_extra_js_url(hass, url_path)
+        except Exception as e:
+            LOGGER.debug("Could not add extra js url for Lovelace card: %s", e)
+
+        domain_data["_frontend_registered"] = True
+
+
 async def async_setup(hass, config):
     """Set up the MyHOME component."""
     hass.data.setdefault(DOMAIN, {})
+
+    from .websocket import async_setup_websocket_api
+    async_setup_websocket_api(hass)
+    await _async_register_frontend(hass)
 
     if DOMAIN not in config:
         return True
@@ -44,6 +83,10 @@ async def async_setup(hass, config):
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
+    from .websocket import async_setup_websocket_api
+    async_setup_websocket_api(hass)
+    await _async_register_frontend(hass)
+
     if entry.data[CONF_MAC] not in hass.data[DOMAIN]:
         hass.data[DOMAIN][entry.data[CONF_MAC]] = {
             CONF_PLATFORMS: {p: {} for p in PLATFORMS},

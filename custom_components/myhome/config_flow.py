@@ -32,7 +32,7 @@ from homeassistant.const import (
     CONF_PORT,
 )
 from homeassistant.core import callback
-from homeassistant.helpers import device_registry as dr, selector
+from homeassistant.helpers import device_registry as dr, selector, config_validation as cv
 from .ownd.connection import OWNGateway, OWNSession
 from .ownd.discovery import find_gateways, get_gateway
 
@@ -77,6 +77,15 @@ class MACAddress:
         return ":".join(["%s" % (self.mac[i : i + 2]) for i in range(0, 12, 2)])
 
 
+def _get_serial_ports() -> list:
+    """Enumerate serial ports safely without hard dependency on pyserial."""
+    try:
+        import serial.tools.list_ports
+        return list(serial.tools.list_ports.comports())
+    except Exception:
+        return []
+
+
 class MyhomeFlowHandler(ConfigFlow, domain=DOMAIN):
     """Handle a MyHome config flow."""
 
@@ -98,9 +107,12 @@ class MyhomeFlowHandler(ConfigFlow, domain=DOMAIN):
     async def async_step_user(self, user_input=None):
         """Handle a flow initialized by the user."""
 
-        # Check if user chooses manual entry
+        # Check if user chooses manual entry or serial entry
         if user_input is not None and user_input["serial"] == "00:00:00:00:00:00":
             return await self.async_step_custom()
+
+        if user_input is not None and user_input["serial"] == "serial_gateway":
+            return await self.async_step_serial()
 
         if user_input is not None and self.discovered_gateways is not None and user_input["serial"] in self.discovered_gateways:
             self.gateway_handler = await OWNGateway.build_from_discovery_info(self.discovered_gateways[user_input["serial"]])
@@ -127,11 +139,79 @@ class MyhomeFlowHandler(ConfigFlow, domain=DOMAIN):
                     Required("serial"): In(
                         {
                             **{gateway["serialNumber"]: f"{gateway['modelName']} Gateway ({gateway['address']})" for gateway in local_gateways},
-                            "00:00:00:00:00:00": "Custom",
+                            "00:00:00:00:00:00": "Custom (IP Gateway)",
+                            "serial_gateway": "USB / Serial Gateway (Legrand 3578 / OpenZigBee)",
                         }
                     )
                 }
             ),
+        )
+
+    async def async_step_serial(self, user_input=None, errors=None):
+        """Handle USB / Serial gateway setup (Legrand 3578 / OpenZigBee)."""
+        if errors is None:
+            errors = {}
+
+        if user_input is not None:
+            port = user_input.get("port", "").strip()
+            if not port:
+                errors["port"] = "invalid_port"
+            else:
+                import hashlib
+                port_hash = hashlib.md5(port.encode()).hexdigest()[:8]
+                serial_mac = dr.format_mac(f"35:78:{port_hash[:2]}:{port_hash[2:4]}:{port_hash[4:6]}:{port_hash[6:8]}")
+
+                await self.async_set_unique_id(serial_mac, raise_on_progress=False)
+                self._abort_if_unique_id_configured()
+
+                data = {
+                    CONF_HOST: port,
+                    CONF_PORT: user_input.get("baudrate", 19200),
+                    CONF_PASSWORD: None,
+                    CONF_MAC: serial_mac,
+                    CONF_FRIENDLY_NAME: user_input.get(CONF_FRIENDLY_NAME) or f"Legrand 3578 ({port})",
+                    CONF_DEVICE_TYPE: "serial",
+                    CONF_MANUFACTURER: "Legrand",
+                    CONF_NAME: "Legrand 3578 USB Gateway",
+                    "transport_type": "serial",
+                    "baudrate": user_input.get("baudrate", 19200),
+                }
+                return self.async_create_entry(
+                    title=data[CONF_FRIENDLY_NAME],
+                    data=data,
+                )
+
+        available_ports = {}
+        try:
+            ports = await self.hass.async_add_executor_job(_get_serial_ports)
+            for p in ports:
+                desc = getattr(p, "description", "")
+                device = getattr(p, "device", str(p))
+                available_ports[device] = f"{device} ({desc})" if desc and desc != device else device
+        except Exception:
+            pass
+
+        if available_ports:
+            schema = Schema(
+                {
+                    Required("port"): In(available_ports),
+                    Required("baudrate", default=19200): In([9600, 19200, 38400, 57600, 115200]),
+                    vol.Optional(CONF_FRIENDLY_NAME, default="Legrand 3578 Gateway"): cv.string,
+                }
+            )
+        else:
+            schema = Schema(
+                {
+                    Required("port"): cv.string,
+                    Required("baudrate", default=19200): In([9600, 19200, 38400, 57600, 115200]),
+                    vol.Optional(CONF_FRIENDLY_NAME, default="Legrand 3578 Gateway"): cv.string,
+                }
+            )
+
+        return self.async_show_form(
+            step_id="serial",
+            data_schema=schema,
+            errors=errors,
         )
 
     async def async_step_custom(self, user_input=None, errors=None):

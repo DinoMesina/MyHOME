@@ -174,7 +174,7 @@ async def test_legacy_platforms_setup_and_execution(hass: HomeAssistant, mock_ga
 
     # Boost coverage by simulating UI/core state machine reads for properties
     for mac, data in hass.data[DOMAIN].items():
-        if CONF_ENTITIES in data:
+        if isinstance(data, dict) and CONF_ENTITIES in data:
             for platform, entity_dict in data[CONF_ENTITIES].items():
                 for entity in entity_dict.values():
                     _ = getattr(entity, "device_class", None)

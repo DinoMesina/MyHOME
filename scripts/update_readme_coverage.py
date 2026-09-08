@@ -43,6 +43,7 @@ COMPONENT_NOTES = {
     "custom_components/myhome/cover.py": "Motorized shutters, blinds, roll-ups with state tracking",
     "custom_components/myhome/__init__.py": "Setup lifecycle and zero-friction entity migration",
     "custom_components/myhome/switch.py": "Relay actuators, auxiliary switches, socket controllers",
+    "custom_components/myhome/websocket.py": "WebSocket API for real-time bus streaming, history, and diagnostics",
 }
 
 
@@ -54,10 +55,14 @@ def get_test_count() -> int:
             tree = ET.parse(junit_xml)
             root = tree.getroot()
             if "tests" in root.attrib:
-                return int(root.attrib["tests"])
+                count = int(root.attrib["tests"])
+                if count > 0:
+                    return count
             suites = root.findall(".//testsuite")
             if suites:
-                return sum(int(ts.attrib.get("tests", 0)) for ts in suites)
+                total = sum(int(ts.attrib.get("tests", 0)) for ts in suites)
+                if total > 0:
+                    return total
         except Exception:
             pass
 
@@ -81,10 +86,13 @@ def get_test_count() -> int:
     except Exception:
         pass
 
-    for py_bin in [sys.executable, "python"]:
+    for cmd in [
+        ["poetry", "run", "pytest", "--collect-only", "-q"],
+        [sys.executable, "-m", "pytest", "--collect-only", "-q"],
+        ["pytest", "--collect-only", "-q"],
+    ]:
         try:
-            cmd = [py_bin, "-m", "pytest", "--collect-only", "-q"]
-            res = subprocess.run(cmd, capture_output=True, text=True, cwd=REPO_ROOT, timeout=20)
+            res = subprocess.run(cmd, capture_output=True, text=True, cwd=REPO_ROOT, timeout=25, shell=True)
             m = re.search(r"(\d+)\s+tests?\s+collected", res.stdout)
             if m:
                 return int(m.group(1))

@@ -1,7 +1,7 @@
 """Tests for the MyHOME custom component initialization."""
 import os
 import pytest
-from unittest.mock import patch, AsyncMock
+from unittest.mock import patch, AsyncMock, MagicMock
 from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntryState
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -394,5 +394,44 @@ async def test_setup_entry_duplicate_and_timeout(hass: HomeAssistant):
     ):
         with pytest.raises(ConfigEntryNotReady):
             await async_setup_entry(hass, timeout_entry)
+
+
+async def test_register_frontend_branches(hass: HomeAssistant):
+    """Test _async_register_frontend static path and frontend script registration."""
+    from custom_components.myhome import _async_register_frontend
+
+    # 1. Reset flag & test when hass.http is None
+    hass.data.setdefault(DOMAIN, {})
+    hass.data[DOMAIN]["_frontend_registered"] = False
+    hass.http = None
+    await _async_register_frontend(hass)
+    assert hass.data[DOMAIN]["_frontend_registered"] is False
+
+    # 2. Simulate modern async_register_static_paths
+    mock_http = MagicMock()
+    mock_http.async_register_static_paths = AsyncMock()
+    hass.http = mock_http
+
+    with patch("homeassistant.components.http.StaticPathConfig", create=True) as mock_spc, patch(
+        "homeassistant.components.frontend.add_extra_js_url"
+    ) as mock_add_url:
+        await _async_register_frontend(hass)
+        assert hass.data[DOMAIN]["_frontend_registered"] is True
+        mock_add_url.assert_called_once_with(hass, "/myhome_static/myhome-bus-card.js")
+
+    # 3. Early return when already registered
+    mock_http.async_register_static_paths.reset_mock()
+    await _async_register_frontend(hass)
+    mock_http.async_register_static_paths.assert_not_called()
+
+    # 4. Fallback to register_static_path and exception handling
+    hass.data[DOMAIN]["_frontend_registered"] = False
+    del mock_http.async_register_static_paths
+    mock_http.register_static_path = MagicMock()
+    with patch("homeassistant.components.frontend.add_extra_js_url", side_effect=Exception("Frontend error")):
+        await _async_register_frontend(hass)
+        assert hass.data[DOMAIN]["_frontend_registered"] is True
+        mock_http.register_static_path.assert_called_once()
+
 
 

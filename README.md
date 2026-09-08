@@ -28,7 +28,7 @@ Maintained by the **[OpenWebNet-HA](https://github.com/OpenWebNet-HA)** communit
 - **Sound System 2.0 & Audio Matrix (WHO=16)**: Complete multi-room audio support for F441 / F441M matrices and amplifiers, including zone power, volume normalization (0–31 scale), software mute emulation, and dynamic streaming proxy.
 - **Streaming Audio Dynamic Proxy**: Seamlessly stream from **Music Assistant**, **Spotify Connect**, or any HA media player to wired BTicino audio zones using a thread-safe `DecoderPool` with analog gain-staging.
 - **Dimmable Light Detection**: Auto-detects dimming capabilities directly from bus events with transition support.
-- **Comprehensive Test Suite**: Over 700 automated unit tests (100% line coverage) executed across modern Python 3.12+ and Home Assistant core standards.
+- **Comprehensive Test Suite**: Over 710 automated unit tests (100% line coverage) executed across modern Python 3.12+ and Home Assistant core standards.
 
 ---
 
@@ -160,18 +160,17 @@ check-wheel-contents dist/*.whl
 ### CI Workflows
 - **`hassfest`**: Official Home Assistant manifest and metadata validation.
 - **`validate`**: Official HACS compliance checks.
-- **`test-coverage`**: 701 automated unit tests with snapshot matching and coverage tracking.
+- **`test-coverage`**: 719 automated unit tests with snapshot matching and coverage tracking.
 - **`pypi_standards`**: Strict wheel hygiene, metadata verification, and packaging checks.
 
 ### 📊 Code Coverage & Quality Assurance
 
-The integration maintains over 700 automated tests (100% line coverage) covering core protocol handling, hardware profiles, discovery, state reconciliation, and error boundaries.
+The integration maintains over 710 automated tests (100% line coverage) covering core protocol handling, hardware profiles, discovery, state reconciliation, and error boundaries.
 
 <!-- START_COVERAGE_TABLE -->
 
 | Component / Module | Coverage | Notes |
 |---|:---:|---|
-| [`__init__.py`](custom_components/myhome/__init__.py) | **100%** | Setup lifecycle and zero-friction entity migration |
 | [`binary_sensor.py`](custom_components/myhome/binary_sensor.py) | **100%** | Magnetic contacts, door/window sensors, motion sensors |
 | [`bus_monitor.py`](custom_components/myhome/bus_monitor.py) | **100%** | In-band 500-frame circular ring buffer tap (0 extra sockets) |
 | [`button.py`](custom_components/myhome/button.py) | **100%** | Scenario buttons and bus diagnostic pings |
@@ -195,7 +194,9 @@ The integration maintains over 700 automated tests (100% line coverage) covering
 | [`sensor.py`](custom_components/myhome/sensor.py) | **100%** | Power meters, energy counters, and pulse sensors |
 | [`switch.py`](custom_components/myhome/switch.py) | **100%** | Relay actuators, auxiliary switches, socket controllers |
 | [`validate.py`](custom_components/myhome/validate.py) | **100%** | Device & gateway schemas, custom WHERE validators, sensor injections |
+| [`websocket.py`](custom_components/myhome/websocket.py) | **100%** | WebSocket API for real-time bus streaming, history, and diagnostics |
 | [`ownd/message.py`](custom_components/myhome/ownd/message.py) | **99%** | OpenWebNet frame parsers, encoders, and dimension decoders |
+| [`__init__.py`](custom_components/myhome/__init__.py) | **99%** | Setup lifecycle and zero-friction entity migration |
 
 <!-- END_COVERAGE_TABLE -->
 
@@ -209,7 +210,7 @@ The integration maintains over 700 automated tests (100% line coverage) covering
   - [x] Declarative hardware gateway profiles (`MH200` to `F454`).
   - [x] Zero-friction migration (preserving custom entity IDs and friendly names).
   - [x] Token-bucket bus pacing and sentinel worker lifecycle.
-  - [x] Synthetic mock TCP test harness with 701+ unit tests (100% coverage).
+  - [x] Synthetic mock TCP test harness with 719+ unit tests (100% coverage).
   - [x] PyPI packaging pipeline & GitHub Actions CI green across all workflows.
 - [ ] **Phase 2: Monitoring & Real-time Diagnostics**
   - [ ] In-band Unified Bus Listener (500-frame circular ring buffer, 0 extra sockets).
