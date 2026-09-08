@@ -28,7 +28,7 @@ Maintained by the **[OpenWebNet-HA](https://github.com/OpenWebNet-HA)** communit
 - **Sound System 2.0 & Audio Matrix (WHO=16)**: Complete multi-room audio support for F441 / F441M matrices and amplifiers, including zone power, volume normalization (0–31 scale), software mute emulation, and dynamic streaming proxy.
 - **Streaming Audio Dynamic Proxy**: Seamlessly stream from **Music Assistant**, **Spotify Connect**, or any HA media player to wired BTicino audio zones using a thread-safe `DecoderPool` with analog gain-staging.
 - **Dimmable Light Detection**: Auto-detects dimming capabilities directly from bus events with transition support.
-- **Comprehensive Test Suite**: Over 660 automated unit tests (94% line coverage) (100% on validate.py, 88%+ core test coverage) executed across modern Python 3.12+ and Home Assistant core standards.
+- **Comprehensive Test Suite**: Over 660 automated unit tests (94% line coverage) (94% line coverage) (100% on validate.py, 88%+ core test coverage) executed across modern Python 3.12+ and Home Assistant core standards.
 
 ---
 
@@ -165,7 +165,7 @@ check-wheel-contents dist/*.whl
 
 ### 📊 Code Coverage & Quality Assurance
 
-The integration maintains over 660 automated tests (94% line coverage) covering core protocol handling, hardware profiles, discovery, state reconciliation, and error boundaries.
+The integration maintains over 660 automated tests (94% line coverage) (94% line coverage) covering core protocol handling, hardware profiles, discovery, state reconciliation, and error boundaries.
 
 <!-- START_COVERAGE_TABLE -->
 
@@ -183,18 +183,18 @@ The integration maintains over 660 automated tests (94% line coverage) covering 
 | [`gateway.py`](custom_components/myhome/gateway.py) | **100%** | Hardware handler, lockout prevention, token-bucket queue |
 | [`gateway_profile.py`](custom_components/myhome/gateway_profile.py) | **100%** | Hardware models (`MH200`, `F454`, etc.) and queue pacing limits |
 | [`media_player.py`](custom_components/myhome/media_player.py) | **100%** | F441/F441M sound system zones, dynamic proxy, gain-staging |
-| [`myhome_device.py`](custom_components/myhome/myhome_device.py) | **100%** | Home Assistant device registry schema compliance |
 | [`ownd/connection.py`](custom_components/myhome/ownd/connection.py) | **100%** | Hardened TCP stream, fail-closed auth, watchdog loop |
 | [`sensor.py`](custom_components/myhome/sensor.py) | **100%** | Power meters, energy counters, and pulse sensors |
 | [`validate.py`](custom_components/myhome/validate.py) | **100%** | Device & gateway schemas, custom WHERE validators, sensor injections |
 | [`light.py`](custom_components/myhome/light.py) | **98%** | Relays, auto-dimmer detection, and brightness transitions |
+| [`myhome_device.py`](custom_components/myhome/myhome_device.py) | **96%** | Home Assistant device registry schema compliance |
 | [`ownd/discovery.py`](custom_components/myhome/ownd/discovery.py) | **92%** | SSDP & UPnP gateway detection and descriptor parsing |
 | [`ownd/message.py`](custom_components/myhome/ownd/message.py) | **91%** | OpenWebNet frame parsers, encoders, and dimension decoders |
 | [`config_flow.py`](custom_components/myhome/config_flow.py) | 89% | Step handlers, user entry, reauth, and options flow |
-| [`button.py`](custom_components/myhome/button.py) | 87% | Scenario buttons and bus diagnostic pings |
 | [`binary_sensor.py`](custom_components/myhome/binary_sensor.py) | 86% | Magnetic contacts, door/window sensors, motion sensors |
 | [`cover.py`](custom_components/myhome/cover.py) | 86% | Motorized shutters, blinds, roll-ups with state tracking |
-| [`__init__.py`](custom_components/myhome/__init__.py) | 85% | Setup lifecycle and zero-friction entity migration |
+| [`button.py`](custom_components/myhome/button.py) | 86% | Scenario buttons and bus diagnostic pings |
+| [`__init__.py`](custom_components/myhome/__init__.py) | 83% | Setup lifecycle and zero-friction entity migration |
 | [`switch.py`](custom_components/myhome/switch.py) | 81% | Relay actuators, auxiliary switches, socket controllers |
 
 <!-- END_COVERAGE_TABLE -->
