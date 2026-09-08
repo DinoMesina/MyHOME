@@ -174,7 +174,7 @@ The integration maintains over 540 automated tests covering core protocol handli
 | [`const.py`](custom_components/myhome/const.py) | **100%** | Protocol commands, dimensions, and integration constants |
 | [`decoder_pool.py`](custom_components/myhome/decoder_pool.py) | **100%** | Thread-safe streaming proxy audio pool |
 | [`myhome_device.py`](custom_components/myhome/myhome_device.py) | **100%** | Home Assistant device registry schema compliance |
-| [`sensor.py`](custom_components/myhome/sensor.py) | **99%** | Power meters, energy counters, and pulse sensors |
+| [`sensor.py`](custom_components/myhome/sensor.py) | **100%** | Power meters, energy counters, and pulse sensors |
 | [`light.py`](custom_components/myhome/light.py) | **98%** | Relays, auto-dimmer detection, and brightness transitions |
 | [`ownd/discovery.py`](custom_components/myhome/ownd/discovery.py) | **92%** | SSDP & UPnP gateway detection and descriptor parsing |
 | [`ownd/message.py`](custom_components/myhome/ownd/message.py) | **91%** | OpenWebNet frame parsers, encoders, and dimension decoders |

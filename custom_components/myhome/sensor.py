@@ -127,8 +127,6 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
                 )
                 if SensorDeviceClass.POWER in _required_entities:
                     _required_entities.remove(SensorDeviceClass.POWER)
-                elif "power" in _required_entities:
-                    _required_entities.remove("power")
 
             for entity_specific_id in _required_entities:
                 _sensors.append(
