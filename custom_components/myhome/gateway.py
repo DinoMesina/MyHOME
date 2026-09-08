@@ -66,6 +66,7 @@ from .const import (
     LOGGER,
 )
 from .myhome_device import MyHOMEEntity
+from .bus_monitor import BusMonitor
 from .button import (
     DisableCommandButtonEntity,
     EnableCommandButtonEntity,
@@ -106,6 +107,7 @@ class MyHOMEGatewayHandler:
             else 250
         )
         self.send_buffer = asyncio.Queue(maxsize=queue_max_size)
+        self.bus_monitor = BusMonitor()
 
     @property
     def mac(self) -> str:
@@ -173,6 +175,12 @@ class MyHOMEGatewayHandler:
 
         while not self._terminate_listener:
             message = await _event_session.get_next()
+            if message is not None:
+                self.bus_monitor.record_frame(
+                    direction="rx",
+                    raw=str(message),
+                    parsed=message if isinstance(message, OWNMessage) else None,
+                )
             LOGGER.debug("%s Message received: `%s`", self.log_id, message)
 
             if self.generate_events:
@@ -386,9 +394,19 @@ class MyHOMEGatewayHandler:
                 task["message"],
                 worker_id,
             )
+            self.bus_monitor.record_frame(
+                direction="tx",
+                raw=str(task["message"]),
+                parsed=task["message"] if isinstance(task["message"], OWNMessage) else None,
+            )
             collected = await _command_session.send(message=task["message"], is_status_request=task["is_status_request"])
             if collected and isinstance(collected, list):
                 for resp in collected:
+                    self.bus_monitor.record_frame(
+                        direction="rx",
+                        raw=str(resp),
+                        parsed=resp if isinstance(resp, OWNMessage) else None,
+                    )
                     if isinstance(resp, OWNMessage):
                         async_dispatcher_send(self.hass, f"myhome_message_{self.mac}", resp)
             self.send_buffer.task_done()

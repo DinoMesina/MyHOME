@@ -826,9 +826,6 @@ class OWNCommandSession(OWNSession):
                     elif msg.is_nack():
                         terminal_ack = False
                         break
-                elif raw_response.decode() in ("*#*1##", "*#*0##"):
-                    terminal_ack = (raw_response.decode() == "*#*1##")
-                    break
                 else:
                     collected.append(msg if msg else raw_response.decode())
 
@@ -851,9 +848,6 @@ class OWNCommandSession(OWNSession):
                         elif msg.is_nack():
                             terminal_ack = False
                             break
-                    elif raw_response.decode() in ("*#*1##", "*#*0##"):
-                        terminal_ack = (raw_response.decode() == "*#*1##")
-                        break
                     else:
                         collected.append(msg if msg else raw_response.decode())
 

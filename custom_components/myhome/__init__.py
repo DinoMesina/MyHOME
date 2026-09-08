@@ -119,6 +119,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
         hass=hass, config_entry=entry, generate_events=_generate_events
     )
     hass.data[DOMAIN][entry.data[CONF_MAC]][CONF_ENTITY] = gateway
+    hass.data[DOMAIN][entry.data[CONF_MAC]]["bus_monitor"] = gateway.bus_monitor
 
     try:
         tests_results = await gateway.test()

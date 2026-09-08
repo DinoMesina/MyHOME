@@ -137,3 +137,31 @@ dmypy.json
 
 #Pylint
 .pylintrc
+
+# Research & Scratch files
+openhab-addons/
+pdf_text.txt
+design-light-transitions.md
+mcp_server/*.log
+mcp_server/baseband_test.py
+mcp_server/bus_sniffer.py
+mcp_server/capture_wallpanel.py
+mcp_server/cycle_once.py
+mcp_server/definitive_test.py
+mcp_server/full_capture.py
+mcp_server/holy_grail*.py
+mcp_server/incremental_test.py
+mcp_server/minimal_on.py
+mcp_server/multi_format_test.py
+mcp_server/off_on_cycle.py
+mcp_server/route_test.py
+mcp_server/simple_off_on.py
+mcp_server/source_sweep.py
+mcp_server/switch_source.py
+mcp_server/test_bare_route.py
+mcp_server/test_last_resort.py
+mcp_server/test_radio_to_aux.py
+mcp_server/test_source1.py
+mcp_server/test_source_0.py
+mcp_server/test_volume_ramp.py
+mcp_server/wallpanel_replay.py
