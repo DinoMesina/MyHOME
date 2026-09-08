@@ -1,4 +1,5 @@
 """Tests for the MyHOME custom component initialization."""
+import os
 import pytest
 from unittest.mock import patch, AsyncMock
 from homeassistant.core import HomeAssistant
@@ -289,6 +290,13 @@ async def test_entity_migration_and_yaml_recovery_edges(hass: HomeAssistant):
 
     mock_entry_reg.async_update_entity.side_effect = update_side_effect
 
+    real_isfile = os.path.isfile
+
+    def fake_isfile(p):
+        if "customize.yaml" in str(p):
+            return True
+        return real_isfile(p)
+
     with patch(
         "custom_components.myhome.gateway.OWNSession.test_connection",
         return_value={"Success": True, "Message": None}
@@ -307,7 +315,7 @@ async def test_entity_migration_and_yaml_recovery_edges(hass: HomeAssistant):
         side_effect=fake_format_mac,
     ), patch(
         "os.path.isfile",
-        return_value=True,
+        side_effect=fake_isfile,
     ), patch(
         "homeassistant.util.yaml.loader.load_yaml",
         side_effect=Exception("Corrupt YAML"),
@@ -343,7 +351,6 @@ async def test_setup_entry_duplicate_and_timeout(hass: HomeAssistant):
         unique_id="000350009988",  # Unformatted MAC triggers lines 58-62
     )
     unformatted_entry.add_to_hass(hass)
-    from custom_components.myhome import async_setup_entry
     with patch(
         "custom_components.myhome.gateway.OWNSession.test_connection",
         return_value={"Success": True},
@@ -352,8 +359,13 @@ async def test_setup_entry_duplicate_and_timeout(hass: HomeAssistant):
     ), patch(
         "custom_components.myhome.gateway.MyHOMEGatewayHandler.sending_loop"
     ):
-        await async_setup_entry(hass, unformatted_entry)
+        assert await hass.config_entries.async_setup(unformatted_entry.entry_id)
+        await hass.async_block_till_done()
         assert unformatted_entry.unique_id == "00:03:50:00:99:88"
+        assert unformatted_entry.state is ConfigEntryState.LOADED
+
+        assert await hass.config_entries.async_unload(unformatted_entry.entry_id)
+        await hass.async_block_till_done()
 
     # 2. Gateway test raises TimeoutError -> ConfigEntryNotReady (lines 126-133)
     timeout_entry = MockConfigEntry(
@@ -362,12 +374,20 @@ async def test_setup_entry_duplicate_and_timeout(hass: HomeAssistant):
         unique_id="00:03:50:00:99:77",
     )
     timeout_entry.add_to_hass(hass)
+    from custom_components.myhome import async_setup_entry
+    real_isfile = os.path.isfile
+
+    def fake_isfile(p):
+        if "customize.yaml" in str(p):
+            return True
+        return real_isfile(p)
+
     with patch(
         "custom_components.myhome.gateway.OWNSession.test_connection",
         side_effect=asyncio.TimeoutError("Timed out connecting"),
     ), patch(
         "os.path.isfile",
-        return_value=True,
+        side_effect=fake_isfile,
     ), patch(
         "homeassistant.util.yaml.loader.load_yaml",
         return_value={"light.test": {"friendly_name": "Test Light"}},
