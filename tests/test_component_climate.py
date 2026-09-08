@@ -271,3 +271,239 @@ async def test_climate_async_update(hass):
     
     await climate.async_update()
     gateway.send_status_request.assert_called_once()
+
+
+async def test_setup_and_unload_entry_platform_not_configured(hass):
+    """Test setup and unload when climate platform is not configured."""
+    hass.data = {
+        "myhome": {
+            "mac": {
+                "platforms": {},
+            }
+        }
+    }
+    config_entry = MagicMock()
+    config_entry.data = {"mac": "mac"}
+
+    assert await async_setup_entry(hass, config_entry, MagicMock()) is True
+    assert await async_unload_entry(hass, config_entry) is True
+
+
+async def test_climate_edge_cases_and_properties(hass):
+    """Test target_temperature fallback, None target temperature in set_hvac_mode, and default kwargs."""
+    gateway = MagicMock()
+    gateway.send = AsyncMock()
+
+    climate = MyHOMEClimate(
+        hass=hass,
+        name="Thermostat",
+        device_id="device_1",
+        who="4",
+        where="1",
+        heating=True,
+        cooling=True,
+        fan=False,
+        standalone=True,
+        central=False,
+        manufacturer="B",
+        model="M",
+        gateway=gateway,
+    )
+
+    # target_temperature fallback when _local_target_temperature is None
+    climate._local_target_temperature = None
+    climate._target_temperature = 21.5
+    assert climate.target_temperature == 21.5
+
+    # async_set_hvac_mode when _target_temperature is None does not send command for HEAT or COOL
+    climate._target_temperature = None
+    await climate.async_set_hvac_mode(HVACMode.HEAT)
+    await climate.async_set_hvac_mode(HVACMode.COOL)
+    gateway.send.assert_not_called()
+
+    # async_set_temperature without temperature kwarg uses _local_target_temperature
+    climate._local_target_temperature = 22.0
+    climate._local_offset = 1.0
+    climate._attr_hvac_mode = HVACMode.HEAT
+    await climate.async_set_temperature()
+    gateway.send.assert_called_once()
+    assert str(gateway.send.call_args[0][0]) == "*#4*1*#14*0210*1##"
+
+
+async def test_climate_handle_events_mode_and_target_transitions(hass):
+    """Test mode and mode_target event branches with idle transitions."""
+    gateway = MagicMock()
+    gateway.log_id = "test"
+
+    climate = MyHOMEClimate(
+        hass=hass,
+        name="Thermostat",
+        device_id="device_1",
+        who="4",
+        where="1",
+        heating=True,
+        cooling=True,
+        fan=False,
+        standalone=True,
+        central=False,
+        manufacturer="B",
+        model="M",
+        gateway=gateway,
+    )
+    climate.async_schedule_update_ha_state = MagicMock()
+
+    # MESSAGE_TYPE_LOCAL_OFFSET when _target_temperature is None
+    climate._target_temperature = None
+    event_offset = MagicMock(spec=OWNHeatingEvent)
+    event_offset.message_type = MESSAGE_TYPE_LOCAL_OFFSET
+    event_offset.local_offset = 2
+    climate.handle_event(event_offset)
+    assert climate._local_offset == 2
+    assert climate._local_target_temperature is None
+
+    # MESSAGE_TYPE_MODE transitions when action was OFF
+    event_mode = MagicMock(spec=OWNHeatingEvent)
+    event_mode.message_type = MESSAGE_TYPE_MODE
+
+    # AUTO transition
+    climate._attr_hvac_action = HVACAction.OFF
+    event_mode.mode = CLIMATE_MODE_AUTO
+    climate.handle_event(event_mode)
+    assert climate.hvac_mode == HVACMode.AUTO
+    assert climate.hvac_action == HVACAction.IDLE
+
+    # COOL transition
+    climate._attr_hvac_action = HVACAction.OFF
+    event_mode.mode = CLIMATE_MODE_COOL
+    climate.handle_event(event_mode)
+    assert climate.hvac_mode == HVACMode.COOL
+    assert climate.hvac_action == HVACAction.IDLE
+
+    # HEAT transition
+    climate._attr_hvac_action = HVACAction.OFF
+    event_mode.mode = CLIMATE_MODE_HEAT
+    climate.handle_event(event_mode)
+    assert climate.hvac_mode == HVACMode.HEAT
+    assert climate.hvac_action == HVACAction.IDLE
+
+    # MESSAGE_TYPE_MODE_TARGET transitions
+    event_target = MagicMock(spec=OWNHeatingEvent)
+    event_target.message_type = MESSAGE_TYPE_MODE_TARGET
+    event_target.set_temperature = 20.0
+
+    # AUTO with action OFF
+    climate._attr_hvac_action = HVACAction.OFF
+    event_target.mode = CLIMATE_MODE_AUTO
+    climate.handle_event(event_target)
+    assert climate.hvac_mode == HVACMode.AUTO
+    assert climate.hvac_action == HVACAction.IDLE
+
+    # COOL with action OFF
+    climate._attr_hvac_action = HVACAction.OFF
+    event_target.mode = CLIMATE_MODE_COOL
+    climate.handle_event(event_target)
+    assert climate.hvac_mode == HVACMode.COOL
+    assert climate.hvac_action == HVACAction.IDLE
+
+    # HEAT with action OFF
+    climate._attr_hvac_action = HVACAction.OFF
+    event_target.mode = CLIMATE_MODE_HEAT
+    climate.handle_event(event_target)
+    assert climate.hvac_mode == HVACMode.HEAT
+    assert climate.hvac_action == HVACAction.IDLE
+
+    # OFF mode
+    event_target.mode = CLIMATE_MODE_OFF
+    climate.handle_event(event_target)
+    assert climate.hvac_mode == HVACMode.OFF
+    assert climate.hvac_action == HVACAction.OFF
+
+
+async def test_climate_handle_events_action_variations_and_runtime_error(hass):
+    """Test action variations across single/dual heating/cooling and runtime error handling."""
+    gateway = MagicMock()
+    gateway.log_id = "test"
+
+    # Dual heating + cooling
+    climate_dual = MyHOMEClimate(
+        hass=hass,
+        name="Thermostat",
+        device_id="device_1",
+        who="4",
+        where="1",
+        heating=True,
+        cooling=True,
+        fan=False,
+        standalone=True,
+        central=False,
+        manufacturer="B",
+        model="M",
+        gateway=gateway,
+    )
+    climate_dual.async_schedule_update_ha_state = MagicMock()
+
+    event = MagicMock(spec=OWNHeatingEvent)
+    event.message_type = MESSAGE_TYPE_ACTION
+    event.is_active.return_value = True
+    event.is_heating.return_value = False
+    event.is_cooling.return_value = True
+    climate_dual.handle_event(event)
+    assert climate_dual.hvac_action == HVACAction.COOLING
+
+    # Inactive while mode is OFF
+    event.is_active.return_value = False
+    climate_dual._attr_hvac_mode = HVACMode.OFF
+    climate_dual.handle_event(event)
+    assert climate_dual.hvac_action == HVACAction.OFF
+
+    # Inactive while mode is AUTO -> IDLE
+    climate_dual._attr_hvac_mode = HVACMode.AUTO
+    climate_dual.handle_event(event)
+    assert climate_dual.hvac_action == HVACAction.IDLE
+
+    # Heating only
+    climate_heat = MyHOMEClimate(
+        hass=hass,
+        name="Thermostat",
+        device_id="device_2",
+        who="4",
+        where="2",
+        heating=True,
+        cooling=False,
+        fan=False,
+        standalone=True,
+        central=False,
+        manufacturer="B",
+        model="M",
+        gateway=gateway,
+    )
+    climate_heat.async_schedule_update_ha_state = MagicMock()
+    event.is_active.return_value = True
+    climate_heat.handle_event(event)
+    assert climate_heat.hvac_action == HVACAction.HEATING
+
+    # Cooling only
+    climate_cool = MyHOMEClimate(
+        hass=hass,
+        name="Thermostat",
+        device_id="device_3",
+        who="4",
+        where="3",
+        heating=False,
+        cooling=True,
+        fan=False,
+        standalone=True,
+        central=False,
+        manufacturer="B",
+        model="M",
+        gateway=gateway,
+    )
+    climate_cool.async_schedule_update_ha_state = MagicMock()
+    event.is_active.return_value = True
+    climate_cool.handle_event(event)
+    assert climate_cool.hvac_action == HVACAction.COOLING
+
+    # Test RuntimeError catch in async_schedule_update_ha_state
+    climate_cool.async_schedule_update_ha_state.side_effect = RuntimeError("State update error")
+    climate_cool.handle_event(event)  # Should not raise
+
