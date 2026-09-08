@@ -174,6 +174,7 @@ The integration maintains over 540 automated tests covering core protocol handli
 | [`const.py`](custom_components/myhome/const.py) | **100%** | Protocol commands, dimensions, and integration constants |
 | [`decoder_pool.py`](custom_components/myhome/decoder_pool.py) | **100%** | Thread-safe streaming proxy audio pool |
 | [`myhome_device.py`](custom_components/myhome/myhome_device.py) | **100%** | Home Assistant device registry schema compliance |
+| [`light.py`](custom_components/myhome/light.py) | **98%** | Relays, auto-dimmer detection, and brightness transitions |
 | [`ownd/discovery.py`](custom_components/myhome/ownd/discovery.py) | **92%** | SSDP & UPnP gateway detection and descriptor parsing |
 | [`ownd/message.py`](custom_components/myhome/ownd/message.py) | **91%** | OpenWebNet frame parsers, encoders, and dimension decoders |
 | [`config_flow.py`](custom_components/myhome/config_flow.py) | **89%** | Step handlers, user entry, reauth, and options flow |
@@ -185,7 +186,6 @@ The integration maintains over 540 automated tests covering core protocol handli
 | [`switch.py`](custom_components/myhome/switch.py) | **81%** | Relay actuators, auxiliary switches, socket controllers |
 | [`climate.py`](custom_components/myhome/climate.py) | **80%** | Heating, cooling, 4-pipe systems, and thermostat controls |
 | [`ownd/connection.py`](custom_components/myhome/ownd/connection.py) | **68%** | Hardened TCP stream, fail-closed auth, watchdog loop |
-| [`light.py`](custom_components/myhome/light.py) | **65%** | Relays, auto-dimmer detection, and brightness transitions |
 | [`sensor.py`](custom_components/myhome/sensor.py) | **62%** | Power meters, energy counters, and pulse sensors |
 | [`media_player.py`](custom_components/myhome/media_player.py) | **62%** | F441/F441M sound system zones, volume normalization |
 
@@ -199,7 +199,7 @@ The integration maintains over 540 automated tests covering core protocol handli
   - [x] Declarative hardware gateway profiles (`MH200` to `F454`).
   - [x] Zero-friction migration (preserving custom entity IDs and friendly names).
   - [x] Token-bucket bus pacing and sentinel worker lifecycle.
-  - [x] Synthetic mock TCP test harness with 540+ unit tests (88%+ coverage).
+  - [x] Synthetic mock TCP test harness with 550+ unit tests (84%+ coverage).
   - [x] PyPI packaging pipeline & GitHub Actions CI green across all workflows.
 - [ ] **Phase 2: Monitoring & Real-time Diagnostics**
   - [ ] In-band Unified Bus Listener (500-frame circular ring buffer, 0 extra sockets).

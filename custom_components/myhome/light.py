@@ -332,7 +332,7 @@ class MyHOMELight(MyHOMEEntity, LightEntity):
             self._fade_task.cancel()
             try:
                 await asyncio.wait_for(asyncio.shield(self._fade_task), timeout=0.15)
-            except Exception:
+            except (Exception, asyncio.CancelledError):
                 pass
             self._fade_task = None
 

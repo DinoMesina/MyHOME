@@ -1,4 +1,5 @@
 """Test the MyHOME light component."""
+import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from homeassistant.components.light import (
@@ -9,7 +10,12 @@ from homeassistant.components.light import (
     FLASH_SHORT,
     ATTR_TRANSITION,
     ColorMode,
+    LightEntityFeature,
 )
+
+import asyncio
+import logging
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 from custom_components.myhome.light import (
     MyHOMELight,
@@ -22,7 +28,15 @@ from custom_components.myhome.ownd.message import (
     OWNLightingEvent,
     OWNLightingCommand,
 )
-from custom_components.myhome.const import DOMAIN
+from custom_components.myhome.const import (
+    DOMAIN,
+    CONF_TRANSITION_MODE,
+    CONF_WORKER_COUNT,
+    DEFAULT_TRANSITION_MODE,
+    TRANSITION_MODE_AUTO,
+    TRANSITION_MODE_NATIVE,
+    TRANSITION_MODE_SOFTWARE,
+)
 
 async def test_setup_and_unload_entry(hass):
     """Test setup dynamically restoring and dynamically creating lights."""
@@ -177,3 +191,435 @@ async def test_light_entity_onoff(hass):
     assert light.icon == "mdi:lightbulb-off"
 
     await light.async_added_to_hass()
+
+
+# ============================================================================
+# Software Stepped Transitions & Edge Cases Tests
+# ============================================================================
+
+
+def test_transition_mode_helper_branches(hass):
+    """Test _get_transition_mode and _should_use_software_stepped logic branches."""
+    gateway = MagicMock()
+    light = MyHOMELight(
+        hass=hass, name="L", entity_name="L", icon="mdi:lightbulb-off", icon_on="mdi:lightbulb-on",
+        device_id="20", who="1", where="20", interface=None, dimmable=True,
+        manufacturer="B", model="M", gateway=gateway
+    )
+
+    # 1. No gateway handler
+    light._gateway_handler = None
+    assert light._get_transition_mode() == DEFAULT_TRANSITION_MODE
+
+    # 2. Gateway handler without config_entry
+    light._gateway_handler = gateway
+    gateway.config_entry = None
+    assert light._get_transition_mode() == DEFAULT_TRANSITION_MODE
+
+    # 3. Config entry with auto mode -> maps to software_stepped
+    cfg = MagicMock()
+    cfg.options = {CONF_TRANSITION_MODE: TRANSITION_MODE_AUTO}
+    gateway.config_entry = cfg
+    assert light._get_transition_mode() == TRANSITION_MODE_SOFTWARE
+
+    # 4. Config entry with invalid mode -> defaults
+    cfg.options = {CONF_TRANSITION_MODE: "unsupported_mode"}
+    assert light._get_transition_mode() == DEFAULT_TRANSITION_MODE
+
+    # 5. Config entry with native
+    cfg.options = {CONF_TRANSITION_MODE: TRANSITION_MODE_NATIVE}
+    assert light._get_transition_mode() == TRANSITION_MODE_NATIVE
+
+    # 6. _should_use_software_stepped checks
+    assert light._should_use_software_stepped(None) is False
+    assert light._should_use_software_stepped(0) is False
+    assert light._should_use_software_stepped(-1.0) is False
+    # In native mode, returns False even with transition > 0
+    assert light._should_use_software_stepped(2.0) is False
+
+    # In software mode, returns True
+    cfg.options = {CONF_TRANSITION_MODE: TRANSITION_MODE_SOFTWARE}
+    assert light._should_use_software_stepped(2.0) is True
+
+
+async def test_software_stepped_turn_on_fade(hass):
+    """Test executing a full software stepped fade ramp on turn_on."""
+    gateway = MagicMock()
+    gateway.send = AsyncMock()
+    cfg = MagicMock()
+    cfg.options = {CONF_TRANSITION_MODE: TRANSITION_MODE_SOFTWARE, CONF_WORKER_COUNT: 1}
+    gateway.config_entry = cfg
+
+    light = MyHOMELight(
+        hass=hass, name="L", entity_name="L", icon="mdi:lightbulb-off", icon_on="mdi:lightbulb-on",
+        device_id="21", who="1", where="21", interface=None, dimmable=True,
+        manufacturer="B", model="M", gateway=gateway
+    )
+    light.hass = hass
+    light.async_schedule_update_ha_state = MagicMock()
+    light._attr_is_on = True
+    light._attr_brightness_pct = 20
+
+    # Patch asyncio.sleep to execute instantly
+    with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+        await light.async_turn_on(**{ATTR_BRIGHTNESS_PCT: 80, ATTR_TRANSITION: 1.0})
+
+        # Wait for fade task to finish
+        assert light._fade_task is not None
+        await light._fade_task
+
+        # Verify multiple send calls with transition=0 (instant steps)
+        assert gateway.send.call_count >= 2
+        assert mock_sleep.call_count >= 1
+        assert light._attr_brightness_pct == 80
+        assert light.is_on is True
+
+
+async def test_software_stepped_turn_off_fade(hass):
+    """Test executing a software stepped fade to 0 on turn_off."""
+    gateway = MagicMock()
+    gateway.send = AsyncMock()
+    cfg = MagicMock()
+    cfg.options = {CONF_TRANSITION_MODE: TRANSITION_MODE_SOFTWARE}
+    gateway.config_entry = cfg
+
+    light = MyHOMELight(
+        hass=hass, name="L", entity_name="L", icon="mdi:lightbulb-off", icon_on="mdi:lightbulb-on",
+        device_id="22", who="1", where="22", interface=None, dimmable=True,
+        manufacturer="B", model="M", gateway=gateway
+    )
+    light.hass = hass
+    light.async_schedule_update_ha_state = MagicMock()
+    light._attr_is_on = True
+    light._attr_brightness_pct = 70
+
+    with patch("asyncio.sleep", new_callable=AsyncMock):
+        await light.async_turn_off(**{ATTR_TRANSITION: 1.0})
+        assert light._fade_task is not None
+        await light._fade_task
+
+        assert light._attr_brightness_pct == 0
+        assert light.is_on is False
+
+
+async def test_software_stepped_transition_only_turn_on(hass):
+    """Test turn_on with transition but without explicit brightness kwarg."""
+    gateway = MagicMock()
+    gateway.send = AsyncMock()
+    cfg = MagicMock()
+    cfg.options = {CONF_TRANSITION_MODE: TRANSITION_MODE_SOFTWARE}
+    gateway.config_entry = cfg
+
+    light = MyHOMELight(
+        hass=hass, name="L", entity_name="L", icon="mdi:lightbulb-off", icon_on="mdi:lightbulb-on",
+        device_id="23", who="1", where="23", interface=None, dimmable=True,
+        manufacturer="B", model="M", gateway=gateway
+    )
+    light.hass = hass
+    light.async_schedule_update_ha_state = MagicMock()
+    light._attr_is_on = False
+    light._last_brightness_pct = 60
+
+    with patch("asyncio.sleep", new_callable=AsyncMock):
+        await light.async_turn_on(**{ATTR_TRANSITION: 1.0})
+        assert light._fade_task is not None
+        await light._fade_task
+
+        assert light._attr_brightness_pct == 60
+        assert light.is_on is True
+
+
+async def test_software_stepped_short_duration_instant_path(hass):
+    """Test duration < 0.05s sends an instant brightness command without stepping."""
+    gateway = MagicMock()
+    gateway.send = AsyncMock()
+    cfg = MagicMock()
+    cfg.options = {CONF_TRANSITION_MODE: TRANSITION_MODE_SOFTWARE}
+    gateway.config_entry = cfg
+
+    light = MyHOMELight(
+        hass=hass, name="L", entity_name="L", icon="mdi:lightbulb-off", icon_on="mdi:lightbulb-on",
+        device_id="24", who="1", where="24", interface=None, dimmable=True,
+        manufacturer="B", model="M", gateway=gateway
+    )
+    light.hass = hass
+    light.async_schedule_update_ha_state = MagicMock()
+
+    await light.async_turn_on(**{ATTR_BRIGHTNESS_PCT: 90, ATTR_TRANSITION: 0.02})
+    if light._fade_task:
+        await light._fade_task
+    gateway.send.assert_called_once()
+    assert light._attr_brightness_pct == 90
+
+
+async def test_software_stepped_multi_worker_warning(hass, caplog):
+    """Test warning logged when command_worker_count > 1 with software stepped transitions."""
+    gateway = MagicMock()
+    gateway.send = AsyncMock()
+    cfg = MagicMock()
+    cfg.options = {CONF_TRANSITION_MODE: TRANSITION_MODE_SOFTWARE, CONF_WORKER_COUNT: 2}
+    gateway.config_entry = cfg
+
+    light = MyHOMELight(
+        hass=hass, name="L", entity_name="L", icon="mdi:lightbulb-off", icon_on="mdi:lightbulb-on",
+        device_id="25", who="1", where="25", interface=None, dimmable=True,
+        manufacturer="B", model="M", gateway=gateway
+    )
+    light.hass = hass
+    light.async_schedule_update_ha_state = MagicMock()
+
+    with patch("asyncio.sleep", new_callable=AsyncMock):
+        with caplog.at_level(logging.WARNING):
+            await light.async_turn_on(**{ATTR_BRIGHTNESS_PCT: 50, ATTR_TRANSITION: 0.5})
+            await light._fade_task
+            assert "command_worker_count=2" in caplog.text
+
+
+async def test_cancellation_and_entity_removal(hass):
+    """Test cancelling fade task on entity removal from Home Assistant."""
+    gateway = MagicMock()
+    gateway.send = AsyncMock()
+    cfg = MagicMock()
+    cfg.options = {CONF_TRANSITION_MODE: TRANSITION_MODE_SOFTWARE}
+    gateway.config_entry = cfg
+
+    light = MyHOMELight(
+        hass=hass, name="L", entity_name="L", icon="mdi:lightbulb-off", icon_on="mdi:lightbulb-on",
+        device_id="26", who="1", where="26", interface=None, dimmable=True,
+        manufacturer="B", model="M", gateway=gateway
+    )
+    light.hass = hass
+    light.async_schedule_update_ha_state = MagicMock()
+
+    # Launch a long fade task
+    async def slow_sleep(*args):
+        await asyncio.sleep(10)
+
+    with patch("asyncio.sleep", side_effect=slow_sleep):
+        await light.async_turn_on(**{ATTR_BRIGHTNESS_PCT: 80, ATTR_TRANSITION: 5.0})
+        assert light._fade_task is not None
+        assert not light._fade_task.done()
+
+        # Removing from hass must robustly cancel and clear _fade_task
+        await light.async_will_remove_from_hass()
+        assert light._fade_task is None
+
+
+def test_handle_event_active_fade_policy(hass):
+    """Test handle_event logic during an active software stepped fade."""
+    gateway = MagicMock()
+    light = MyHOMELight(
+        hass=hass, name="L", entity_name="L", icon="mdi:lightbulb-off", icon_on="mdi:lightbulb-on",
+        device_id="27", who="1", where="27", interface=None, dimmable=True,
+        manufacturer="B", model="M", gateway=gateway
+    )
+    light.hass = hass
+    light.async_schedule_update_ha_state = MagicMock()
+
+    # 1. Bus event is_on=False cancels active fade task
+    mock_task = MagicMock()
+    mock_task.done.return_value = False
+    light._fade_task = mock_task
+
+    off_event = MagicMock(spec=OWNLightingEvent)
+    off_event.is_on = False
+    off_event.brightness = None
+    off_event.brightness_preset = None
+    off_event.human_readable_log = "Turned off"
+
+    light.handle_event(off_event)
+    mock_task.cancel.assert_called_once()
+    assert light._fade_task is None
+
+    # 2. Small brightness difference (< 10pp) keeps optimistic state (echo ignored)
+    mock_task2 = MagicMock()
+    mock_task2.done.return_value = False
+    light._fade_task = mock_task2
+    light._attr_brightness_pct = 50
+
+    echo_event = MagicMock(spec=OWNLightingEvent)
+    echo_event.is_on = True
+    echo_event.brightness = 53  # diff = 3 (< 10)
+    echo_event.brightness_preset = None
+    echo_event.human_readable_log = "Echo 53%"
+
+    light.handle_event(echo_event)
+    mock_task2.cancel.assert_not_called()
+    assert light._attr_brightness_pct == 50  # unchanged optimistic state
+
+    # 3. Large brightness change (>= 10pp) cancels fade and applies reported value
+    jump_event = MagicMock(spec=OWNLightingEvent)
+    jump_event.is_on = True
+    jump_event.brightness = 80  # diff = 30 (>= 10)
+    jump_event.brightness_preset = None
+    jump_event.human_readable_log = "Wall switch 80%"
+
+    light.handle_event(jump_event)
+    mock_task2.cancel.assert_called_once()
+    assert light._attr_brightness_pct == 80
+
+
+def test_auto_dimmer_promotion_and_flash_support(hass):
+    """Test auto-promotion from on/off to dimmable and flash feature flags."""
+    gateway = MagicMock()
+    gateway.send = AsyncMock()
+
+    light = MyHOMELight(
+        hass=hass, name="L", entity_name="L", icon="mdi:lightbulb-off", icon_on="mdi:lightbulb-on",
+        device_id="28", who="1", where="28", interface=None, dimmable=False,
+        manufacturer="B", model="M", gateway=gateway
+    )
+    light.hass = hass
+    light.async_schedule_update_ha_state = MagicMock()
+
+    assert light.color_mode == ColorMode.ONOFF
+    assert light.supported_features & LightEntityFeature.FLASH
+
+    # Receive an event with brightness_preset
+    preset_event = MagicMock(spec=OWNLightingEvent)
+    preset_event.is_on = True
+    preset_event.brightness = None
+    preset_event.brightness_preset = 4
+    preset_event.human_readable_log = "Preset 4"
+
+    light.handle_event(preset_event)
+
+    # Promoted to BRIGHTNESS mode with TRANSITION feature, FLASH removed
+    assert light.color_mode == ColorMode.BRIGHTNESS
+    assert light.supported_features & LightEntityFeature.TRANSITION
+    assert not (light.supported_features & LightEntityFeature.FLASH)
+
+
+async def test_discovery_callback_message_filtering(hass):
+    """Test async_add_light ignores messages with missing where or group/area/general flags."""
+    mock_gateway = MagicMock()
+    mock_gateway.mac = "test_mac"
+    hass.data = {DOMAIN: {"test_mac": {"entity": mock_gateway}}}
+
+    config_entry = MagicMock()
+    config_entry.data = {"mac": "test_mac"}
+    config_entry.entry_id = "test_entry"
+
+    added_entities = []
+
+    def mock_add_entities(entities):
+        added_entities.extend(entities)
+
+    with patch("custom_components.myhome.light.er.async_entries_for_config_entry", return_value=[]), \
+         patch("custom_components.myhome.light.er.async_get"):
+        await async_setup_entry(hass, config_entry, mock_add_entities)
+
+    dispatcher_signal = f"myhome_message_{config_entry.data['mac']}"
+
+    # Message with missing where -> ignored
+    msg_no_where = MagicMock(spec=OWNLightingEvent)
+    msg_no_where.where = None
+    async_dispatcher_send(hass, dispatcher_signal, msg_no_where)
+    assert len(added_entities) == 0
+
+    # Group message -> ignored
+    msg_group = MagicMock(spec=OWNLightingEvent)
+    msg_group.where = "1"
+    msg_group.is_group = True
+    async_dispatcher_send(hass, dispatcher_signal, msg_group)
+    assert len(added_entities) == 0
+
+    # Area message -> ignored
+    msg_area = MagicMock(spec=OWNLightingEvent)
+    msg_area.where = "1"
+    msg_area.is_area = True
+    async_dispatcher_send(hass, dispatcher_signal, msg_area)
+    assert len(added_entities) == 0
+
+    # General message -> ignored
+    msg_general = MagicMock(spec=OWNLightingEvent)
+    msg_general.where = "0"
+    msg_general.is_general = True
+    async_dispatcher_send(hass, dispatcher_signal, msg_general)
+    assert len(added_entities) == 0
+
+    # Valid message -> light discovered and added
+    valid_msg = MagicMock(spec=OWNLightingEvent)
+    valid_msg.where = "44"
+    valid_msg.who = 1
+    valid_msg.interface = None
+    valid_msg.is_group = False
+    valid_msg.is_area = False
+    valid_msg.is_general = False
+    valid_msg.brightness = 60
+    valid_msg.brightness_preset = None
+    valid_msg.is_on = True
+    valid_msg.human_readable_log = "Valid Light 44"
+    async_dispatcher_send(hass, dispatcher_signal, valid_msg)
+    assert len(added_entities) == 1
+
+
+def test_schedule_update_runtime_error_caught(hass):
+    """Test that RuntimeError during async_schedule_update_ha_state is caught safely."""
+    gateway = MagicMock()
+    light = MyHOMELight(
+        hass=hass, name="L", entity_name="L", icon=None, icon_on=None,
+        device_id="29", who="1", where="29", interface=None, dimmable=False,
+        manufacturer="B", model="M", gateway=gateway
+    )
+    light.hass = hass
+    light.async_schedule_update_ha_state = MagicMock(side_effect=RuntimeError("Update after removal"))
+
+    event = MagicMock(spec=OWNLightingEvent)
+    event.is_on = True
+    event.brightness = None
+    event.brightness_preset = None
+    event.human_readable_log = "Safe test"
+
+    # Must not raise RuntimeError
+    light.handle_event(event)
+
+
+async def test_flash_variants_and_fade_exceptions(hass, caplog):
+    """Test FLASH_LONG on turn_on, FLASH_SHORT on turn_off, and fade exception handling."""
+    gateway = MagicMock()
+    gateway.send = AsyncMock()
+
+    light = MyHOMELight(
+        hass=hass, name="L", entity_name="L", icon=None, icon_on=None,
+        device_id="30", who="1", where="30", interface=None, dimmable=False,
+        manufacturer="B", model="M", gateway=gateway
+    )
+    light.hass = hass
+    light.async_schedule_update_ha_state = MagicMock()
+
+    # FLASH_LONG on turn_on
+    await light.async_turn_on(**{ATTR_FLASH: FLASH_LONG})
+    assert gateway.send.called
+    gateway.send.reset_mock()
+
+    # FLASH_SHORT on turn_off
+    await light.async_turn_off(**{ATTR_FLASH: FLASH_SHORT})
+    assert gateway.send.called
+    gateway.send.reset_mock()
+
+    # Direct _apply_brightness_state with explicit is_on
+    light._apply_brightness_state(40, is_on=False)
+    assert light._attr_brightness_pct == 40
+    assert light.is_on is False
+
+    # Stale fade_id at start of _async_fade_to
+    light._fade_id = 5
+    await light._async_fade_to(0, 100, 1.0, fade_id=1)
+    # Stale ID immediately returns without sending
+    assert not gateway.send.called
+
+    # Fade exception caught and logged
+    light._fade_id = 10
+    with patch.object(light, "_set_brightness_instant", side_effect=RuntimeError("Bus disconnected")):
+        with caplog.at_level(logging.WARNING):
+            await light._async_fade_to(0, 100, 0.5, fade_id=10)
+            assert "Fade task error" in caplog.text
+
+    # Fade cancellation caught cleanly
+    light._fade_id = 11
+    with patch.object(light, "_set_brightness_instant", side_effect=asyncio.CancelledError()):
+        with pytest.raises(asyncio.CancelledError):
+            await light._async_fade_to(0, 100, 0.5, fade_id=11)
+
+
