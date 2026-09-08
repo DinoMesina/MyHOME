@@ -93,7 +93,7 @@ class AsyncSerialTransport(OWNTransport):
             try:
                 raw_bytes = await self._reader.readuntil(SEPARATOR)
                 frame_str = raw_bytes.decode(errors="replace").strip()
-                if not frame_str:
+                if not frame_str or frame_str == "##":
                     continue
 
                 self._process_inbound_frame(frame_str)
