@@ -142,21 +142,22 @@ class DisableCommandButtonEntity(ButtonEntity, MyHOMEEntity):
 
     async def async_added_to_hass(self):
         """When entity is added to hass."""
-        self._hass.data[DOMAIN][self._gateway_handler.mac][CONF_PLATFORMS][
-            self._platform
-        ][self._device_id][CONF_ENTITIES]["disable"] = self
+        try:
+            device_dict = self._hass.data[DOMAIN][self._gateway_handler.mac][CONF_PLATFORMS][self._platform][self._device_id]
+            if CONF_ENTITIES not in device_dict or not isinstance(device_dict[CONF_ENTITIES], dict):
+                device_dict[CONF_ENTITIES] = {}
+            device_dict[CONF_ENTITIES]["disable"] = self
+        except (KeyError, TypeError):
+            pass
 
     async def async_will_remove_from_hass(self):
         """When entity is removed from hass."""
-        if (
-            "disable"
-            in self._hass.data[DOMAIN][self._gateway_handler.mac][CONF_PLATFORMS][
-                self._platform
-            ][self._device_id][CONF_ENTITIES]
-        ):
-            del self._hass.data[DOMAIN][self._gateway_handler.mac][CONF_PLATFORMS][
-                self._platform
-            ][self._device_id][CONF_ENTITIES]["disable"]
+        try:
+            device_dict = self._hass.data[DOMAIN][self._gateway_handler.mac][CONF_PLATFORMS][self._platform][self._device_id]
+            if CONF_ENTITIES in device_dict and isinstance(device_dict[CONF_ENTITIES], dict) and "disable" in device_dict[CONF_ENTITIES]:
+                del device_dict[CONF_ENTITIES]["disable"]
+        except (KeyError, TypeError):
+            pass
 
     async def async_press(self) -> None:
         """Press the button."""
@@ -211,21 +212,22 @@ class EnableCommandButtonEntity(ButtonEntity, MyHOMEEntity):
 
     async def async_added_to_hass(self):
         """When entity is added to hass."""
-        self._hass.data[DOMAIN][self._gateway_handler.mac][CONF_PLATFORMS][
-            self._platform
-        ][self._device_id][CONF_ENTITIES]["enable"] = self
+        try:
+            device_dict = self._hass.data[DOMAIN][self._gateway_handler.mac][CONF_PLATFORMS][self._platform][self._device_id]
+            if CONF_ENTITIES not in device_dict or not isinstance(device_dict[CONF_ENTITIES], dict):
+                device_dict[CONF_ENTITIES] = {}
+            device_dict[CONF_ENTITIES]["enable"] = self
+        except (KeyError, TypeError):
+            pass
 
     async def async_will_remove_from_hass(self):
         """When entity is removed from hass."""
-        if (
-            "enable"
-            in self._hass.data[DOMAIN][self._gateway_handler.mac][CONF_PLATFORMS][
-                self._platform
-            ][self._device_id][CONF_ENTITIES]
-        ):
-            del self._hass.data[DOMAIN][self._gateway_handler.mac][CONF_PLATFORMS][
-                self._platform
-            ][self._device_id][CONF_ENTITIES]["enable"]
+        try:
+            device_dict = self._hass.data[DOMAIN][self._gateway_handler.mac][CONF_PLATFORMS][self._platform][self._device_id]
+            if CONF_ENTITIES in device_dict and isinstance(device_dict[CONF_ENTITIES], dict) and "enable" in device_dict[CONF_ENTITIES]:
+                del device_dict[CONF_ENTITIES]["enable"]
+        except (KeyError, TypeError):
+            pass
 
     async def async_press(self) -> None:
         """Press the button."""

@@ -29,6 +29,7 @@ from homeassistant.components.sensor import (
 from homeassistant.components.climate import DOMAIN as CLIMATE
 
 from homeassistant.helpers.dispatcher import async_dispatcher_send
+from homeassistant.helpers import device_registry as dr
 
 from .ownd.connection import OWNSession, OWNEventSession, OWNCommandSession, OWNGateway
 from .ownd.message import (
@@ -76,19 +77,19 @@ class MyHOMEGatewayHandler:
 
     def __init__(self, hass, config_entry, generate_events=False):
         build_info = {
-            "address": config_entry.data[CONF_HOST],
-            "port": config_entry.data[CONF_PORT],
-            "password": config_entry.data[CONF_PASSWORD],
-            "ssdp_location": config_entry.data[CONF_SSDP_LOCATION],
-            "ssdp_st": config_entry.data[CONF_SSDP_ST],
-            "deviceType": config_entry.data[CONF_DEVICE_TYPE],
-            "friendlyName": config_entry.data[CONF_FRIENDLY_NAME],
-            "manufacturer": config_entry.data[CONF_MANUFACTURER],
-            "manufacturerURL": config_entry.data[CONF_MANUFACTURER_URL],
-            "modelName": config_entry.data[CONF_NAME],
-            "modelNumber": config_entry.data[CONF_FIRMWARE],
-            "serialNumber": config_entry.data[CONF_MAC],
-            "UDN": config_entry.data[CONF_UDN],
+            "address": config_entry.data.get(CONF_HOST),
+            "port": config_entry.data.get(CONF_PORT, 20000),
+            "password": config_entry.data.get(CONF_PASSWORD),
+            "ssdp_location": config_entry.data.get(CONF_SSDP_LOCATION, ""),
+            "ssdp_st": config_entry.data.get(CONF_SSDP_ST, ""),
+            "deviceType": config_entry.data.get(CONF_DEVICE_TYPE, ""),
+            "friendlyName": config_entry.data.get(CONF_FRIENDLY_NAME, ""),
+            "manufacturer": config_entry.data.get(CONF_MANUFACTURER, ""),
+            "manufacturerURL": config_entry.data.get(CONF_MANUFACTURER_URL, ""),
+            "modelName": config_entry.data.get(CONF_NAME, "Generic"),
+            "modelNumber": config_entry.data.get(CONF_FIRMWARE, ""),
+            "serialNumber": config_entry.data.get(CONF_MAC, ""),
+            "UDN": config_entry.data.get(CONF_UDN, ""),
         }
         self.hass = hass
         self.config_entry = config_entry
@@ -99,11 +100,21 @@ class MyHOMEGatewayHandler:
         self.is_connected = False
         self.listening_worker: asyncio.tasks.Task = None
         self.sending_workers: List[asyncio.tasks.Task] = []
-        self.send_buffer = asyncio.Queue()
+        queue_max_size = (
+            self.gateway.profile.max_queue_size
+            if hasattr(self.gateway, "profile") and self.gateway.profile
+            else 250
+        )
+        self.send_buffer = asyncio.Queue(maxsize=queue_max_size)
 
     @property
     def mac(self) -> str:
-        return self.gateway.serial
+        serial = self.gateway.serial
+        if serial:
+            formatted = dr.format_mac(serial)
+            if formatted:
+                return formatted
+        return serial or ""
 
     @property
     def unique_id(self) -> str:
@@ -128,6 +139,10 @@ class MyHOMEGatewayHandler:
     @property
     def firmware(self) -> str:
         return self.gateway.firmware
+
+    @property
+    def profile(self):
+        return self.gateway.profile
 
     async def test(self) -> Dict:
         return await OWNSession(gateway=self.gateway, logger=LOGGER).test_connection()
@@ -328,7 +343,6 @@ class MyHOMEGatewayHandler:
         self.is_connected = False
 
         LOGGER.debug("%s Destroying listening worker.", self.log_id)
-        self.listening_worker.cancel()
 
     async def sending_loop(self, worker_id: int):
         self._terminate_sender = False
@@ -344,15 +358,21 @@ class MyHOMEGatewayHandler:
 
         while not self._terminate_sender:
             task = await self.send_buffer.get()
+            if task is None or self._terminate_sender:
+                self.send_buffer.task_done()
+                break
+
             LOGGER.debug(
                 "%s Message `%s` was successfully unqueued by worker %s.",
-                self.name,
-                self.gateway.host,
+                self.log_id,
                 task["message"],
                 worker_id,
             )
             await _command_session.send(message=task["message"], is_status_request=task["is_status_request"])
             self.send_buffer.task_done()
+
+            if hasattr(self.gateway, "profile") and self.gateway.profile.command_queue_delay > 0:
+                await asyncio.sleep(self.gateway.profile.command_queue_delay)
 
         await _command_session.close()
 
@@ -361,12 +381,18 @@ class MyHOMEGatewayHandler:
             self.log_id,
             worker_id,
         )
-        self.sending_workers[worker_id].cancel()
 
     async def close_listener(self) -> bool:
         LOGGER.info("%s Closing event listener", self.log_id)
         self._terminate_sender = True
         self._terminate_listener = True
+
+        # Unblock any sending workers waiting on send_buffer
+        for _ in range(max(1, len(self.sending_workers))):
+            try:
+                self.send_buffer.put_nowait(None)
+            except (asyncio.QueueFull, Exception):
+                pass
 
         return True
 

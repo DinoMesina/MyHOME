@@ -53,6 +53,9 @@ from .const import (
     CONF_UDN,
     CONF_WORKER_COUNT,
     CONF_FILE_PATH,
+    CONF_TRANSITION_MODE,
+    DEFAULT_TRANSITION_MODE,
+    TRANSITION_MODES,
     DOMAIN,
     LOGGER,
 )
@@ -84,7 +87,7 @@ class MyhomeFlowHandler(ConfigFlow, domain=DOMAIN):
     @callback
     def async_get_options_flow(config_entry):
         """Get the options flow for this handler."""
-        return MyhomeOptionsFlowHandler()
+        return MyhomeOptionsFlowHandler(config_entry)
 
     def __init__(self):
         """Initialize the MyHome flow."""
@@ -267,18 +270,29 @@ class MyhomeFlowHandler(ConfigFlow, domain=DOMAIN):
     async def async_step_reauth(self, config: dict = None):
         """Perform reauth upon an authentication error."""
 
-        self._existing_entry = await self.async_set_unique_id(config[CONF_MAC])
+        entry = self.hass.config_entries.async_get_entry(self.context.get("entry_id"))
+        if entry is None and config and CONF_MAC in config:
+            entry = self.hass.config_entries.async_entry_for_domain_unique_id(DOMAIN, config[CONF_MAC])
+        self._existing_entry = entry
 
-        self.gateway_handler = MyHOMEGatewayHandler(hass=self.hass, config_entry=self._existing_entry).gateway
+        mac = entry.unique_id if entry else (config.get(CONF_MAC) if config else None)
+        if mac:
+            await self.async_set_unique_id(mac)
 
+        if self._existing_entry:
+            self.gateway_handler = MyHOMEGatewayHandler(hass=self.hass, config_entry=self._existing_entry).gateway
+        elif config:
+            self.gateway_handler = OWNGateway(config)
+
+        model_val = getattr(self.gateway_handler, "model_name", None) or getattr(self.gateway_handler, "model", "Gateway")
         self.context.update(
             {
                 CONF_HOST: self.gateway_handler.host,
-                CONF_NAME: self.gateway_handler.model,
+                CONF_NAME: model_val,
                 CONF_MAC: self.gateway_handler.serial,
                 "title_placeholders": {
                     CONF_HOST: self.gateway_handler.host,
-                    CONF_NAME: self.gateway_handler.model,
+                    CONF_NAME: model_val,
                     CONF_MAC: self.gateway_handler.serial,
                 },
             }
@@ -312,6 +326,16 @@ class MyhomeFlowHandler(ConfigFlow, domain=DOMAIN):
         test_result = await test_session.test_connection()
 
         if test_result["Success"]:
+            if self._existing_entry:
+                new_data = dict(self._existing_entry.data)
+                new_data[CONF_PASSWORD] = gateway.password
+                self.hass.config_entries.async_update_entry(
+                    self._existing_entry,
+                    data=new_data,
+                )
+                await self.hass.config_entries.async_reload(self._existing_entry.entry_id)
+                return self.async_abort(reason="reauth_successful")
+
             _new_entry_data = {
                 CONF_ID: dr.format_mac(gateway.serial),
                 CONF_HOST: gateway.address,
@@ -329,23 +353,14 @@ class MyhomeFlowHandler(ConfigFlow, domain=DOMAIN):
                 CONF_UDN: gateway.udn,
             }
             _new_entry_options = {
-                CONF_WORKER_COUNT: self._existing_entry.options[CONF_WORKER_COUNT] if self._existing_entry and CONF_WORKER_COUNT in self._existing_entry.options else 1,
+                CONF_WORKER_COUNT: 1,
             }
 
-            if self._existing_entry:
-                self.hass.config_entries.async_update_entry(
-                    self._existing_entry,
-                    data=_new_entry_data,
-                    options=_new_entry_options,
-                )
-                await self.hass.config_entries.async_reload(self._existing_entry.entry_id)
-                return self.async_abort(reason="reauth_successful")
-            else:
-                return self.async_create_entry(
-                    title=f"{gateway.model_name} Gateway",
-                    data=_new_entry_data,
-                    options=_new_entry_options,
-                )
+            return self.async_create_entry(
+                title=f"{gateway.model_name} Gateway",
+                data=_new_entry_data,
+                options=_new_entry_options,
+            )
         else:
             if test_result["Message"] == "password_required":
                 return await self.async_step_password()
@@ -454,26 +469,42 @@ class MyhomeFlowHandler(ConfigFlow, domain=DOMAIN):
 class MyhomeOptionsFlowHandler(OptionsFlow):
     """Handle MyHome options (general settings + decoder mapping)."""
 
-    def __init__(self):
+    def __init__(self, config_entry: ConfigEntry = None):
         """Initialize MyHome options flow."""
+        self._config_entry = config_entry
         self.options = None
         self.data = None
 
+    @property
+    def config_entry(self):
+        """Return the config entry for this options flow."""
+        if self._config_entry is not None:
+            return self._config_entry
+        if hasattr(self, "handler") and self.hass:
+            return self.hass.config_entries.async_get_entry(self.handler)
+        return None
+
     async def async_step_init(self, user_input=None):  # pylint: disable=unused-argument
         """Manage the MyHome options."""
-        # self.config_entry is injected by the HA framework after __init__
         self.options = dict(self.config_entry.options)
         self.data = dict(self.config_entry.data)
         if CONF_WORKER_COUNT not in self.options:
             self.options[CONF_WORKER_COUNT] = 1
         if CONF_GENERATE_EVENTS not in self.options:
             self.options[CONF_GENERATE_EVENTS] = False
+        if CONF_TRANSITION_MODE not in self.options:
+            self.options[CONF_TRANSITION_MODE] = DEFAULT_TRANSITION_MODE
         return await self.async_step_user()
 
     async def async_step_user(self, user_input=None, errors={}):  # pylint: disable=dangerous-default-value
         """Manage general settings and decoder mapping."""
 
         errors = {}
+
+        if self.options is None:
+            self.options = dict(self.config_entry.options) if self.config_entry else {}
+        if self.data is None:
+            self.data = dict(self.config_entry.data) if self.config_entry else {}
 
         if user_input is not None:
             # ── Validate decoder entity IDs ───────────────────────────────
@@ -495,6 +526,7 @@ class MyhomeOptionsFlowHandler(OptionsFlow):
             if not errors:
                 self.options.update({CONF_WORKER_COUNT: user_input[CONF_WORKER_COUNT]})
                 self.options.update({CONF_GENERATE_EVENTS: user_input[CONF_GENERATE_EVENTS]})
+                self.options[CONF_TRANSITION_MODE] = user_input.get(CONF_TRANSITION_MODE, DEFAULT_TRANSITION_MODE)
 
                 # Persist decoder slots
                 for i in range(1, CONF_DECODER_SLOTS + 1):
@@ -536,12 +568,27 @@ class MyhomeOptionsFlowHandler(OptionsFlow):
             ): str,
             Required(
                 CONF_WORKER_COUNT,
-                description={"suggested_value": self.options[CONF_WORKER_COUNT]},
+                description={"suggested_value": self.options.get(CONF_WORKER_COUNT, 1)},
             ): All(Coerce(int), Range(min=1, max=10)),
             Required(
                 CONF_GENERATE_EVENTS,
-                description={"suggested_value": self.options[CONF_GENERATE_EVENTS]},
+                description={"suggested_value": self.options.get(CONF_GENERATE_EVENTS, False)},
             ): bool,
+            vol.Optional(
+                CONF_TRANSITION_MODE,
+                description={
+                    "suggested_value": self.options.get(CONF_TRANSITION_MODE, DEFAULT_TRANSITION_MODE)
+                },
+            ): selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=[
+                        {"value": "software_stepped", "label": "software_stepped (recommended - reliable stepped fades)"},
+                        {"value": "native", "label": "native (pass through hardware speed param - only if your dimmers support it)"},
+                        {"value": "auto", "label": "auto (alias for software_stepped)"},
+                    ],
+                    mode=selector.SelectSelectorMode.DROPDOWN,
+                )
+            ),
         }
 
         # Decoder slots 1–4

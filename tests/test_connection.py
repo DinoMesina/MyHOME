@@ -276,10 +276,12 @@ class TestOWNSessionConnecting:
 
     @pytest.mark.asyncio
     async def test_close(self, session):
-        session._stream_writer = AsyncMock()
+        mock_writer = MagicMock()
+        mock_writer.wait_closed = AsyncMock()
+        session._stream_writer = mock_writer
         await session.close()
-        session._stream_writer.close.assert_called_once()
-        session._stream_writer.wait_closed.assert_called_once()
+        mock_writer.close.assert_called_once()
+        mock_writer.wait_closed.assert_called_once()
 
 class TestOWNEventSession:
     @pytest.fixture

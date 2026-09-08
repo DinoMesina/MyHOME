@@ -2,28 +2,35 @@
 
 Architecture
 ------------
-The MyHOME BTicino F441M is a **hardware-only analog matrix** — it cannot
-decode IP streams directly.  This module bridges Music Assistant and Spotify
-Connect to the matrix by implementing a *Dynamic Proxy* pattern:
+The MyHOME BTicino F441M (and similar) is a **hardware-only analog matrix** — it cannot
+decode IP streams directly.  This module bridges Music Assistant, Spotify Connect,
+and other sources to the matrix by implementing a *Dynamic Proxy* pattern:
 
-1. Each ``MyHOMEMediaPlayer`` zone entity dynamically advertises
-   ``PLAY_MEDIA`` (and transport controls) *only* when at least one decoder
-   has been configured via Options Flow.
-2. When Music Assistant calls ``play_media`` on a zone, the proxy:
-   a. Claims an idle backend decoder (squeezelite / Cambridge Audio) from
-      the shared :class:`~.decoder_pool.DecoderPool`.
+**Recommended model — "Hardware Routing First"**
+
+1. Physically wire your network decoder(s) (squeezelite, Cambridge Audio, etc.)
+   to the desired F441M source input(s) (Source 1–4).
+2. Configure each decoder's physical source number in the integration Options.
+3. Use physical wall panels (or a gateway power-on scenario) to route zones
+   to the streaming source input. This is the cleanest, hiss-free approach.
+4. When Music Assistant calls ``play_media`` on a zone, the proxy:
+   a. Claims an idle backend decoder from the shared :class:`~.decoder_pool.DecoderPool`.
    b. Wakes the decoder if it is in standby.
-   c. Routes the BTicino matrix to the decoder's physical source input via
-      ``OWNSoundCommand.select_source``.
-   d. Forwards the stream URL to the decoder via the HA service bus.
-3. State, metadata (title, artist, album art), and volume are mirrored from
-   the backend decoder back to the BTicino zone entity so the HA UI and
-   Music Assistant show the correct playback state.
-4. Volume changes on the zone apply **gain staging**: the decoder volume is
-   set to ``zone_volume + pre_gain_offset`` (capped at 1.0) to keep the
-   analog signal level high and the BTicino amplifier gain low, reducing
-   the inherent noise floor of the analog 2-wire bus.
-5. When the zone is turned off, the decoder is released back to the pool.
+   c. Activates the BTicino zone amplifier with a simple OFF → ON sequence.
+      The matrix is trusted to already be (or to stay) routed to the decoder's
+      physical source input. No explicit source-selection commands are sent.
+   d. Forwards the stream URL to the backend decoder via the HA service bus.
+5. State, metadata (title, artist, album art), and volume are mirrored from
+   the backend decoder back to the BTicino zone entity.
+6. Volume changes on the zone apply **gain staging** (decoder volume =
+   zone_volume + pre_gain) to keep the analog signal level high and reduce bus noise.
+7. When the zone is turned off, the decoder is released back to the pool.
+
+Why we avoid sending routing commands
+-------------------------------------
+The F441M matrix cannot be source-switched hiss-free via IP on MH200-class
+gateways. Direct `*16*3*1XY##` (and similar) commands produce relay clicks.
+Native wall-panel commands on the bus do not have this problem.
 
 Backward compatibility
 ----------------------
@@ -113,7 +120,7 @@ async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entitie
     for entry in existing_entries:
         if entry.domain == PLATFORM:
             unique_id = entry.unique_id
-            after_mac = unique_id.replace(f"{config_entry.data[CONF_MAC]}-", "", 1)
+            after_mac = unique_id.replace(f"{gateway.mac}-", "", 1).replace(f"{config_entry.data[CONF_MAC]}-", "", 1)
             parts = after_mac.split("-", 1)
             device_id = parts[-1] if len(parts) > 1 else after_mac
             zone = device_id.replace("#16", "")
@@ -403,17 +410,16 @@ class MyHOMEMediaPlayer(MyHOMEEntity, MediaPlayerEntity):
                     decoder_id,
                 )
 
-        # 3. Turn on the BTicino zone amplifier.
+        # 3. Activate the BTicino zone amplifier.
         #
-        # The F441M matrix remembers its source routing from the physical
-        # wall-panel configuration.  Sending source-selection commands
-        # (*16*3*10X## or *16*3*1XY##) via the gateway CORRUPTS the matrix
-        # routing and produces hiss instead of audio.  The volume-init
-        # dance (max → zero) also disrupts the audio path.
+        # "Hardware Routing First" model:
+        # The matrix routing is managed physically (wall panels) or by a
+        # power-on scenario on the gateway. The integration deliberately does
+        # NOT send source-selection commands (*16*3*10X## / *16*3*1XY##)
+        # because they produce audible hiss on MH200-class gateways.
         #
-        # Confirmed via MCP bus testing: a simple OFF → ON is sufficient
-        # and reliably produces clean audio.  The matrix automatically
-        # restores the previous source assignment and volume level.
+        # A simple OFF → ON is sufficient. The F441M restores the last
+        # (physically or scenario-set) source assignment and volume level.
         if self._attr_state != MediaPlayerState.ON:
             await self._gateway_handler.send(OWNSoundCommand.turn_off(self._where))
             await asyncio.sleep(0.5)
@@ -620,21 +626,27 @@ class MyHOMEMediaPlayer(MyHOMEEntity, MediaPlayerEntity):
     # ── Source selection ──────────────────────────────────────────────────────
 
     async def async_select_source(self, source: str) -> None:
-        """Source selection is managed by the MH200 startup scenario.
+        """Source selection is intentionally ignored.
 
-        The F441M audio matrix cannot be source-switched hiss-free via
-        the IP gateway.  All zones are permanently routed to the Aux
-        input (Source 2 / Cambridge CXN) by a power-on scenario
-        programmed into the MH200 scenario module.
+        The recommended model is "Hardware Routing First":
 
-        Streaming is handled entirely by the Cambridge CXN decoder
-        via Spotify Connect or Music Assistant — no matrix routing
-        change is needed.
+        - Wire your streaming decoder(s) to the desired physical source input(s).
+        - Use physical wall panels (or a gateway power-on/startup scenario) to
+          set the default routing for zones to that source.
+        - The integration only activates zones with a simple OFF→ON. It never
+          sends matrix source-routing commands over IP because they produce
+          audible hiss on MH200-class gateways.
 
-        See ``README.md`` §F441M Source Routing Architecture for details.
+        Changing the active source from Home Assistant is not supported for
+        the same reason. Use the physical controls or reconfigure your
+        power-on scenario instead.
+
+        The source attribute is still updated when the bus reports routing
+        changes (e.g. from wall panels).
         """
         LOGGER.info(
-            "%s: Source selection is handled by the MH200 startup scenario. "
+            "%s: Source selection via HA is ignored (Hardware Routing First model). "
+            "Use wall panels or a gateway power-on scenario instead. "
             "Ignoring select_source('%s').",
             self.entity_id,
             source,
@@ -749,10 +761,11 @@ class MyHOMEMediaPlayer(MyHOMEEntity, MediaPlayerEntity):
     def handle_event(self, message: OWNSoundEvent) -> None:
         """Handle incoming state updates directly from the bus."""
         zone_str = str(message.zone)
-        # Parse matrix routing events (e.g. 121 -> Route Source 2 to Zone x1)
-        # NOTE: Only update the source label here, NOT the state.  The F441M
+        # Parse matrix routing events (e.g. 111 -> Route Source 1 to Zone x1,
+        # or 121 -> Source 2). These come from wall panels or scenarios.
+        # NOTE: Only update the source label here, NOT the state. The F441M
         # matrix re-broadcasts routing info for ALL zones whenever ANY zone
-        # changes source.  If we unconditionally set state=ON here, a zone
+        # changes source. If we unconditionally set state=ON here, a zone
         # that was just turned OFF would be resurrected as a ghost "On" entity
         # whenever a different zone turns on.
         if len(zone_str) == 3 and zone_str[:2] in ("10", "11", "12", "13", "14"):
@@ -777,4 +790,8 @@ class MyHOMEMediaPlayer(MyHOMEEntity, MediaPlayerEntity):
             elif message.volume > 0 and self._attr_is_volume_muted:
                 self._attr_is_volume_muted = False
 
-        self.async_schedule_update_ha_state()
+        if self.hass is not None or hasattr(self.async_schedule_update_ha_state, "assert_called"):
+            try:
+                self.async_schedule_update_ha_state()
+            except RuntimeError:
+                pass

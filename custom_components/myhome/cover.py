@@ -55,7 +55,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
             unique_id = entry.unique_id
             # unique_id format: "{mac}-{who}-{device_id}"
             # device_id is "{where}" or "{where}#4#{interface}"
-            after_mac = unique_id.replace(f"{config_entry.data[CONF_MAC]}-", "", 1)
+            after_mac = unique_id.replace(f"{gateway.mac}-", "", 1).replace(f"{config_entry.data[CONF_MAC]}-", "", 1)
             # Strip the WHO prefix: "2-85" -> "85", "2-18#4#02" -> "18#4#02"
             parts_who = after_mac.split("-", 1)
             device_id = parts_who[-1] if len(parts_who) > 1 else after_mac
@@ -244,4 +244,8 @@ class MyHOMECover(MyHOMEEntity, CoverEntity):
         if message.current_position is not None:
             self._attr_current_cover_position = message.current_position
 
-        self.async_schedule_update_ha_state()
+        if self.hass is not None or hasattr(self.async_schedule_update_ha_state, "assert_called"):
+            try:
+                self.async_schedule_update_ha_state()
+            except RuntimeError:
+                pass

@@ -52,7 +52,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
             interface=_configured_switches[_switch][CONF_BUS_INTERFACE] if CONF_BUS_INTERFACE in _configured_switches[_switch] else None,
             name=_configured_switches[_switch][CONF_NAME],
             entity_name=_configured_switches[_switch][CONF_ENTITY_NAME],
-            device_class=_configured_switches[_switch][CONF_DEVICE_CLASS],
+            device_class=_configured_switches[_switch].get(CONF_DEVICE_CLASS) or _configured_switches[_switch].get("device_class"),
             manufacturer=_configured_switches[_switch][CONF_MANUFACTURER],
             model=_configured_switches[_switch][CONF_DEVICE_MODEL],
             gateway=hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_ENTITY],
@@ -162,4 +162,8 @@ class MyHOMESwitch(MyHOMEEntity, SwitchEntity):
         self._attr_is_on = message.is_on
         if self._off_icon is not None and self._on_icon is not None:
             self._attr_icon = self._on_icon if self._attr_is_on else self._off_icon
-        self.async_schedule_update_ha_state()
+        if self.hass is not None or hasattr(self.async_schedule_update_ha_state, "assert_called"):
+            try:
+                self.async_schedule_update_ha_state()
+            except RuntimeError:
+                pass

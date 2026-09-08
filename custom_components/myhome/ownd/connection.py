@@ -52,6 +52,9 @@ class OWNGateway:
             if "modelName" in discovery_info
             else "Unknown model"
         )
+        self.model = self.model_name
+        from ..gateway_profile import get_gateway_profile
+        self.profile = get_gateway_profile(self.model_name)
         self.model_number = (
             discovery_info["modelNumber"] if "modelNumber" in discovery_info else None
         )
@@ -182,8 +185,8 @@ class OWNSession:
         self._type = connection_type.lower()
         self._logger = logger
 
-        self._stream_reader: asyncio.StreamReader
-        self._stream_writer: asyncio.StreamWriter
+        self._stream_reader: Optional[asyncio.StreamReader] = None
+        self._stream_writer: Optional[asyncio.StreamWriter] = None
 
     @property
     def gateway(self) -> OWNGateway:
@@ -322,8 +325,9 @@ class OWNSession:
 
     async def close(self) -> None:
         """Closes the connection to the OpenWebNet gateway"""
-        self._stream_writer.close()
-        await self._stream_writer.wait_closed()
+        if self._stream_writer:
+            self._stream_writer.close()
+            await self._stream_writer.wait_closed()
         self._logger.debug(
             "%s %s session closed.", self._gateway.log_id, self._type.capitalize()
         )

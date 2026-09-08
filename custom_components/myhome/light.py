@@ -1,4 +1,6 @@
 """Support for MyHome lights."""
+import asyncio
+
 from homeassistant.components.light import (
     ATTR_BRIGHTNESS,
     ATTR_BRIGHTNESS_PCT,
@@ -37,6 +39,15 @@ from .const import (
     CONF_MANUFACTURER,
     CONF_DEVICE_MODEL,
     CONF_DIMMABLE,
+    CONF_TRANSITION_MODE,
+    CONF_WORKER_COUNT,
+    DEFAULT_TRANSITION_MODE,
+    TRANSITION_MODE_NATIVE,
+    TRANSITION_MODE_SOFTWARE,
+    TRANSITION_MODE_AUTO,
+    SOFTWARE_TRANSITION_STEP_INTERVAL,
+    SOFTWARE_TRANSITION_MIN_STEPS,
+    SOFTWARE_TRANSITION_MAX_STEPS,
     DOMAIN,
     LOGGER,
 )
@@ -61,7 +72,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
             unique_id = entry.unique_id
             # unique_id format: "{mac}-{who}-{device_id}"
             # device_id is "{where}" or "{where}#4#{interface}"
-            after_mac = unique_id.replace(f"{config_entry.data[CONF_MAC]}-", "", 1)
+            after_mac = unique_id.replace(f"{gateway.mac}-", "", 1).replace(f"{config_entry.data[CONF_MAC]}-", "", 1)
             # Strip the WHO prefix: "1-55" -> "55", "1-18#4#02" -> "18#4#02"
             parts_who = after_mac.split("-", 1)
             device_id = parts_who[-1] if len(parts_who) > 1 else after_mac
@@ -76,7 +87,8 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
             _customs = hass.data.get(DOMAIN, {}).get("customizations", {})
             clean_where = where.split('-')[-1]
             _predicted_id = f"light.light_{clean_where.replace(' ', '_')}"
-            _is_dimmable = _customs.get(_predicted_id, {}).get("dimmable", False)
+            _custom_entry = _customs.get(entry.entity_id, {}) or _customs.get(_predicted_id, {})
+            _is_dimmable = _custom_entry.get("dimmable", False)
 
             _light = MyHOMELight(
                 hass=hass,
@@ -239,6 +251,12 @@ class MyHOMELight(MyHOMEEntity, LightEntity):
         self._attr_brightness = None
         self._attr_brightness_pct = None
 
+        # Software stepped transition support
+        self._fade_task: asyncio.Task | None = None
+        self._fade_id: int = 0
+        self._cmd_lock: asyncio.Lock = asyncio.Lock()
+        self._last_brightness_pct: int = 100
+
     async def async_added_to_hass(self):
         """Run when entity about to be added to hass."""
         self.async_on_remove(
@@ -259,6 +277,138 @@ class MyHOMELight(MyHOMEEntity, LightEntity):
         else:
             await self._gateway_handler.send_status_request(OWNLightingCommand.status(self._full_where))
 
+    # ── Transition helpers (software stepped dimming) ────────────────────────
+
+    def _get_transition_mode(self) -> str:
+        if not self._gateway_handler or not self._gateway_handler.config_entry:
+            return DEFAULT_TRANSITION_MODE
+        raw = self._gateway_handler.config_entry.options.get(
+            CONF_TRANSITION_MODE, DEFAULT_TRANSITION_MODE
+        )
+        if raw == TRANSITION_MODE_AUTO:
+            return TRANSITION_MODE_SOFTWARE
+        if raw not in (TRANSITION_MODE_SOFTWARE, TRANSITION_MODE_NATIVE):
+            return DEFAULT_TRANSITION_MODE
+        return raw
+
+    def _should_use_software_stepped(self, transition: float | None) -> bool:
+        if transition is None or transition <= 0:
+            return False
+        mode = self._get_transition_mode()
+        return mode != TRANSITION_MODE_NATIVE
+
+    async def _set_brightness_instant(self, pct: int) -> None:
+        """Send set_brightness with transition=0. Uses per-light lock to help ordering."""
+        pct = max(0, min(100, int(pct)))
+        async with self._cmd_lock:
+            await self._gateway_handler.send(
+                OWNLightingCommand.set_brightness(self._full_where, pct, 0)
+            )
+
+    def _apply_brightness_state(self, pct: int, is_on: bool | None = None) -> None:
+        pct = max(0, min(100, int(pct)))
+        self._attr_brightness_pct = pct
+        self._attr_brightness = percent_to_eight_bits(pct)
+        if is_on is not None:
+            self._attr_is_on = is_on
+        else:
+            self._attr_is_on = pct > 0
+        if pct > 0:
+            self._last_brightness_pct = pct
+
+    def _next_fade_id(self) -> int:
+        self._fade_id += 1
+        return self._fade_id
+
+    def _cancel_fade_if_active(self) -> None:
+        """Simple cancel for @callback contexts (e.g. handle_event)."""
+        if self._fade_task and not self._fade_task.done():
+            self._fade_task.cancel()
+            self._fade_task = None
+
+    async def _cancel_fade_robustly(self) -> None:
+        """Robust cancel + drain for async contexts."""
+        if self._fade_task and not self._fade_task.done():
+            self._fade_task.cancel()
+            try:
+                await asyncio.wait_for(asyncio.shield(self._fade_task), timeout=0.15)
+            except Exception:
+                pass
+            self._fade_task = None
+
+    async def async_will_remove_from_hass(self):
+        await self._cancel_fade_robustly()
+        await super().async_will_remove_from_hass()
+
+    async def _async_fade_to(self, start_pct: int, target_pct: int, duration: float, fade_id: int) -> None:
+        """Background software stepped fade using instant brightness commands."""
+        start_pct = max(0, min(100, int(start_pct or 0)))
+        target_pct = max(0, min(100, int(target_pct or 0)))
+        duration = max(0.0, float(duration))
+
+        if fade_id != self._fade_id:
+            return
+
+        # Warn if using multiple workers (can interleave steps for this light)
+        try:
+            if self._gateway_handler and self._gateway_handler.config_entry:
+                wc = self._gateway_handler.config_entry.options.get(CONF_WORKER_COUNT, 1)
+                if int(wc) > 1:
+                    LOGGER.warning(
+                        "%s: Using software stepped fade with command_worker_count=%s. "
+                        "Step reordering is possible. Recommend =1 for reliable fades.",
+                        self._where, wc
+                    )
+        except Exception:
+            pass
+
+        if duration < 0.05 or abs(target_pct - start_pct) < 1:
+            await self._set_brightness_instant(target_pct)
+            self._apply_brightness_state(target_pct)
+            self.async_schedule_update_ha_state()
+            if fade_id == self._fade_id:
+                self._fade_task = None
+            return
+
+        num_steps = max(
+            SOFTWARE_TRANSITION_MIN_STEPS,
+            min(
+                SOFTWARE_TRANSITION_MAX_STEPS,
+                int(duration / SOFTWARE_TRANSITION_STEP_INTERVAL + 0.5),
+            ),
+        )
+        if num_steps < 1:
+            num_steps = 1
+        step_time = duration / num_steps
+        delta = (target_pct - start_pct) / num_steps
+
+        try:
+            for i in range(1, num_steps + 1):
+                if fade_id != self._fade_id:
+                    LOGGER.debug("%s Aborting stale fade step", self._where)
+                    return
+                current = int(round(start_pct + delta * i))
+                current = max(0, min(100, current))
+
+                await self._set_brightness_instant(current)
+                self._apply_brightness_state(current)
+                self.async_schedule_update_ha_state()
+
+                if i < num_steps:
+                    await asyncio.sleep(step_time)
+
+            if fade_id == self._fade_id:
+                self._apply_brightness_state(target_pct)
+                self.async_schedule_update_ha_state()
+        except asyncio.CancelledError:
+            LOGGER.debug("%s Software fade cancelled (id=%s)", self._where, fade_id)
+            raise
+        except Exception as err:  # prevent "Task exception was never retrieved"
+            LOGGER.warning("%s Fade task error (id=%s): %s", self._where, fade_id, err)
+        finally:
+            if fade_id == self._fade_id:
+                self._fade_task = None
+
     async def async_turn_on(self, **kwargs):
         """Turn the device on."""
 
@@ -268,9 +418,12 @@ class MyHOMELight(MyHOMEEntity, LightEntity):
             elif kwargs[ATTR_FLASH] == FLASH_LONG:
                 return await self._gateway_handler.send(OWNLightingCommand.flash(self._full_where, 1.5))
 
+        # Original combined condition preserved for compatibility
         if ((ATTR_BRIGHTNESS in kwargs or ATTR_BRIGHTNESS_PCT in kwargs) and ColorMode.BRIGHTNESS in self._attr_supported_color_modes) or (
             ATTR_TRANSITION in kwargs and self._attr_supported_features & LightEntityFeature.TRANSITION
         ):
+            transition = float(kwargs.get(ATTR_TRANSITION, 0.0))
+
             if ATTR_BRIGHTNESS in kwargs or ATTR_BRIGHTNESS_PCT in kwargs:
                 _percent_brightness = eight_bits_to_percent(kwargs[ATTR_BRIGHTNESS]) if ATTR_BRIGHTNESS in kwargs else None
                 _percent_brightness = kwargs[ATTR_BRIGHTNESS_PCT] if ATTR_BRIGHTNESS_PCT in kwargs else _percent_brightness
@@ -278,20 +431,46 @@ class MyHOMELight(MyHOMEEntity, LightEntity):
                 if _percent_brightness == 0:
                     return await self.async_turn_off(**kwargs)
                 else:
-                    return (
-                        await self._gateway_handler.send(
-                            OWNLightingCommand.set_brightness(
-                                self._full_where,
-                                _percent_brightness,
-                                int(kwargs[ATTR_TRANSITION]),
-                            )
+                    target_pct = _percent_brightness
+                    start_pct = (self._attr_brightness_pct if self._attr_is_on and self._attr_brightness_pct is not None else 0)
+
+                    await self._cancel_fade_robustly()
+
+                    if self._should_use_software_stepped(transition):
+                        fid = self._next_fade_id()
+                        self._fade_task = self.hass.async_create_task(
+                            self._async_fade_to(start_pct, target_pct, transition, fid)
                         )
-                        if ATTR_TRANSITION in kwargs
-                        else await self._gateway_handler.send(OWNLightingCommand.set_brightness(self._full_where, _percent_brightness))
-                    )
+                        return
+
+                    # native path (exact pre-existing)
+                    if ATTR_TRANSITION in kwargs:
+                        await self._gateway_handler.send(
+                            OWNLightingCommand.set_brightness(self._full_where, target_pct, int(transition))
+                        )
+                    else:
+                        await self._gateway_handler.send(OWNLightingCommand.set_brightness(self._full_where, target_pct))
+                    if target_pct > 0:
+                        self._last_brightness_pct = target_pct
+                    return
             else:
-                return await self._gateway_handler.send(OWNLightingCommand.switch_on(self._full_where, int(kwargs[ATTR_TRANSITION])))
+                # transition-only (no brightness kwarg)
+                target_pct = self._last_brightness_pct or 100
+                start_pct = (self._attr_brightness_pct if self._attr_is_on and self._attr_brightness_pct is not None else 0)
+
+                await self._cancel_fade_robustly()
+
+                if self._should_use_software_stepped(transition):
+                    fid = self._next_fade_id()
+                    self._fade_task = self.hass.async_create_task(
+                        self._async_fade_to(start_pct, target_pct, transition, fid)
+                    )
+                    return
+
+                # native switch_on with speed
+                return await self._gateway_handler.send(OWNLightingCommand.switch_on(self._full_where, int(transition)))
         else:
+            # plain on path (preserved)
             await self._gateway_handler.send(OWNLightingCommand.switch_on(self._full_where))
             if ColorMode.BRIGHTNESS in self._attr_supported_color_modes:
                 await self.async_update()
@@ -300,7 +479,20 @@ class MyHOMELight(MyHOMEEntity, LightEntity):
         """Turn the device off."""
 
         if ATTR_TRANSITION in kwargs and self._attr_supported_features & LightEntityFeature.TRANSITION:
-            return await self._gateway_handler.send(OWNLightingCommand.switch_off(self._full_where, int(kwargs[ATTR_TRANSITION])))
+            transition = float(kwargs[ATTR_TRANSITION])
+            start_pct = (self._attr_brightness_pct if self._attr_is_on and self._attr_brightness_pct is not None else 0)
+
+            await self._cancel_fade_robustly()
+
+            if self._should_use_software_stepped(transition):
+                fid = self._next_fade_id()
+                self._fade_task = self.hass.async_create_task(
+                    self._async_fade_to(start_pct, 0, transition, fid)
+                )
+                return
+
+            # native
+            return await self._gateway_handler.send(OWNLightingCommand.switch_off(self._full_where, int(transition)))
 
         if ATTR_FLASH in kwargs and self._attr_supported_features & LightEntityFeature.FLASH:
             if kwargs[ATTR_FLASH] == FLASH_SHORT:
@@ -308,11 +500,17 @@ class MyHOMELight(MyHOMEEntity, LightEntity):
             elif kwargs[ATTR_FLASH] == FLASH_LONG:
                 return await self._gateway_handler.send(OWNLightingCommand.flash(self._full_where, 1.5))
 
+        # plain off (preserved)
         return await self._gateway_handler.send(OWNLightingCommand.switch_off(self._full_where))
 
     @callback
     def handle_event(self, message: OWNLightingEvent):
-        """Handle an event message."""
+        """Handle an event message.
+
+        During an active software fade we keep optimistic state unless the bus
+        reports a significant change (is_on=False or brightness diff >=10pp or 0).
+        This prevents wall switches or echoes from ruining the visible fade.
+        """
         LOGGER.info(
             "%s %s",
             self._gateway_handler.log_id,
@@ -320,7 +518,13 @@ class MyHOMELight(MyHOMEEntity, LightEntity):
         )
         self._attr_is_on = message.is_on
 
-        # Auto-promote to dimmable when brightness data is received
+        is_fading = bool(self._fade_task and not self._fade_task.done())
+
+        # Always cancel fade on physical off (pure on/off events or brightness=0)
+        if is_fading and not self._attr_is_on:
+            self._cancel_fade_if_active()
+
+        # Auto-promote to dimmable when brightness data is received (always)
         if (message.brightness is not None or message.brightness_preset is not None):
             if ColorMode.BRIGHTNESS not in self._attr_supported_color_modes:
                 LOGGER.info(
@@ -333,10 +537,25 @@ class MyHOMELight(MyHOMEEntity, LightEntity):
                 self._attr_supported_features &= ~LightEntityFeature.FLASH
 
         if ColorMode.BRIGHTNESS in self._attr_supported_color_modes and message.brightness is not None:
-            self._attr_brightness_pct = message.brightness
-            self._attr_brightness = percent_to_eight_bits(message.brightness)
+            if is_fading:
+                # Precise policy during fade: only apply significant physical changes
+                current_opt = self._attr_brightness_pct or 0
+                reported = message.brightness
+                if reported == 0 or abs(reported - current_opt) >= 10:
+                    self._cancel_fade_if_active()
+                    self._apply_brightness_state(reported)
+                # else: keep optimistic state
+            else:
+                self._attr_brightness_pct = message.brightness
+                self._attr_brightness = percent_to_eight_bits(message.brightness)
+                if message.brightness > 0:
+                    self._last_brightness_pct = message.brightness
 
         if self._off_icon is not None and self._on_icon is not None:
             self._attr_icon = self._on_icon if self._attr_is_on else self._off_icon
 
-        self.async_schedule_update_ha_state()
+        if self.hass is not None or hasattr(self.async_schedule_update_ha_state, "assert_called"):
+            try:
+                self.async_schedule_update_ha_state()
+            except RuntimeError:
+                pass

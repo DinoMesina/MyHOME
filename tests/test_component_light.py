@@ -77,6 +77,13 @@ async def test_light_entity_dimmable(hass):
     gateway = MagicMock()
     gateway.send = AsyncMock()
     gateway.send_status_request = AsyncMock()
+
+    # Force native mode so legacy transition tests continue to exercise the
+    # direct send path (matches pre-stepped behavior). New stepped tests use
+    # software mode explicitly or the default.
+    cfg = MagicMock()
+    cfg.options = {"transition_mode": "native"}
+    gateway.config_entry = cfg
     
     light = MyHOMELight(
         hass=hass, name="L", entity_name="L", icon="mdi:lightbulb-off", icon_on="mdi:lightbulb-on",

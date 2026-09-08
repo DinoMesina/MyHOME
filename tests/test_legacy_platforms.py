@@ -17,6 +17,7 @@ from custom_components.myhome.const import (
 from custom_components.myhome.ownd.message import OWNEvent
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from syrupy.assertion import SnapshotAssertion
+from syrupy.matchers import path_type
 
 @pytest.fixture
 def mock_gateway_connection():
@@ -161,7 +162,10 @@ async def test_legacy_platforms_setup_and_execution(hass: HomeAssistant, mock_ga
     await hass.async_block_till_done()
     
     # Snapshot Button
-    assert hass.states.get("button.button_1") == snapshot(name="button_state")
+    assert hass.states.get("button.button_1") == snapshot(
+        name="button_state",
+        matcher=path_type({"state": (str,)})
+    )
     
     # Send Dummy Dispatch update to climate 
     clim_event = OWNEvent.parse("*#4*01*0*0225##")

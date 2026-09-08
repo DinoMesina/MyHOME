@@ -32,7 +32,7 @@ PLATFORMS = ["light", "switch", "cover", "climate", "binary_sensor", "sensor", "
 
 async def async_setup(hass, config):
     """Set up the MyHOME component."""
-    hass.data[DOMAIN] = {}
+    hass.data.setdefault(DOMAIN, {})
 
     if DOMAIN not in config:
         return True
@@ -61,7 +61,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
         LOGGER.warning("Migrating config entry unique_id to %s", entry.unique_id)
         
     entity_registry = er.async_get(hass)
-    _mac = entry.data[CONF_MAC]
+    _mac = dr.format_mac(entry.data[CONF_MAC])
     
     _domain_to_who = {
         "light": "1",
@@ -73,8 +73,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     registry_entries = er.async_entries_for_config_entry(entity_registry, entry.entry_id)
     for reg_entry in registry_entries:
         parts = reg_entry.unique_id.split("-")
-        # Old unique_id format: MAC-WHERE
-        if len(parts) == 2 and parts[0] == _mac:
+        # Old unique_id format: MAC-WHERE (MAC may be formatted with colons or raw hex)
+        is_matching_mac = False
+        if len(parts) == 2:
+            if parts[0] == _mac or parts[0] == entry.data[CONF_MAC]:
+                is_matching_mac = True
+            elif parts[0]:
+                try:
+                    is_matching_mac = (dr.format_mac(parts[0]) == _mac)
+                except Exception:
+                    is_matching_mac = False
+
+        if is_matching_mac:
             where_part = parts[1]
             who = _domain_to_who.get(reg_entry.domain)
             if who:
@@ -89,23 +99,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
                     except ValueError as e:
                         LOGGER.warning("Could not auto-migrate entity %s to %s: %s", reg_entry.entity_id, new_unique_id, e)
 
-    # Force alignment of entity_ids back to default light.light_69 and cover.cover_18 format!
-    # Because a previous buggy implementation overrode _attr_name in the component,
-    # HA generated dynamic friendly entity_ids (e.g. light.keuken_tafel).
-    # We must revert them to match the dashboard and customize.yaml.
-    registry_entries = er.async_entries_for_config_entry(entity_registry, entry.entry_id)
-    for reg_entry in registry_entries:
-        parts = reg_entry.unique_id.split("-")
-        if len(parts) >= 3 and parts[0] == _mac:
-            where_part = "-".join(parts[2:]) # Handle #4# logic if any
-            clean_where = where_part.split("#4#")[0]
-            expected_entity_id = f"{reg_entry.domain}.{reg_entry.domain}_{clean_where}"
-            if reg_entry.entity_id != expected_entity_id:
-                try:
-                    entity_registry.async_update_entity(reg_entry.entity_id, new_entity_id=expected_entity_id)
-                    LOGGER.info("Restoring Entity ID %s back to %s", reg_entry.entity_id, expected_entity_id)
-                except ValueError as e:
-                    LOGGER.warning("Could not restore entity %s to %s: %s", reg_entry.entity_id, expected_entity_id, e)
 
     # Hack to forcefully absorb customize.yaml for users who deleted their integrations
     # and therefore lost the transparent entity_registry migration!
@@ -145,7 +138,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
             hass.async_create_task(
                 hass.config_entries.flow.async_init(
                     DOMAIN,
-                    context={"source": SOURCE_REAUTH},
+                    context={"source": SOURCE_REAUTH, "entry_id": entry.entry_id},
                     data=entry.data,
                 )
             )

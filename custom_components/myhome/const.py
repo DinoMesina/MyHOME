@@ -54,3 +54,16 @@ CONF_DECODER_ENTITY = "decoder_{}_entity"     # HA media_player entity_id
 CONF_DECODER_SOURCE = "decoder_{}_source"     # BTicino source number (int 1-4)
 CONF_DECODER_PRE_GAIN = "decoder_{}_pre_gain" # Volume offset % added to decoder (0-50)
 CONF_DECODER_SLOTS = 4                        # Maximum number of decoder slots
+
+# ── Light transition modes (software stepped dimming) ─────────────────────
+CONF_TRANSITION_MODE = "transition_mode"
+TRANSITION_MODE_NATIVE = "native"
+TRANSITION_MODE_SOFTWARE = "software_stepped"
+TRANSITION_MODE_AUTO = "auto"  # back-compat alias → software_stepped
+TRANSITION_MODES = [TRANSITION_MODE_SOFTWARE, TRANSITION_MODE_NATIVE, TRANSITION_MODE_AUTO]
+DEFAULT_TRANSITION_MODE = TRANSITION_MODE_SOFTWARE
+
+# Tuning for software stepped fades (best-effort)
+SOFTWARE_TRANSITION_STEP_INTERVAL = 0.3   # target seconds between steps
+SOFTWARE_TRANSITION_MIN_STEPS = 2
+SOFTWARE_TRANSITION_MAX_STEPS = 25

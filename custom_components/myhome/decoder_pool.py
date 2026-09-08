@@ -77,8 +77,11 @@ class DecoderPool:
                     "media_player.hifiberry_zone": 2,
                 }
 
-                Source numbers are passed directly to
-                ``OWNSoundCommand.select_source(where, str(source_num))``.
+                The source number tells the integration which physical F441M input
+                the decoder is wired to. For normal streaming the integration activates
+                the zone with a simple OFF→ON sequence and trusts the matrix routing
+                (set physically or by gateway scenario). The number is available if
+                explicit routing commands are ever needed.
 
             pre_gain_map: Optional mapping of ``{entity_id: pre_gain_pct}``
                 where ``pre_gain_pct`` is an integer between 0 and 50.

@@ -13,16 +13,16 @@ Modernized MyHOME Custom Component for Home Assistant
    
 2. **Native Audio System Support (WHO=16):**
    Full native support for Bticino/MyHome Audio Matrices, compatible with both legacy baseband and **Sound System 2.0 stereo** hardware. Exposes native `media_player` entities for all audio zones with bidirectional state tracking.
-   - **Turn On/Off, Source Selection & Volume:** Full support for `turn_on`, `turn_off`, `select_source`, `volume_set`, `volume_up`, and `volume_down`. Source selection correctly addresses stereo amplifier zones (11x–14x).
+   - **Turn On/Off, Source Selection & Volume:** Full support for `turn_on`, `turn_off`, `select_source`, `volume_set`, `volume_up`, and `volume_down`. Source selection on the zone entities reports the current matrix routing (observed from the bus). Changing the active source from HA is a no-op to avoid hiss (see F441M section below).
    - **Absolute Volume Tracking:** Full support for dimension messages (`*#16*where*#1*vol##`), normalizing the 0–31 hardware scale automatically.
    - **Software Mute Emulation:** Since OpenWebNet lacks a native audio Mute function, this integration fully emulates local muting, keeping physical volume levels accurately cached.
 
 3. **🎵 Dynamic Proxy — Stream Music to Your BTicino Zones:**
    The BTicino audio matrix (F441, S0105A) is a **hardware-only analog switch** — it cannot decode IP-based audio streams on its own. This integration bridges that gap with a *Dynamic Proxy* that lets you stream from **Music Assistant**, **Spotify Connect**, or any HA-compatible media source to your wired BTicino zones.
 
-   **How it works (automatically):**
-   1. You configure one or more *decoders* (network media players physically connected to the matrix source inputs) via the Options UI.
-   2. When Music Assistant or Spotify sends `play_media` to a BTicino zone, the proxy claims an idle decoder, wakes it, routes the matrix to the correct source input, and forwards the stream.
+   **How it works (automatically) — Hardware Routing First:**
+   1. You configure one or more *decoders* (network media players physically connected to the matrix source inputs) via the Options UI. You tell the integration which physical source input (1–4) each decoder is wired to.
+   2. When Music Assistant or Spotify sends `play_media` to a BTicino zone, the proxy claims an idle decoder, wakes it, and activates the zone with a simple OFF → ON command. It does **not** send matrix source-routing commands (they cause hiss). Routing is expected to already be correct because of physical wall panel selection or a power-on scenario.
    3. Playback state (title, artist, album art) is mirrored back from the decoder to the zone entity in real time.
    4. When the zone is turned off, the decoder is released back to the pool for other zones.
 
@@ -84,47 +84,59 @@ To assign human-readable names (like "Kitchen Lights"):
 *   **The Power-User Way:** Use Home Assistant's native [customize.yaml](https://www.home-assistant.io/docs/configuration/customizing-devices/) feature to bulk-rename entities without touching the underlying integration logic.
 
 ### 4. Audio Zone Controls
-Audio zones are automatically discovered as `media_player` entities when any sound system traffic is detected on the bus. The supported features include:
+Audio zones are automatically discovered as `media_player` entities when any sound system traffic is detected on the bus.
+
+**Source selection philosophy ("Hardware Routing First")**:  
+Source changes are best performed with physical wall panels or a gateway power-on scenario. The integration does not send matrix routing commands over IP (they cause hiss on MH200 gateways). When streaming via the Dynamic Proxy, the software only activates the zone (OFF → ON) and trusts that the matrix is already routed to the correct physical decoder input.
+
+The supported features include:
 
 | Feature | Method |
 |---|---|
 | Turn On/Off | Standard HA media player controls |
 | Volume Up/Down | Step-based volume adjustment |
 | Volume Slider | Absolute volume set (0–31 → normalized 0.0–1.0) |
-| Source Selection | **MH200 Startup Scenario** (fixed routing — see below) |
+| Source Selection | Physical wall panels (recommended) or gateway power-on scenario |
 | Mute | Software-emulated (caches volume, sets to 0, restores on unmute) |
 
-#### F441M Source Routing Architecture
+#### F441M Source Routing Architecture ("Hardware Routing First")
 
-> **Important:** The original MH200 gateway (firmware ≤ 2.1.0) **cannot** switch F441M matrix sources hiss-free via IP. All WHO=16 compound routing commands (`*16*3*1XY##`) sent through the IP gateway produce audible analog relay transients because the gateway's SCS frame translation lacks the A5 analog isolation preamble that native bus devices (wall panels) include. Additionally, the MH200 does **not** support CEN/CEN+ virtual triggering over IP (WHO=15 and WHO=25 are NACK'd).
+> **Important:** The original MH200 gateway (firmware ≤ 2.1.0) **cannot** switch F441M matrix sources hiss-free via IP. All WHO=16 compound routing commands (`*16*3*1XY##`) sent through the IP gateway produce audible analog relay transients. Native wall-panel commands on the bus do not have this problem. The MH200 also does not support CEN/CEN+ virtual triggering over IP.
 
-**Solution:** All zones are permanently routed to the **Aux** input (Source 2 — e.g. Cambridge CXN) via a **power-on startup scenario** programmed into the MH200 using the TiMH200 software. Streaming is handled entirely by the network decoder (Spotify Connect / Music Assistant), so no matrix routing change is ever needed at runtime.
+**Recommended model — Hardware Routing First**
 
-The `async_select_source` method in `media_player.py` is intentionally a **no-op** that logs an informational message.
+1. Physically connect your network streaming decoder(s) to the source input(s) you want to use (any of Source 1–4).
+2. Use physical BTicino wall panels to select that source for the zones you care about. This is clean and hiss-free.
+3. (Optional) Program a gateway power-on / startup scenario so zones default to your streaming source(s) after power loss.
+4. The integration only sends simple zone ON/OFF commands. It trusts the matrix routing that was set physically or by the scenario. No source-routing commands are ever sent from Home Assistant.
 
-##### Setting Up the MH200 Startup Scenario
+This approach lets you put streaming on **Source 1** (or any source) and have wall panels natively select it without involving the gateway for routing.
+
+The `async_select_source()` method is intentionally a **no-op**. Changing sources from the Home Assistant UI is not supported for hiss-avoidance reasons.
+
+##### Optional: Using a Gateway Power-On Scenario (Legacy / Fixed Routing)
+
+If you prefer all zones to come up already routed to a specific source (e.g. your streaming input), you can still use a power-on scenario. The technique is the same regardless of which source number you chose physically:
 
 1. Open **Configurator TiMH200** (Windows XP SP3 compatibility mode, Run as Administrator).
 2. Create a new **Scenario** of type **"All'accensione"** (Power-On / Startup).
-3. For **each amplifier zone**, add a sound system action:
+3. For each amplifier zone, add a sound system action:
    - **Action:** Stereo ON (`WHAT=3`)
-   - **Address:** Compound `1<source><zone_digit>` (e.g. `121` = Source 2, Zone 1)
-4. The compound address table for Source 2 (Aux) — all 8 F441M outputs:
+   - **Address:** Compound `1<source><zone_digit>` (e.g. `111` = Source 1, Zone 1)
 
-   | Amplifier Zone | Zone Digit | Compound Address | Command |
+Example compound addresses (replace the source digit with the one you physically wired your decoder to):
+
+   | Amplifier Zone | Zone Digit | Example for Source 1 | Example for Source 2 |
    |---|---|---|---|
-   | 14 | 4 | 124 | `*16*3*124##` |
-   | 17 | 7 | 127 | `*16*3*127##` |
-   | 18 | 8 | 128 | `*16*3*128##` |
-   | 21 (Bureau) | 1 | 121 | `*16*3*121##` |
-   | 22 | 2 | 122 | `*16*3*122##` |
-   | 23 | 3 | 123 | `*16*3*123##` |
-   | 35 | 5 | 125 | `*16*3*125##` |
-   | 36 | 6 | 126 | `*16*3*126##` |
+   | 14 | 4 | `*16*3*114##` | `*16*3*124##` |
+   | 21 (Bureau) | 1 | `*16*3*111##` | `*16*3*121##` |
+   | ... | ... | ... | ... |
 
 5. Upload via Serial (COM1) to the MH200.
 
 > **TiMH200 Upload Bug:** On Windows 10/11, right-click `TiMH200.exe` → Properties → Compatibility → **Windows XP (Service Pack 3)** + **Run as Administrator**.
+
+The old practice of permanently forcing everything to "Source 2 = Aux" is no longer required. Choose whichever source number is most convenient for your physical wiring.
 
 ##### Upgrading the Gateway
 To restore full IP-based source switching (hiss-free CEN+ triggering), upgrade to an **MH200N**, **F454**, or **F459** gateway. These support `WHO=25` CEN+ virtual triggering over IP with proper SCS frame generation.
@@ -144,13 +156,15 @@ To stream from Music Assistant, Spotify Connect, or other services to your BTici
 2. Scroll to the **Decoder** section.
 3. For each connected decoder, fill in:
    - **Entity:** The `media_player` entity ID of the decoder (e.g. `media_player.cambridge_audio_cxn`)
-   - **Source:** The BTicino source input number (1–4) the decoder is physically wired to
+   - **Source:** The BTicino source input number (1–4) the decoder is **physically wired to** on the F441M matrix. This is critical — the integration uses this number when claiming the decoder for a zone.
    - **Pre-gain:** A volume offset percentage (0–50) to optimise the analog signal-to-noise ratio. Recommended values:
      - `0` for decoders with fixed line-level output (e.g. Cambridge Audio with Pre-Amp OFF)
      - `15–20` for software-level decoders (e.g. squeezelite on a HiFiBerry DAC)
      - Higher values for particularly noisy setups — start at `30` and reduce if the decoder clips
 
 4. Click **Submit**. The decoder pool is rebuilt immediately without restarting HA.
+
+**Tip:** With the "Hardware Routing First" model you can wire your main streaming decoder to Source 1 (or any convenient input) and let wall panels select it directly. The software does not need to know or enforce a specific source number for routing — it only needs to know which physical input each decoder is attached to.
 
 #### Gain staging explained
 The BTicino 2-wire bus introduces inherent analog noise. The `pre_gain` setting drives the decoder volume proportionally higher than the zone volume (`decoder_vol = zone_vol + pre_gain/100`, capped at 1.0), keeping the analog signal level high while reducing the amplifier's noise floor amplification. The result is cleaner audio at lower listening volumes.
@@ -173,25 +187,29 @@ The underlying OpenWebNet (`OWNd`) package has been exclusively vendored nativel
 | S0105A | ✅ | 4 stereo inputs |
 | E46ADCN (amplifier) | ✅ | Receives from matrix |
 
-#### Architecture: Dynamic Proxy
+#### Architecture: Dynamic Proxy (Hardware Routing First)
 
 ```
 ┌──────────────────┐     ┌───────────────┐     ┌──────────────────┐
 │  Music Assistant  │     │  DecoderPool  │     │   F441M Matrix   │
 │  / Spotify / MA   │────▶│  (asyncio)    │────▶│   (hardware)     │
 │                   │     │               │     │                  │
-│  play_media()     │     │  claim()      │     │  select_source() │
-│                   │     │  release()    │     │                  │
-└──────────────────┘     │  gain_stage() │     │  IN1 ──▶ Zone 3  │
-                          └───────────────┘     │  IN2 ──▶ Zone 4  │
-                                ▲               │  IN3 ──▶ Zone 5  │
+│  play_media()     │     │  claim()      │     │  (routing already│
+│                   │     │  release()    │     │   set physically │
+└──────────────────┘     │  gain_stage() │     │   or by scenario)│
+                          └───────────────┘     │  IN1 ──▶ Zone 3  │
+                                ▲               │  IN2 ──▶ Zone 4  │
+                                │               │  IN3 ──▶ Zone 5  │
                                 │               │  IN4 ──▶ Zone 6  │
                           ┌─────┴──────┐        └──────────────────┘
                           │  Decoders   │
                           │             │
-                          │ Cambridge   │──── RCA ───▶ IN1
-                          │ squeezelite │──── RCA ───▶ IN2
+                          │ Cambridge   │──── RCA ───▶ IN1   ← You choose which
+                          │ squeezelite │──── RCA ───▶ IN2      physical input
                           └─────────────┘
 ```
+
+The proxy claims the decoder and only activates the zone (OFF → ON).  
+It does **not** send matrix source-routing commands. Routing is managed physically or via gateway scenario.
 
 *(For legacy OpenWebNet implementation documentation, refer to the original bticino open specs).*

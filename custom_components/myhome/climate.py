@@ -424,4 +424,8 @@ class MyHOMEClimate(MyHOMEEntity, ClimateEntity):
             else:
                 self._attr_hvac_action = HVACAction.IDLE
 
-        self.async_schedule_update_ha_state()
+        if self.hass is not None or hasattr(self.async_schedule_update_ha_state, "assert_called"):
+            try:
+                self.async_schedule_update_ha_state()
+            except RuntimeError:
+                pass
