@@ -391,9 +391,11 @@ async def test_cancellation_and_entity_removal(hass):
     light.hass = hass
     light.async_schedule_update_ha_state = MagicMock()
 
-    # Launch a long fade task
-    async def slow_sleep(*args):
-        await asyncio.sleep(10)
+    # Launch a long fade task that pauses on sleep
+    stop_event = asyncio.Event()
+
+    async def slow_sleep(*args, **kwargs):
+        await stop_event.wait()
 
     with patch("asyncio.sleep", side_effect=slow_sleep):
         await light.async_turn_on(**{ATTR_BRIGHTNESS_PCT: 80, ATTR_TRANSITION: 5.0})
