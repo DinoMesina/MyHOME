@@ -10,7 +10,13 @@ from homeassistant.const import (
     CONF_MAC,
 )
 
-from custom_components.myhome.sensor import async_setup_entry, MyHOMEPowerSensor
+from custom_components.myhome.sensor import (
+    async_setup_entry,
+    async_unload_entry,
+    MyHOMEPowerSensor,
+    MyHOMETemperatureSensor,
+    MyHOMEIlluminanceSensor,
+)
 from custom_components.myhome.const import (
     DOMAIN,
     CONF_PLATFORMS,
@@ -132,3 +138,71 @@ async def test_async_setup_entry_no_platform_data(mock_hass, mock_config_entry):
     
     assert result is True
     mock_add_entities.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_async_setup_entry_temperature_illuminance_and_legacy_power(mock_hass, mock_config_entry):
+    mock_hass.data[DOMAIN]["00:11:22:33:44:55"][CONF_PLATFORMS]["sensor"] = {
+        "sensor_temp_1": {
+            CONF_DEVICE_CLASS: SensorDeviceClass.TEMPERATURE,
+            CONF_WHO: "4",
+            CONF_WHERE: "51",
+            CONF_NAME: "Temp Sensor",
+            CONF_MANUFACTURER: "Bticino",
+            CONF_DEVICE_MODEL: "Meter",
+        },
+        "sensor_lux_1": {
+            CONF_DEVICE_CLASS: SensorDeviceClass.ILLUMINANCE,
+            CONF_WHO: "1",
+            CONF_WHERE: "12",
+            CONF_NAME: "Lux Sensor",
+            CONF_MANUFACTURER: "Bticino",
+            CONF_DEVICE_MODEL: "Meter",
+        },
+        "sensor_power_legacy": {
+            CONF_DEVICE_CLASS: SensorDeviceClass.POWER,
+            CONF_ENTITIES: {"power": {}},
+            CONF_WHO: "18",
+            CONF_WHERE: "51",
+            CONF_NAME: "Legacy Power Sensor",
+            CONF_MANUFACTURER: "Bticino",
+            CONF_DEVICE_MODEL: "Meter",
+        },
+    }
+
+    mock_platform = MagicMock()
+    platform_token = entity_platform.current_platform.set(mock_platform)
+    try:
+        with patch("custom_components.myhome.sensor.er.async_get") as mock_er_get:
+            mock_registry = MagicMock()
+            mock_registry.async_get_entity_id.return_value = None
+            mock_er_get.return_value = mock_registry
+
+            mock_add_entities = MagicMock()
+            await async_setup_entry(mock_hass, mock_config_entry, mock_add_entities)
+
+            mock_add_entities.assert_called_once()
+            added = mock_add_entities.call_args[0][0]
+            assert len(added) == 3
+            assert any(isinstance(s, MyHOMETemperatureSensor) for s in added)
+            assert any(isinstance(s, MyHOMEIlluminanceSensor) for s in added)
+            assert any(isinstance(s, MyHOMEPowerSensor) for s in added)
+
+            mock_platform.async_register_entity_service.assert_called_once()
+    finally:
+        entity_platform.current_platform.reset(platform_token)
+
+
+@pytest.mark.asyncio
+async def test_async_unload_entry(mock_hass, mock_config_entry):
+    from custom_components.myhome.sensor import async_unload_entry
+
+    # 1. Unload when platform present
+    assert "sensor_power_1" in mock_hass.data[DOMAIN]["00:11:22:33:44:55"][CONF_PLATFORMS]["sensor"]
+    await async_unload_entry(mock_hass, mock_config_entry)
+    assert len(mock_hass.data[DOMAIN]["00:11:22:33:44:55"][CONF_PLATFORMS]["sensor"]) == 0
+
+    # 2. Unload when platform absent
+    del mock_hass.data[DOMAIN]["00:11:22:33:44:55"][CONF_PLATFORMS]["sensor"]
+    result = await async_unload_entry(mock_hass, mock_config_entry)
+    assert result is True
