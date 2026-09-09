@@ -4,34 +4,34 @@ Welcome to the **OpenWebNet Protocol & WHO Specifications Archive**. This docume
 
 Historically, these technical specifications were distributed through the *MyOpen Community* portal (`myopen-legrandgroup.com` / `myopen-bticino.it`), which is no longer active. To ensure that developers, installers, and community members have permanent access to accurate protocol documentation, we maintain this centralized registry.
 
-An interactive version of this page is also hosted on our [GitHub Wiki](https://github.com/OpenWebNet-HA/MyHOME/wiki/OpenWebNet-Protocol-&-WHO-Specifications).
+### 🌐 Official & Community Documentation Links
+- 🏛️ **Official Legrand Developer Portal**: [Legrand Local Interoperability — PDF Documentation](https://developer.legrand.com/local-interoperability/#PDF%20documentation)
+- 📦 **Master Document Archive**: [OWN DOC.zip (GitHub PR #232 Attachment)](https://github.com/user-attachments/files/32008617/OWN.DOC.zip) — Complete 15-document bundle preserved and contributed by **@GianlucaCh**.
+- 🪄 **Home Assistant Community Blueprint**: [MyHome CEN+ Commands Blueprint](https://community.home-assistant.io/t/myhome-cen-commands/260345) — Connect physical MyHOME CEN / CEN+ scenario pushbuttons to toggle non-BTicino entities and dim lights.
+- 📖 **Interactive GitHub Wiki**: [OpenWebNet Protocol & WHO Specifications](https://github.com/OpenWebNet-HA/MyHOME/wiki/OpenWebNet-Protocol-&-WHO-Specifications)
 
 ---
 
-## 📋 Community Cross-Check: Call for BTicino Installers & Software Specialists
+## 📋 Community Cross-Check & Verification Status
 
-If you are a **certified BTicino / Legrand installer**, **system integrator**, or **MyHOME software specialist** (such as **@xtimmy86x**, **@lyubomirtraykov**, and fellow community professionals), your real-world experience across varied plant configurations and engineering software is invaluable.
+Thanks to community contributions—in particular the comprehensive technical manual archive contributed by **@GianlucaCh** in [PR #232](https://github.com/OpenWebNet-HA/MyHOME/pull/232)—**15 official specifications** are now preserved, verified, and cross-checked against live installations!
 
-We invite installers and software specialists to review and cross-check this archive:
+If you are a **certified BTicino / Legrand installer**, **system integrator**, or **MyHOME software specialist** (such as **@xtimmy86x**, **@lyubomirtraykov**, and fellow community professionals), your real-world experience across varied plant configurations and engineering software continues to help us fill the final remaining gaps:
 
-### 🔍 What We Need Installers & Software Specialists to Review:
+### 🔍 Remaining Specifications & Items Under Review:
 
 1. **Document Versions & Revision Dates**:
    - Compare your PDF archive against the [Master WHO Family Inventory](#-master-who-family-inventory) table below.
    - Look at the cover page and revision history (e.g. *Last date modify*, *Version number*). If your copy is newer than what is listed, please share the version details!
 
-2. **Plant Topologies & Gateway Quirks**:
-   - **Scenario Programmers (`MH200`, `MH200N`, `MH201`, `MH202`)**: Differences in session limits, memory banks, execution delays, and scenario frame syntax.
-   - **Cross-Bus Interfaces (`F422`)**: Edge cases with interface addressing (`WHERE#4#INTERFACE`) on complex multi-riser installations.
-   - **Next-Gen & Hybrid Gateways (`F454`, `F455`, `MyHomeServer1`, `F461`)**: Firmware variations, HMAC-SHA256 authentication behaviors, and SSDP UPnP discovery.
+2. **Remaining Missing / Legacy Specifications**:
+   - **`WHO = 14`**: Actuator diagnostics, hardware lock/unlock states, and operating counters (Seeking official PDF).
+   - **`WHO = 3`**: Load control legacy central unit (F421) (Seeking newer official PDF than 2006).
+   - **`WHO = 6`**: Dedicated audio door entry call frames (Seeking standalone document beyond WHO 7 / Intro).
+   - **`WHO = 9`**: Auxiliary channels (AUX 1–9) (Seeking newer official PDF than 2006).
 
-3. **Software Tooling & Official Specifications (MyHOME_Suite / TiMyHome)**:
+3. **Software Tooling & Dictionaries (MyHOME_Suite / TiMyHome)**:
    - Command definitions or exported XML dictionaries from Legrand/BTicino configuration software (**MyHOME_Suite**, **TiMyHome**, **Virtual Configurator**, **MyHOME_Up**).
-   - Any technical addenda or documentation for:
-      - **`WHO = 1`**: Extended DALI & DALI-2 gateway ballasts (tunable white, color temperature, RGB/RGBW, e.g. **F429G**). *(Note: Official specification for **`WHO = 24`** Lighting Management is now archived & verified thanks to **@GianlucaCh**!)*
-      - **`WHO = 14`**: Actuator diagnostics, hardware lock/unlock states, and operating counters.
-      - **`WHO = 18` & `WHO = 22`**: Multi-tariff smart metering, load shedding, and phase diagnostics.
-      - **`WHO = 25`**: CEN+ extended scenario pushes and dry contact interfaces (**3477**).
 
 > **💡 How to Contribute:** You can share filenames, revision dates, technical sheets, or bus monitor traces by opening an issue on the [OpenWebNet-HA/MyHOME GitHub repository](https://github.com/OpenWebNet-HA/MyHOME/issues) or commenting directly in [PR #232](https://github.com/OpenWebNet-HA/MyHOME/pull/232). Every contribution helps ensure open, permanent documentation for the entire MyHOME ecosystem.
 
@@ -48,27 +48,102 @@ The table below catalogs every known OpenWebNet function family (`WHO`), its off
 
 | WHO | Subsystem / Function | Official Document Title / Filename | Known Version & Date | Status | Home Assistant Entity / Platform | Notes & Supported Hardware |
 |:---:|:---|:---|:---:|:---:|:---|:---|
-| **0** | **Scenarios (Basic)** | `OpenWebNet_Community_Scenarios` / `WHO_0.pdf` | v1.0.0 (2006) | 🟡 | `event`, automations | 32 standard scenarios (e.g. 3551 4-button module). |
-| **1** | **Lighting (Illuminazione)** | `OpenWebNet_Community_1_Lighting` / `WHO_1.pdf` | v1.2.0 (2012) | 🟡 | `light` | ON, OFF, Dimming (1-100%, 10 levels, steps), Blink, Timer, Speed of transition. Extended lighting & DALI dimensions (tunable white / RGBW via F429/F429G). |
-| **2** | **Automation (Automazione)** | `OpenWebNet_Community_2_Automation` / `WHO_2.pdf` | v1.0.0 (2006) | 🟡 | `cover` | Roller shutters, venetian blinds, motorized curtains, gates. Standard UP/DOWN/STOP and advanced absolute positioning percentage (0-100%, Legrand 67557). |
+| **0** | **Scenarios (Basic)** | `Open Web Net Language (Scenarios)` / `WHO_0.pdf` | **v2.0.0 (2010-10-01)** | 🟢 | `event`, automations | 32 standard scenarios. Legrand 03551, 88301; BTicino F420, IR interface 3456. Contributed by GianlucaCh. |
+| **1** | **Lighting (Illuminazione)** | `Who = 1 LIGHTING` / `WHO_1.pdf` | **v1.1.0 (2014-11-17)** | 🟢 | `light` | ON, OFF, Dimming (1-100%, 10 levels, steps), Blink, Timer, Speed of transition. Extended lighting & DALI dimensions (tunable white / RGBW via F429/F429G). Contributed by GianlucaCh. |
+| **2** | **Automation (Automazione)** | `Messages - Automation` / `WHO_2.pdf` | **v1.0.0 (2015-11-12)** | 🟢 | `cover` | Roller shutters, venetian blinds, motorized curtains, gates. Standard UP/DOWN/STOP and advanced absolute positioning percentage (0-100%, Legrand 67557). Contributed by GianlucaCh. |
 | **3** | **Load Control (Legacy)** | `OpenWebNet_Community_3_LoadControl` / `WHO_3.pdf` | v1.0.0 (2006) | 🟡 | `switch`, `sensor` | Priority-based load disconnection central unit (F421). Inhibit/force actuators. |
-| **4** | **Thermoregulation (Termoregolazione)** | `OpenWebNet_Community_Heating` / `WHO_4.pdf` | v1.1.0 (2008) | 🟡 | `climate`, `sensor` | 4-zone / 99-zone central units (3550), standalone thermostats (L/N/NT4691), external probe sensors (3475), manual/auto/antifreeze/off/protection modes, heating/cooling season toggle. |
-| **5** | **Burglar Alarm (Antifurto)** | `OpenWebNet_Community_BurglarAlarm` / `WHO_5.pdf` | v1.0.0 (2006) | 🟡 | `alarm_control_panel` | Central units (3485, 3486), partition arming/disarming, panic alarms, gas/water technical alarms, sensor zone status. |
+| **4** | **Thermoregulation (Termoregolazione)** | `Open Web Net Language - Heating adjustment` / `WHO_4 2.pdf` | **v2.0.0 (2013-11-27)** | 🟢 | `climate`, `sensor` | 4-zone / 99-zone central units (3550), standalone thermostats (L/N/NT4691), external probe sensors (3475). Added dimension 22 (offset) and dimension 11 (fancoil 3-speed). Contributed by GianlucaCh. |
+| **5** | **Burglar Alarm (Antifurto)** | `MyHome Burglar Alarm` / `WHO_5.pdf` | **(2008-02-13)** | 🟢 | `alarm_control_panel` | Central units (3485, 3486), partition arming/disarming, panic alarms, gas/water technical alarms, sensor zone status. Authored by Lorenzo Pini. Contributed by GianlucaCh. |
 | **6** | **Door Entry Call & Lock** | `OpenWebNet_Community_DoorEntry` / `WHO_6.pdf` | v1.0.0 (2006) | 🟡 | `lock`, `switch`, `event` | Audio door entry calls, door lock release (`*6*10*<WHERE>##`), staircase light, camera switching, incoming call chimes. |
-| **7** | **Video Door Entry** | `OpenWebNet_Community_VideoDoorEntry` / `WHO_7.pdf` | v1.0.0 (2006) | 🟡 | `camera` | Video session establishment, camera selection, video stream routing over IP. |
+| **7** | **Video Door Entry / Multimedia** | `Open Web Net WHO=7` / `WHO_7.pdf` | **v1.0.1 (2011-12-01)** | 🟢 | `camera` | Video session establishment, camera selection, video stream routing over IP for Video Server F453AV. Contributed by GianlucaCh. |
 | **9** | **Auxiliary (Comandi Ausiliari)** | `OpenWebNet_Community_Auxiliary` / `WHO_9.pdf` | v1.0.0 (2006) | 🟡 | `switch` | Auxiliary channels (AUX 1 to AUX 9) for triggering remote relays, annunciators, or inter-system signals without occupying lighting addresses. |
-| **13** | **Gateway Management** | `OpenWebNet_Community_Gateway` / `WHO_13.pdf` | v1.0.0 (2006) | 🟡 | Core diagnostics | Date/time synchronization (`*#13**0*...`), firmware version query, IP configuration, MAC address, uptime, reboot command. |
+| **13** | **Gateway Management** | `OpenWebNet_Community_2_device_v1_0_0_EN` / `WHO_13.pdf` | **v1.0.0 (2006-06-13)** | 🟢 | Core diagnostics | Date/time synchronization (`*#13**0*...`), firmware version query, IP configuration, MAC address, uptime, reboot command. Contributed by GianlucaCh. |
 | **14** | **Actuator Diagnostics** | `OpenWebNet_Community_Diagnostics` / `WHO_14.pdf` | Pending check | 🔴 | Core diagnostics / maintenance | Actuator operating state queries, hardware fault reports, locking/unlocking APL endpoints, operating hours counters. |
-| **15** | **CEN Scenario Control** | `OpenWebNet_Community_CEN` / `WHO_15.pdf` | v1.0.0 (2006) | 🟡 | `event`, device triggers | Pushbutton scenario events: Press, Short Release, Extended Press (long push), Release after extended press. Scenarios 1-32, buttons 1-32 (3477, 3478, H4651, LN4652). |
-| **16** | **Sound Distribution (Diffusione Sonora)** | `OpenWebNet_Community_4_soundsystem_v1_0_1_EN.doc` / `WHO_16.pdf` | **v1.0.1 (2011-11-24)** | 🟢 | `media_player` | Multi-room audio matrix control: Amplifier ON/OFF, volume control (step & %), audio input source selection (RDS tuner, RCA/aux, USB, Bluetooth), equalizer (bass, treble, balance), station presets, RDS text (F441, F441M, F450, 3487). |
-| **17** | **Scenario Programmer** | `OpenWebNet_Community_ScenarioProgrammer` / `WHO_17.pdf` | v1.0.0 (2006) | 🟡 | `switch`, `event` | MH200 / MH200N / MH202 scenario programmer integration, enable/disable automated schedules, trigger macro executions. |
-| **18** | **Energy Management** | `OpenWebNet_Community_Energy` / `WHO_18.pdf` | v1.0.0 (2008) | 🟡 | `sensor` | Electricity, water, and gas pulse meters. Instantaneous power (W), cumulative active energy (kWh), current (mA), voltage (V), power factor, tariff periods (F520, F521, F522, F523, 3522). |
-| **22** | **Load Control (New Generation)** | `OpenWebNet_Community_LoadControlNew` / `WHO_22.pdf` | Pending check | 🔴 | `sensor`, `switch` | Modern smart load shedding central unit (F522/F523), dynamic threshold management, per-phase monitoring. |
-| **24** | **Lighting Management (Gestione Luci)** | `Who_24_eng_PUBBLIC.doc` / `WHO_24.pdf` | **v1.0.0 (2012-03-30)** | 🟢 | `light`, `sensor` | Legrand / BTicino Lighting Management System (BMNE500 / 002645 room controller, BMview, Lighting Console). Zone addressing (`1000+zone`), dimensions 1–12 (switch-on level %, max lux, maintained level lux, auto switch on/off, switch on/off delay, delay timer, standby timer/value, off value, slave offset GAP), dimension 17 (state: Auto/Manual/Stop), dimension 18 (centralised lux sensor reporting). Profile frames (`*24*1#Profile_ID*WHERE##`) and slave offset (`*24*2#[0-1]*WHERE##`). Contributed by GianlucaCh. |
-| **25** | **CEN+ Scenario Control & Dry Contacts** | `OpenWebNet_Community_CENPlus` / `WHO_25.pdf` | Pending check | 🟡 | `event`, `binary_sensor` | Extended CEN protocol with 256 buttons/scenarios, start/short/long press differentiation, dry contact interface telemetry (Legrand 3477 binary sensors, MH201). |
+| **15** | **CEN Scenario Control (Scheduler)** | `CEN Frames for Scenario Scheduler` / `WHO_15-25.pdf` | **v1.0.0 (2010-10-01)** | 🟢 | `event`, device triggers | Pushbutton scenario events for Scenario Scheduler (MH200, MH200N, Legrand 03565): Virtual/physical pressure, short release, extended pressure, release after extended pressure. Contributed by GianlucaCh. |
+| **16** | **Sound Distribution (Zone/Amp Control)** | `OpenWebNet_Community_4_soundsystem` / `WHO_16.pdf` | **v1.0.1 (2011-11-24)** | 🟢 | `media_player` | Multi-room audio matrix & zone control: Amplifier ON/OFF, volume control (step & %), audio input source selection (RDS tuner, RCA/aux, USB, Bluetooth), equalizer (bass, treble, balance), station presets (F441, F441M, F450, 3487). |
+| **17** | **Scenario Programmer (Scenes)** | `Who = 17 SCENES` / `WHO_17.pdf` | **v1.0.0 (2015-04-09)** | 🟢 | `switch`, `event` | MH200 / MH200N / MH202 scenario programmer integration, enable/disable automated schedules, trigger macro executions. Contributed by GianlucaCh. |
+| **18** | **Energy Management Functions** | `Energy Management Functions` / `WHO_18 1.pdf` | **v1.0.0 (2011-07-15)** | 🟢 | `sensor` | Electricity, water, and gas pulse meters. Instantaneous power (W), cumulative active energy (kWh), current (mA), voltage (V), power factor, tariff periods (F80/x, F520, F521, F522, F523, 3522). Contributed by GianlucaCh. |
+| **22** | **Sound Diffusion (Source & Speaker)** | `Who = 22 Sound Diffusion` / `WHO_22.pdf` | **v1.1.0 (2014-06-12)** | 🟢 | `media_player` | Sound source navigation & speaker control: Radio FM frequency step up/down, station navigation, track skipping (next/previous track), RDS text display control (`*22*31...`), station presets, and speaker volume. Contributed by GianlucaCh. |
+| **24** | **Lighting Management (Gestione Luci)** | `Who_24_eng_PUBBLIC.doc` / `WHO_24.pdf` | **v1.0.0 (2012-04-06)** | 🟢 | `light`, `sensor` | Legrand / BTicino Lighting Management System (BMNE500 / 002645 room controller, BMview, Lighting Console). Zone addressing (`1000+zone`), dimensions 1–12 (switch-on level %, max lux, maintained level lux, auto switch on/off, switch on/off delay, delay timer, standby timer/value, off value, slave offset GAP), dimension 17 (state: Auto/Manual/Stop), dimension 18 (centralised lux sensor reporting). Profile frames (`*24*1#Profile_ID*WHERE##`) and slave offset (`*24*2#[0-1]*WHERE##`). Contributed by GianlucaCh. |
+| **25** *(CEN+)* | **CEN+ Scenario Control (Scheduler)** | `CEN Frames for Scenario Scheduler` / `WHO_15-25.pdf` | **v1.0.0 (2010-10-01)** | 🟢 | `event`, device triggers | Extended CEN protocol with up to 256 buttons/scenarios for MH200/MH200N/03565: Short pressure (<0.5s), start of extended pressure (>=0.5s), extended pressure holding, release after extended pressure. Contributed by GianlucaCh. |
+| **25** *(Contacts)* | **Dry Contact & IR State Functions** | `DRY CONTACT AND IR STATE FUNCTIONS` / `WHO_25.pdf` | **v1.0.0 (2010-11-04)** | 🟢 | `binary_sensor` | Dry contact interfaces & IR sensor state: State ON / IR detection (`WHAT=31`), State OFF / IR not detected (`WHAT=32`), event-driven (`PARAM=1`) or poll request (`PARAM=0`). BTicino 3477, F428, 3480, F482, IR 4610/4611/4640; Legrand 573996, 03553, 067513, etc. Contributed by GianlucaCh. |
+| **HMAC** | **Gateway Security & Authentication** | `Hmac Specification` / `Hmac.pdf` | **v1.1.0 (2016-08-05)** | 🟢 | Core transport | Cryptographic challenge-response HMAC-SHA256 authentication replacing legacy OPEN numeric password authentication for modern gateways (MyHomeServer1, F455, F461). Contributed by GianlucaCh. |
+| **INTRO** | **OpenWebNet System Architecture** | `INTRODUCTION Examples of Integration` / `OWN INTRO.pdf` | **(2012-10-03)** | 🟢 | Core protocol | Foundational architecture manual by BTicino detailing frame delimiters, session separation (Command vs Event/Status), ACK/NACK signaling, and system integration patterns. Contributed by GianlucaCh. |
 | **1000** | **Automation Group Commands** | Embedded in WHO 2 | — | 🟡 | `cover` | Area and General group broadcast commands for automation. |
 | **1001** | **Lighting Group Commands** | Embedded in WHO 1 | — | 🟡 | `light` | Area and General group broadcast commands for lighting. |
 | **1004** | **Temperature Group Commands** | Embedded in WHO 4 | — | 🟡 | `climate` | Zone group commands for thermoregulation. |
+
+---
+
+## 📑 Protocol Clarifications & Subsystem Distinctions
+
+### 1. CEN/CEN+ Scenario Schedulers (`WHO_15-25.pdf`) vs Dry Contacts & IR (`WHO_25.pdf`)
+
+A common source of confusion in the OpenWebNet ecosystem stems from the shared `WHO = 25` code. As highlighted by **@GianlucaCh**, these are two completely distinct official specifications:
+
+1. **Scenario Scheduler CEN / CEN+ (`WHO_15-25.pdf`)**:
+   - **Covered Devices**: Scenario Programmers and Controllers (MH200, MH200N, MH201, Legrand 03565).
+   - **Protocol Nature**: Pushbutton scenario trigger events.
+   - **Syntax**: `*25*<WHAT>*<WHERE>##` where `WHAT` encodes:
+     - `21`: Short pressure (< 0.5 seconds).
+     - `22`: Start of extended pressure (>= 0.5 seconds).
+     - `23`: Extended pressure holding.
+     - `24`: Release after extended pressure.
+   - **Addressing (`WHERE`)**: Scenario address up to 256 buttons/scenarios (`[1-256]`).
+
+2. **Dry Contact Interfaces & IR Sensors (`WHO_25.pdf`)**:
+   - **Covered Devices**: Physical interface modules (BTicino 3477, F428, 3480, F482, IR 4610/4611/4640; Legrand 573996, 03553, 067513, etc.).
+   - **Protocol Nature**: Hardware state telemetry for magnetic window/door reed switches, technical contacts, and passive infrared motion detectors.
+   - **Syntax**: `*25*<WHAT>*<WHERE>##` or dimension frames where `WHAT` indicates:
+     - `31`: Contact ON / IR detection (closed contact or motion detected).
+     - `32`: Contact OFF / IR not detected (opened contact or motion cleared).
+   - **Parameter (`PARAM`)**:
+     - `PARAM = 0`: State response upon polling request.
+     - `PARAM = 1`: State response upon real-time system event.
+   - **Home Assistant Entity**: Exposed as `binary_sensor` (e.g. window opened/closed, PIR motion).
+
+---
+
+### 2. Multi-Room Sound Distribution (`WHO = 16`) vs Sound Diffusion (`WHO = 22`)
+
+The sound subsystem is split across two dedicated OpenWebNet WHO families:
+
+1. **WHO = 16 (Sound Distribution — Zone & Matrix Management)**:
+   - Controls physical audio amplifiers and source matrix units (F441, F441M, F450, 3487).
+   - Functions include: Zone power (ON/OFF), volume attenuation (0–31 scale / percentages), audio input channel routing (IN 1 to IN 4), tone equalizers (bass, treble, balance), and master room follow-me.
+   - Mapped to Home Assistant `media_player` entities.
+
+2. **WHO = 22 (Sound Diffusion — Source & Speaker Navigation)**:
+   - Controls the audio source devices themselves (FM tuner, CD player, multimedia source) and individual speaker units.
+   - Functions include:
+     - FM tuner frequency step up/down (`WHAT = 5` / `WHAT = 6`).
+     - Station preset navigation (`WHAT = 9` next / `WHAT = 10` previous).
+     - Track navigation (`WHAT = 11` next track / `WHAT = 12` previous track).
+     - RDS text string display streaming (`WHAT = 31` start / `WHAT = 32` stop).
+     - Direct frequency tuning and preset memorization (`WHAT = 33`).
+     - Speaker volume adjustment (`WHAT = 3` increase / `WHAT = 4` decrease).
+
+---
+
+## 🪄 CEN / CEN+ Automation & Community Blueprints
+
+One of the most powerful capabilities of physical MyHOME installations is using existing BTicino wall pushbuttons and dry contact modules (such as the **3477** interface) to trigger automations across modern smart home ecosystems.
+
+### 🌟 Community Blueprint: MyHome CEN+ Commands
+
+A highly recommended blueprint developed by the Home Assistant community (by **gST84**) is available on the Home Assistant Community Forum:
+
+👉 **[MyHome - CEN+ commands Blueprint (Community Forum)](https://community.home-assistant.io/t/myhome-cen-commands/260345)**  
+👉 **[Raw Blueprint Source YAML (GitHub)](https://github.com/gST84/myHome_blueprints/blob/f4f3151aab73d85b0ab098b67f51d68e731f534f/CENplus/myhome-cen-plus.yaml)**
+
+### Key Features of the Blueprint:
+1. **Control Non-BTicino Devices**: Use your native BTicino wall switches to switch or toggle non-BTicino smart devices (Philips Hue, Zigbee, Z-Wave, Shelly, or Tuya).
+2. **Short vs. Long Press Handling**:
+   - **Short Press (< 0.5s)**: Instantly toggles lights or triggers scenes.
+   - **Extended / Long Press (>= 0.5s)**: Enables smooth dimming up or down.
+3. **Dimming Direction Helper**:
+   - By creating a simple `input_boolean` helper (e.g. `input_boolean.living_dim_direction`), the blueprint tracks dimming direction so alternating long presses cycle between brightening and dimming.
+4. **Zero-Delay Bus Processing**: Fully compatible with the stateless `myhome.cen` and `myhome.cen_plus` events dispatched by the modernized MyHOME integration.
 
 ---
 

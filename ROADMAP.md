@@ -98,15 +98,15 @@ Next-generation lighting control enabled by our verified protocol archive.
 
 ---
 
-### 📋 v2.4 — Phase 5: Smart Energy Management & Dynamic Load Shedding (WHO = 18 & WHO = 22)
+### 📋 v2.4 — Phase 5: Smart Energy Management & Advanced Sound Diffusion (WHO = 18 & WHO = 22)
 *Target: Q1 2027*
 
-Comprehensive home energy observability and grid-aware load balancing.
+Comprehensive home energy observability, grid-aware load balancing, and advanced audio source control.
 
-- **⚡ New-Generation Load Control (WHO = 22)**:
-  - Central unit load management (**F522 / F523**) with dynamic disconnection priorities, per-phase threshold monitoring, and manual force/inhibit overrides.
-- **📈 Advanced Energy Metering (WHO = 18)**:
-  - Multi-tariff smart metering, reactive power, power factor, line voltage, and cumulative pulse counters wired directly into the Home Assistant Energy Dashboard.
+- **⚡ Energy Management & Smart Metering (WHO = 18)**:
+  - Multi-function energy meters and central units (**F520 / F521 / F522 / F523 / 3522**) with instantaneous power (W), line voltage (V), current (mA), power factor, tariff periods, and cumulative pulse counters wired directly into the Home Assistant Energy Dashboard.
+- **🎵 Sound Diffusion Source & Speaker Navigation (WHO = 22)**:
+  - Advanced audio source control for multi-room systems: FM tuner frequency stepping, station preset selection, track skipping, RDS metadata display streaming (`*22*31...`), and speaker attenuation.
 
 ---
 
@@ -115,7 +115,7 @@ Comprehensive home energy observability and grid-aware load balancing.
 This project thrives because of active collaboration between homeowners, certified installers, and open-source developers. We extend our sincere gratitude to:
 
 - **[@anotherjulien](https://github.com/anotherjulien)**: Creator of the original OpenWebNet integration and foundational maintainer. Invaluable real-world VM testing and plant verification across Legrand 67557 advanced covers, 3477 dry contacts, 048834 multi-sensors, and WHO 14 actuator lock concepts.
-- **[@GianlucaCh](https://github.com/GianlucaCh)**: For preserving and contributing the missing official **`WHO_24.pdf`** Lighting Management specification and designing native SCS hardware timer temporization ([Myhome-Timer](https://github.com/GianlucaCh/Myhome-Timer)).
+- **[@GianlucaCh](https://github.com/GianlucaCh)**: For preserving and contributing the comprehensive 15-manual BTicino / Legrand specification archive (`OWN DOC.zip`) covering WHO 0, 1, 2, 4, 5, 7, 13, 15/25, 17, 18, 22, 24, 25, HMAC authentication, and architecture intro; designing native SCS hardware timer temporization ([Myhome-Timer](https://github.com/GianlucaCh/Myhome-Timer)); and highlighting the community CEN+ automation blueprint.
 - **[@xtimmy86x](https://github.com/xtimmy86x)** & **[@lyubomirtraykov](https://github.com/lyubomirtraykov)**: Certified BTicino installers and software specialists providing crucial insights into scenario programmer quirks (MH200/MH201/MH202), cross-bus gateway interface routing (F422), and real-world bus traces.
 
 ---
