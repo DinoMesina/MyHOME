@@ -758,6 +758,7 @@ ${framesText}
           <div style="display: flex; flex-direction: column; gap: 4px;">
             <span><strong>✅ Copied diagnostic payload to clipboard!</strong> Opening GitHub issue form...</span>
             <span style="font-size: 0.75rem; opacity: 0.9;">Paste the clipboard contents directly into the <em>Bus Monitor Diagnostic Payload / Bus Trace</em> field.</span>
+            <span style="font-size: 0.72rem; opacity: 0.85;">💡 <em>Tip: Also download and drag &amp; drop your HA log (Settings &rarr; System &rarr; Logs &rarr; Download full log) into the issue!</em></span>
           </div>
           <a href="${issueUrl}" target="_blank" rel="noopener noreferrer" class="banner-link">Open GitHub Form ↗</a>
         `;
