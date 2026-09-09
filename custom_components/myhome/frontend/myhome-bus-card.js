@@ -25,6 +25,13 @@ class MyHomeBusCard extends HTMLElement {
     this._isSubscribing = false;
   }
 
+  static getStubConfig() {
+    return {
+      title: "MyHOME Bus Monitor",
+      max_frames: 200,
+    };
+  }
+
   setConfig(config) {
     this._config = Object.assign(
       {
@@ -91,7 +98,16 @@ class MyHomeBusCard extends HTMLElement {
         this._wsPayload("myhome/bus_monitor/history", { limit: 50 })
       );
       if (res && res.frames) {
-        this._frames = res.frames;
+        const existingKeys = new Set(
+          this._frames.map((f) => `${f.timestamp}_${f.raw}_${f.direction}`)
+        );
+        const newHistory = res.frames.filter(
+          (f) => !existingKeys.has(`${f.timestamp}_${f.raw}_${f.direction}`)
+        );
+        this._frames = newHistory.concat(this._frames);
+        if (this._frames.length > this._maxDisplayFrames) {
+          this._frames = this._frames.slice(-this._maxDisplayFrames);
+        }
         if (res.stats) this._stats = res.stats;
         if (res.gateway) this._gatewayInfo = res.gateway;
         this._updateFrameList();
@@ -169,9 +185,13 @@ class MyHomeBusCard extends HTMLElement {
     }
   }
 
-  _updatePlaceholder() {
+  _updatePlaceholder(isFiltered = false) {
     const container = this.shadowRoot && this.shadowRoot.getElementById("stream");
     if (!container) return;
+    if (isFiltered) {
+      container.innerHTML = `<div class="placeholder-msg">No bus frames match the active filter.</div>`;
+      return;
+    }
     if (this._frames.length === 0) {
       let msg = "Waiting for OpenWebNet bus frames...";
       if (this._connectionStatus === "connecting") {
@@ -493,7 +513,7 @@ class MyHomeBusCard extends HTMLElement {
 
     this._bindEvents();
     this._updateBadge();
-    this._updatePlaceholder();
+    this._updateFrameList();
   }
 
   _bindEvents() {
@@ -778,7 +798,7 @@ ${framesText}
     if (!container) return;
     const matching = this._frames.filter((f) => this._matchesFilter(f));
     if (matching.length === 0) {
-      this._updatePlaceholder();
+      this._updatePlaceholder(this._frames.length > 0);
       return;
     }
     container.innerHTML = "";
@@ -797,6 +817,9 @@ ${framesText}
       container.innerHTML = "";
     }
     container.appendChild(this._createFrameNode(frame));
+    while (container.children.length > this._maxDisplayFrames) {
+      container.removeChild(container.firstElementChild);
+    }
     container.scrollTop = container.scrollHeight;
   }
 
@@ -813,7 +836,9 @@ ${framesText}
     const div = document.createElement("div");
     div.className = "frame-line";
 
-    const timeStr = frame.iso_time ? frame.iso_time.split("T")[1].substring(0, 12) : "";
+    const timeStr = frame.iso_time && frame.iso_time.includes("T")
+      ? frame.iso_time.split("T")[1].substring(0, 12)
+      : (frame.timestamp ? new Date(frame.timestamp * 1000).toISOString().split("T")[1].substring(0, 12) : "");
     const dirClass = frame.direction === "rx" ? "dir-rx" : "dir-tx";
     const dirLabel = frame.direction ? frame.direction.toUpperCase() : "RX";
     const whoClass = this._getWhoClass(frame.who);

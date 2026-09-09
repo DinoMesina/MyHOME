@@ -45,8 +45,13 @@ async def _async_register_lovelace_resource(hass: HomeAssistant, url_path: str) 
             await resources.async_load()
             resources.loaded = True
         if hasattr(resources, "async_create_item"):
-            existing = [item["url"] for item in (resources.async_items() or []) if isinstance(item, dict) and "url" in item]
-            if url_path not in existing:
+            clean_url = url_path.split("?")[0]
+            existing = [
+                item["url"].split("?")[0]
+                for item in (resources.async_items() or [])
+                if isinstance(item, dict) and "url" in item
+            ]
+            if clean_url not in existing:
                 await resources.async_create_item({
                     "res_type": "module",
                     "url": url_path,
@@ -90,7 +95,7 @@ async def _async_register_frontend(hass: HomeAssistant) -> None:
     if not await _async_register_lovelace_resource(hass, url_path):
         if not domain_data.get("_lovelace_listener_registered"):
             async def _on_ha_started(event):
-                await _async_register_lovelace_resource(hass, url_path)
+                await _async_register_frontend(hass)
 
             from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
             hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, _on_ha_started)

@@ -515,6 +515,23 @@ async def test_register_frontend_branches(hass: HomeAssistant):
         "url": "/myhome_static/myhome-bus-card.js",
     })
 
+    # 12. Lovelace resource with query parameter matches and does not duplicate
+    hass.data[DOMAIN]["_frontend_registered"] = False
+    mock_res_query = MagicMock()
+    mock_res_query.loaded = True
+    mock_res_query.async_items.return_value = [{"url": "/myhome_static/myhome-bus-card.js?v=1.0.0"}]
+    mock_res_query.async_create_item = AsyncMock()
+    hass.data["lovelace"] = MagicMock(resources=mock_res_query)
+    await _async_register_frontend(hass)
+    mock_res_query.async_create_item.assert_not_called()
+
+    # 13. Lovelace not available registers started listener
+    hass.data[DOMAIN]["_frontend_registered"] = False
+    hass.data[DOMAIN]["_lovelace_listener_registered"] = False
+    del hass.data["lovelace"]
+    await _async_register_frontend(hass)
+    assert hass.data[DOMAIN]["_lovelace_listener_registered"] is True
+
 
 async def test_setup_entry_myhome_yaml_loading(hass: HomeAssistant):
     """Test loading legacy myhome.yaml with all branches."""

@@ -36,17 +36,17 @@ SCHEMA_WS_HISTORY = {
     vol.Required("type"): WS_TYPE_HISTORY,
     vol.Optional("mac"): vol.Any(cv.string, None),
     vol.Optional("limit", default=100): vol.All(vol.Coerce(int), vol.Range(min=1, max=500)),
-    vol.Optional("who"): vol.Any(cv.string, vol.Coerce(int)),
-    vol.Optional("where"): cv.string,
-    vol.Optional("direction"): vol.In(["rx", "tx", "all"]),
+    vol.Optional("who"): vol.Any(cv.string, vol.Coerce(int), None),
+    vol.Optional("where"): vol.Any(cv.string, None),
+    vol.Optional("direction"): vol.Any(vol.In(["rx", "tx", "all"]), None),
 }
 
 SCHEMA_WS_STREAM = {
     vol.Required("type"): WS_TYPE_STREAM,
     vol.Optional("mac"): vol.Any(cv.string, None),
-    vol.Optional("who"): vol.Any(cv.string, vol.Coerce(int)),
-    vol.Optional("where"): cv.string,
-    vol.Optional("direction"): vol.In(["rx", "tx", "all"]),
+    vol.Optional("who"): vol.Any(cv.string, vol.Coerce(int), None),
+    vol.Optional("where"): vol.Any(cv.string, None),
+    vol.Optional("direction"): vol.Any(vol.In(["rx", "tx", "all"]), None),
 }
 
 SCHEMA_WS_SEND = {
@@ -205,11 +205,18 @@ def _get_gateway_and_monitor(
             formatted_mac = mac
 
         for key, val in domain_data.items():
-            if isinstance(val, dict) and (key == mac or key == formatted_mac):
-                gw = val.get(CONF_ENTITY)
-                bm = val.get("bus_monitor") or getattr(gw, "bus_monitor", None)
-                if gw or bm:
-                    return gw, bm
+            if isinstance(val, dict):
+                norm_key = key
+                if isinstance(key, str) and (":" in key or len(key) == 12):
+                    try:
+                        norm_key = dr.format_mac(key)
+                    except Exception:
+                        norm_key = key
+                if key == mac or key == formatted_mac or norm_key == formatted_mac:
+                    gw = val.get(CONF_ENTITY)
+                    bm = val.get("bus_monitor") or getattr(gw, "bus_monitor", None)
+                    if gw or bm:
+                        return gw, bm
 
     # Fallback to the first available gateway entry
     for key, val in domain_data.items():

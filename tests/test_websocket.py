@@ -87,6 +87,31 @@ async def test_websocket_schemas_validation():
     res5 = schema_info({"id": 5, "type": "myhome/bus_monitor/info", "mac": None})
     assert res5["mac"] is None
 
+    # Nullable who, where, direction in history and stream schemas
+    res_null_hist = schema_hist({
+        "id": 6,
+        "type": "myhome/bus_monitor/history",
+        "mac": None,
+        "who": None,
+        "where": None,
+        "direction": None,
+    })
+    assert res_null_hist["who"] is None
+    assert res_null_hist["where"] is None
+    assert res_null_hist["direction"] is None
+
+    res_null_stream = schema_stream({
+        "id": 7,
+        "type": "myhome/bus_monitor/stream",
+        "mac": None,
+        "who": None,
+        "where": None,
+        "direction": None,
+    })
+    assert res_null_stream["who"] is None
+    assert res_null_stream["where"] is None
+    assert res_null_stream["direction"] is None
+
 
 def test_get_gateway_and_monitor_with_bus_monitor_only(hass: HomeAssistant):
     """Test fallback finds entry when bus_monitor exists without CONF_ENTITY."""
@@ -99,6 +124,15 @@ def test_get_gateway_and_monitor_with_bus_monitor_only(hass: HomeAssistant):
     gw, bm = _get_gateway_and_monitor(hass)
     assert gw is None
     assert bm is monitor
+
+    # Test MAC normalization match (e.g. unformatted hex or alternate casing)
+    hass.data[DOMAIN]["000350aabbcc"] = {
+        CONF_ENTITY: "custom_gw",
+        "bus_monitor": monitor,
+    }
+    gw_found, bm_found = _get_gateway_and_monitor(hass, "00:03:50:AA:BB:CC")
+    assert gw_found == "custom_gw"
+    assert bm_found is monitor
 
 
 async def test_ws_history_no_gateway(hass: HomeAssistant, mock_ws_connection):

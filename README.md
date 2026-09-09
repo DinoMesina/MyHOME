@@ -34,7 +34,7 @@ Maintained by the **[OpenWebNet-HA](https://github.com/OpenWebNet-HA)** communit
 - **Sound System 2.0 & Audio Matrix (WHO=16)**: Complete multi-room audio support for F441 / F441M matrices and amplifiers, including zone power, volume normalization (0–31 scale), software mute emulation, and dynamic streaming proxy.
 - **Streaming Audio Dynamic Proxy**: Seamlessly stream from **Music Assistant**, **Spotify Connect**, or any HA media player to wired BTicino audio zones using a thread-safe `DecoderPool` with analog gain-staging.
 - **Dimmable Light Detection**: Auto-detects dimming capabilities directly from bus events with transition support.
-- **Comprehensive Test Suite**: Over 750 automated unit tests (100% line coverage) executed across modern Python 3.12+ and Home Assistant core standards.
+- **Comprehensive Test Suite**: Over 700 automated unit tests (100% line coverage) executed across modern Python 3.12+ and Home Assistant core standards.
 
 ---
 
@@ -239,7 +239,7 @@ check-wheel-contents dist/*.whl
 ### CI Workflows
 - **`hassfest`**: Official Home Assistant manifest and metadata validation.
 - **`validate`**: Official HACS compliance checks.
-- **`test-coverage`**: 750 automated unit tests with snapshot matching and coverage tracking.
+- **`test-coverage`**: 701 automated unit tests with snapshot matching and coverage tracking.
 - **`pypi_standards`**: Strict wheel hygiene, metadata verification, and packaging checks.
 
 ### 📊 Code Coverage & Quality Assurance
@@ -290,7 +290,7 @@ The integration maintains 739 automated unit tests (100% line coverage across al
   - [x] Declarative hardware gateway profiles (`MH200` to `F454`).
   - [x] Zero-friction migration (preserving custom entity IDs and friendly names).
   - [x] Token-bucket bus pacing and sentinel worker lifecycle.
-  - [x] Synthetic mock TCP test harness with 750+ unit tests (100% coverage).
+  - [x] Synthetic mock TCP test harness with 701+ unit tests (100% coverage).
   - [x] PyPI packaging pipeline & GitHub Actions CI green across all workflows.
 - [x] **Phase 2: Monitoring & Real-time Diagnostics**
   - [x] In-band Unified Bus Listener (500-frame circular ring buffer, 0 extra sockets).
