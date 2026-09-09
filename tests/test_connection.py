@@ -35,6 +35,19 @@ class TestOWNGateway:
         assert gw.manufacturer == "BTicino S.p.A."
         assert gw.port == 20000
 
+    def test_manufacturer_normalization(self):
+        # Tuple
+        gw_tuple = OWNGateway({"address": "127.0.0.1", "manufacturer": ("BTicino S.p.A.",)})
+        assert gw_tuple.manufacturer == "BTicino S.p.A."
+
+        # Empty tuple / list fallback
+        gw_empty_list = OWNGateway({"address": "127.0.0.1", "manufacturer": []})
+        assert gw_empty_list.manufacturer == "BTicino S.p.A."
+
+        # Missing / None fallback
+        gw_none = OWNGateway({"address": "127.0.0.1", "manufacturer": None})
+        assert gw_none.manufacturer == "BTicino S.p.A."
+
     def test_unique_id(self, gateway_info):
         gw = OWNGateway(gateway_info)
         assert gw.unique_id == "00:03:50:00:12:34"
