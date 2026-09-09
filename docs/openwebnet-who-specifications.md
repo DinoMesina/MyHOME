@@ -28,10 +28,10 @@ We invite installers and software specialists to review and cross-check this arc
 3. **Software Tooling & Official Specifications (MyHOME_Suite / TiMyHome)**:
    - Command definitions or exported XML dictionaries from Legrand/BTicino configuration software (**MyHOME_Suite**, **TiMyHome**, **Virtual Configurator**, **MyHOME_Up**).
    - Any technical addenda or documentation for:
-     - **`WHO = 1` & `WHO = 24`**: DALI & DALI-2 gateway ballasts (tunable white, color temperature, RGB/RGBW, e.g. **F429G**).
-     - **`WHO = 14`**: Actuator diagnostics, hardware lock/unlock states, and operating counters.
-     - **`WHO = 18` & `WHO = 22`**: Multi-tariff smart metering, load shedding, and phase diagnostics.
-     - **`WHO = 25`**: CEN+ extended scenario pushes and dry contact interfaces (**3477**).
+      - **`WHO = 1`**: Extended DALI & DALI-2 gateway ballasts (tunable white, color temperature, RGB/RGBW, e.g. **F429G**). *(Note: Official specification for **`WHO = 24`** Lighting Management is now archived & verified thanks to **@GianlucaCh**!)*
+      - **`WHO = 14`**: Actuator diagnostics, hardware lock/unlock states, and operating counters.
+      - **`WHO = 18` & `WHO = 22`**: Multi-tariff smart metering, load shedding, and phase diagnostics.
+      - **`WHO = 25`**: CEN+ extended scenario pushes and dry contact interfaces (**3477**).
 
 > **💡 How to Contribute:** You can share filenames, revision dates, technical sheets, or bus monitor traces by opening an issue on the [OpenWebNet-HA/MyHOME GitHub repository](https://github.com/OpenWebNet-HA/MyHOME/issues) or commenting directly in [PR #232](https://github.com/OpenWebNet-HA/MyHOME/pull/232). Every contribution helps ensure open, permanent documentation for the entire MyHOME ecosystem.
 
@@ -64,7 +64,7 @@ The table below catalogs every known OpenWebNet function family (`WHO`), its off
 | **17** | **Scenario Programmer** | `OpenWebNet_Community_ScenarioProgrammer` / `WHO_17.pdf` | v1.0.0 (2006) | 🟡 | `switch`, `event` | MH200 / MH200N / MH202 scenario programmer integration, enable/disable automated schedules, trigger macro executions. |
 | **18** | **Energy Management** | `OpenWebNet_Community_Energy` / `WHO_18.pdf` | v1.0.0 (2008) | 🟡 | `sensor` | Electricity, water, and gas pulse meters. Instantaneous power (W), cumulative active energy (kWh), current (mA), voltage (V), power factor, tariff periods (F520, F521, F522, F523, 3522). |
 | **22** | **Load Control (New Generation)** | `OpenWebNet_Community_LoadControlNew` / `WHO_22.pdf` | Pending check | 🔴 | `sensor`, `switch` | Modern smart load shedding central unit (F522/F523), dynamic threshold management, per-phase monitoring. |
-| **24** | **Lighting Management & DALI** | `OpenWebNet_Community_LightingManagement` / `WHO_24.pdf` | Pending check | 🔴 | `light`, `sensor` | Advanced lighting control, DALI ballast addressing, lux sensors, daylight harvesting, multi-sensor motion/illuminance reporting (Legrand 048834, F429G). |
+| **24** | **Lighting Management (Gestione Luci)** | `Who_24_eng_PUBBLIC.doc` / `WHO_24.pdf` | **v1.0.0 (2012-03-30)** | 🟢 | `light`, `sensor` | Legrand / BTicino Lighting Management System (BMNE500 / 002645 room controller, BMview, Lighting Console). Zone addressing (`1000+zone`), dimensions 1–12 (switch-on level %, max lux, maintained level lux, auto switch on/off, switch on/off delay, delay timer, standby timer/value, off value, slave offset GAP), dimension 17 (state: Auto/Manual/Stop), dimension 18 (centralised lux sensor reporting). Profile frames (`*24*1#Profile_ID*WHERE##`) and slave offset (`*24*2#[0-1]*WHERE##`). Contributed by GianlucaCh. |
 | **25** | **CEN+ Scenario Control & Dry Contacts** | `OpenWebNet_Community_CENPlus` / `WHO_25.pdf` | Pending check | 🟡 | `event`, `binary_sensor` | Extended CEN protocol with 256 buttons/scenarios, start/short/long press differentiation, dry contact interface telemetry (Legrand 3477 binary sensors, MH201). |
 | **1000** | **Automation Group Commands** | Embedded in WHO 2 | — | 🟡 | `cover` | Area and General group broadcast commands for automation. |
 | **1001** | **Lighting Group Commands** | Embedded in WHO 1 | — | 🟡 | `light` | Area and General group broadcast commands for lighting. |
