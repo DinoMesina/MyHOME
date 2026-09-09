@@ -717,3 +717,63 @@ async def test_fade_stale_step_and_worker_count_exception(hass):
     assert light._fade_id == 999
 
 
+async def test_light_switch_collision_and_interface_dispatch(hass):
+    """Test configured light skipped if address is in switch_wheres and bus interface dispatch."""
+    mock_gateway = MagicMock()
+    mock_gateway.mac = "mac"
+    hass.data = {
+        DOMAIN: {
+            "mac": {
+                "entity": mock_gateway,
+                CONF_PLATFORMS: {
+                    "switch": {
+                        "16": {CONF_WHERE: "16"},
+                    },
+                    "light": {
+                        "16": {CONF_WHERE: "16", CONF_NAME: "Conflicting Light 16"},
+                        "17": {CONF_WHERE: "17", CONF_NAME: "Light 17"},
+                    },
+                },
+            }
+        }
+    }
+    config_entry = MagicMock()
+    config_entry.data = {"mac": "mac"}
+    config_entry.entry_id = "test_entry"
+
+    with patch(
+        "custom_components.myhome.light.er.async_entries_for_config_entry",
+        return_value=[],
+    ), patch(
+        "custom_components.myhome.light.er.async_get",
+        return_value=MagicMock(),
+    ):
+        async_add_entities = MagicMock()
+        await async_setup_entry(hass, config_entry, async_add_entities)
+        async_add_entities.assert_called_once()
+        entities = async_add_entities.call_args[0][0]
+        # Only Light 17 is added; Light 16 is skipped because it is in switch_wheres
+        assert len(entities) == 1
+        assert entities[0]._device_id == "17"
+
+        # Now test message dispatching for an entity with interface where clean_where is in switch_wheres
+        received_unique = []
+        received_base = []
+
+        from homeassistant.helpers.dispatcher import async_dispatcher_connect
+        async_dispatcher_connect(hass, "myhome_update_mac_1_16#4#01", lambda msg: received_unique.append(msg))
+        async_dispatcher_connect(hass, "myhome_update_mac_1_16", lambda msg: received_base.append(msg))
+
+        msg = MagicMock(spec=OWNLightingEvent)
+        msg.where = "16"
+        msg.interface = "01"
+
+        # Send gateway message
+        async_dispatcher_send(hass, "myhome_message_mac", msg)
+        await hass.async_block_till_done()
+
+        assert len(received_unique) == 1
+        assert len(received_base) == 1
+
+
+
