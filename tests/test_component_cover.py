@@ -325,3 +325,28 @@ class TestMyHOMECoverEntity:
         msg_stopped_with_closed.human_readable_log = "Stopped with closed"
         basic_cover.handle_event(msg_stopped_with_closed)
         assert basic_cover.is_closed is True
+
+    @pytest.mark.asyncio
+    async def test_advanced_cover_async_update(self, hass: HomeAssistant, mock_gateway):
+        cover = MyHOMECover(
+            hass=hass,
+            name="Advanced Cover",
+            entity_name="Advanced Cover",
+            device_id="21",
+            who="2",
+            where="21",
+            interface=None,
+            advanced=True,
+            manufacturer="BTicino",
+            model="F401",
+            gateway=mock_gateway,
+        )
+        await cover.async_update()
+        mock_gateway.send_status_request.assert_awaited_once()
+        assert str(mock_gateway.send_status_request.call_args[0][0]) == "*#2*21*10##"
+
+        # Test RuntimeError exception safety in handle_event
+        cover.async_schedule_update_ha_state = MagicMock(side_effect=RuntimeError("Loop closing"))
+        cover.handle_event(OWNEvent.parse("*2*0*21##"))
+
+

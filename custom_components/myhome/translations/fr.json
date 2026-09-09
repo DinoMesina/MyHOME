@@ -36,6 +36,15 @@
       "discovery_confirm": {
         "title": "Passerelle MyHOME découverte",
         "description": "Voulez-vous configurer la passerelle {name} ({host}) ?"
+      },
+      "serial": {
+        "title": "Passerelle USB / Série",
+        "description": "Configurez votre passerelle USB ou série Legrand 3578 / OpenZigBee.",
+        "data": {
+          "port": "Port série",
+          "baudrate": "Vitesse en bauds",
+          "friendly_name": "Nom convivial"
+        }
       }
     },
     "error": {

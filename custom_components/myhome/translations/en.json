@@ -42,6 +42,15 @@
       "discovery_confirm": {
         "title": "Discovered MyHOME gateway",
         "description": "Do you want to set up the {name} gateway ({host})?"
+      },
+      "serial": {
+        "title": "USB / Serial Gateway",
+        "description": "Configure your Legrand 3578 / OpenZigBee USB or serial gateway.",
+        "data": {
+          "port": "Serial port",
+          "baudrate": "Baudrate",
+          "friendly_name": "Friendly name"
+        }
       }
     },
     "error": {

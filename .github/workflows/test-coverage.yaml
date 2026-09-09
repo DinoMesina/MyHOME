@@ -27,6 +27,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install pytest pytest-cov pytest-asyncio homeassistant python-dateutil pytz pytest-homeassistant-custom-component pytest-socket "syrupy>=4.6.0,<5.0.0" time-machine
 
+      - name: Verify Home Assistant Architectural Standards
+        run: |
+          python scripts/verify_ha_standards.py
+
       - name: Test coverage & Snapshot generation
         run: |
           PYTHONPATH=. pytest tests/ --snapshot-update --cov=custom_components.myhome --cov-report=xml --cov-report=html --cov-report=term --junitxml=junit.xml

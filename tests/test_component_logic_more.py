@@ -192,6 +192,12 @@ class TestSwitchEntity:
         config_entry = MagicMock()
         config_entry.data = {"mac": "00:03:50:00:12:34"}
 
+        # 0. Missing or unconfigured MAC -> returns True
+        bad_entry = MagicMock()
+        bad_entry.data = {"mac": "unknown_mac"}
+        assert await async_setup_entry(mock_hass, bad_entry, MagicMock()) is True
+        assert await async_unload_entry(mock_hass, bad_entry) is True
+
         # 1. PLATFORM not configured -> returns True
         mock_hass.data = {
             DOMAIN: {
@@ -206,7 +212,7 @@ class TestSwitchEntity:
         res_unload = await async_unload_entry(mock_hass, config_entry)
         assert res_unload is True
 
-        # 2. PLATFORM configured -> sets up and unloads
+        # 2. PLATFORM configured with existing registry entries -> restores and creates entities
         mock_hass.data[DOMAIN]["00:03:50:00:12:34"][CONF_PLATFORMS] = {
             "switch": {
                 "sw1": {
@@ -222,12 +228,65 @@ class TestSwitchEntity:
                 }
             }
         }
-        async_add_entities = MagicMock()
-        await async_setup_entry(mock_hass, config_entry, async_add_entities)
-        async_add_entities.assert_called_once()
-        assert len(async_add_entities.call_args[0][0]) == 1
 
-        # Unload
+        # Mock existing registry entries: one corrupt with "-1-1-", one with "#4#01" interface, one standard
+        corrupt_entry = MagicMock()
+        corrupt_entry.domain = "switch"
+        corrupt_entry.unique_id = "00:03:50:00:12:34-1-1-21"
+        corrupt_entry.entity_id = "switch.corrupt"
+
+        interface_entry = MagicMock()
+        interface_entry.domain = "switch"
+        interface_entry.unique_id = "00:03:50:00:12:34-1-22#4#01"
+        interface_entry.entity_id = "switch.interfaced"
+
+        standard_entry = MagicMock()
+        standard_entry.domain = "switch"
+        standard_entry.unique_id = "00:03:50:00:12:34-1-23"
+        standard_entry.entity_id = "switch.standard"
+
+        mock_registry = MagicMock()
+
+        with patch(
+            "custom_components.myhome.switch.er.async_get",
+            return_value=mock_registry,
+        ), patch(
+            "custom_components.myhome.switch.er.async_entries_for_config_entry",
+            return_value=[corrupt_entry, interface_entry, standard_entry],
+        ):
+            async_add_entities = MagicMock()
+            await async_setup_entry(mock_hass, config_entry, async_add_entities)
+            mock_registry.async_remove.assert_called_once_with("switch.corrupt")
+            async_add_entities.assert_called_once()
+            assert len(async_add_entities.call_args[0][0]) == 3
+
+        # 3. Test MyHOMESwitch async_added_to_hass with interface
+        from custom_components.myhome.switch import MyHOMESwitch
+        sw_interface = MyHOMESwitch(
+            hass=mock_hass,
+            name="Switch Interfaced",
+            entity_name="Switch Interfaced",
+            icon="mdi:icon",
+            icon_on="mdi:icon_on",
+            device_id="22#4#01",
+            who="1",
+            where="22",
+            interface="01",
+            device_class="switch",
+            manufacturer="BTicino",
+            model="F411",
+            gateway=mock_gateway,
+        )
+        sw_interface.hass = mock_hass
+        sw_interface.async_on_remove = MagicMock()
+        sw_interface.async_update = AsyncMock()
+
+        with patch("custom_components.myhome.switch.async_dispatcher_connect"):
+            await sw_interface.async_added_to_hass()
+        # Connected to both full_where and base where
+        assert sw_interface.async_on_remove.call_count == 2
+
+        # 4. Unload
         await async_unload_entry(mock_hass, config_entry)
         assert "sw1" not in mock_hass.data[DOMAIN]["00:03:50:00:12:34"][CONF_PLATFORMS]["switch"]
 

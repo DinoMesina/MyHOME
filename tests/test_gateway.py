@@ -10,6 +10,10 @@ from custom_components.myhome.const import (
     CONF_SHORT_RELEASE,
     CONF_LONG_PRESS,
     CONF_LONG_RELEASE,
+    CONF_ROTARY_CW_SLOW,
+    CONF_ROTARY_CW_FAST,
+    CONF_ROTARY_CCW_SLOW,
+    CONF_ROTARY_CCW_FAST,
     CONF_SSDP_LOCATION,
     CONF_SSDP_ST,
     CONF_DEVICE_TYPE,
@@ -33,6 +37,7 @@ from custom_components.myhome.ownd.message import (
     OWNHeatingCommand,
     OWNCENPlusEvent,
     OWNCENEvent,
+    OWNEnergyEvent,
     OWNGatewayEvent,
     OWNGatewayCommand,
     OWNAlarmEvent,
@@ -408,6 +413,12 @@ async def test_listening_loop_cen_and_cenplus_variants(gateway_handler):
         cp_released = MagicMock(spec=OWNCENPlusEvent, is_short_pressed=False, is_held=False, is_still_held=False, is_released=True, object="1", push_button="3", human_readable_log="cp_rel")
         cp_unmapped = MagicMock(spec=OWNCENPlusEvent, is_short_pressed=False, is_held=False, is_still_held=False, is_released=False, object="1", push_button="4", human_readable_log="cp_unm")
 
+        # Rotary CEN+ events
+        cp_cw_slow = MagicMock(spec=OWNCENPlusEvent, is_short_pressed=False, is_held=False, is_still_held=False, is_released=False, is_slowly_turned_cw=True, object="1", push_button="5", human_readable_log="cp_cw_s")
+        cp_cw_fast = MagicMock(spec=OWNCENPlusEvent, is_short_pressed=False, is_held=False, is_still_held=False, is_released=False, is_quickly_turned_cw=True, object="1", push_button="6", human_readable_log="cp_cw_f")
+        cp_ccw_slow = MagicMock(spec=OWNCENPlusEvent, is_short_pressed=False, is_held=False, is_still_held=False, is_released=False, is_slowly_turned_ccw=True, object="1", push_button="7", human_readable_log="cp_ccw_s")
+        cp_ccw_fast = MagicMock(spec=OWNCENPlusEvent, is_short_pressed=False, is_held=False, is_still_held=False, is_released=False, is_quickly_turned_ccw=True, object="1", push_button="8", human_readable_log="cp_ccw_f")
+
         # CEN: pressed, released_after_short, released_after_long, unmapped
         c_pressed = MagicMock(spec=OWNCENEvent, is_pressed=True, is_released_after_short_press=False, is_held=False, is_released_after_long_press=False, object="2", push_button="1", human_readable_log="c_press")
         c_rel_short = MagicMock(spec=OWNCENEvent, is_pressed=False, is_released_after_short_press=True, is_held=False, is_released_after_long_press=False, object="2", push_button="2", human_readable_log="c_rel_short")
@@ -419,6 +430,10 @@ async def test_listening_loop_cen_and_cenplus_variants(gateway_handler):
             cp_still_held,
             cp_released,
             cp_unmapped,
+            cp_cw_slow,
+            cp_cw_fast,
+            cp_ccw_slow,
+            cp_ccw_fast,
             c_pressed,
             c_rel_short,
             c_rel_long,
@@ -437,6 +452,10 @@ async def test_listening_loop_cen_and_cenplus_variants(gateway_handler):
         gateway_handler.hass.bus.async_fire.assert_any_call("myhome_cenplus_event", {"object": 1, "pushbutton": 2, "event": CONF_LONG_PRESS})
         gateway_handler.hass.bus.async_fire.assert_any_call("myhome_cenplus_event", {"object": 1, "pushbutton": 3, "event": CONF_LONG_RELEASE})
         gateway_handler.hass.bus.async_fire.assert_any_call("myhome_cenplus_event", {"object": 1, "pushbutton": 4, "event": None})
+        gateway_handler.hass.bus.async_fire.assert_any_call("myhome_cenplus_event", {"object": 1, "pushbutton": 5, "event": CONF_ROTARY_CW_SLOW})
+        gateway_handler.hass.bus.async_fire.assert_any_call("myhome_cenplus_event", {"object": 1, "pushbutton": 6, "event": CONF_ROTARY_CW_FAST})
+        gateway_handler.hass.bus.async_fire.assert_any_call("myhome_cenplus_event", {"object": 1, "pushbutton": 7, "event": CONF_ROTARY_CCW_SLOW})
+        gateway_handler.hass.bus.async_fire.assert_any_call("myhome_cenplus_event", {"object": 1, "pushbutton": 8, "event": CONF_ROTARY_CCW_FAST})
 
         gateway_handler.hass.bus.async_fire.assert_any_call("myhome_cen_event", {"object": 2, "pushbutton": 1, "event": CONF_SHORT_PRESS})
         gateway_handler.hass.bus.async_fire.assert_any_call("myhome_cen_event", {"object": 2, "pushbutton": 2, "event": CONF_SHORT_RELEASE})
@@ -464,6 +483,11 @@ async def test_listening_loop_translation_gateway_and_unsupported(gateway_handle
         msg_gw_cmd = MagicMock(spec=OWNGatewayCommand)
         msg_gw_cmd.human_readable_log = "GW Cmd"
 
+        # Energy message
+        msg_energy = MagicMock(spec=OWNEnergyEvent)
+        msg_energy.who = 18
+        msg_energy.human_readable_log = "Energy"
+
         # Unsupported OWNMessage
         msg_unsupported = MagicMock(spec=OWNMessage)
         msg_unsupported.human_readable_log = "Unsupported"
@@ -475,6 +499,7 @@ async def test_listening_loop_translation_gateway_and_unsupported(gateway_handle
             msg_trans,
             msg_gw_evt,
             msg_gw_cmd,
+            msg_energy,
             msg_unsupported,
             raw_non_msg,
             asyncio.CancelledError(),
