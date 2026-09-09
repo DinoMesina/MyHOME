@@ -13,15 +13,3 @@ updates:
         patterns:
           - "*"
 
-  - package-ecosystem: "pip"
-    directory: "/"
-    schedule:
-      interval: "monthly"
-    commit-message:
-      prefix: "deps"
-      include: "scope"
-    open-pull-requests-limit: 3
-    groups:
-      dev-dependencies:
-        patterns:
-          - "*"
