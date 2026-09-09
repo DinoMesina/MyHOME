@@ -21,7 +21,8 @@ Maintained by the **[OpenWebNet-HA](https://github.com/OpenWebNet-HA)** communit
 
 ## 🌟 Key Features & Modern V2 Architecture
 
-- **Declarative Hardware Profiles**: Auto-detects and tunes connection limits and queue pacing specifically for your gateway model (`MH200`, `MH200N`, `MH202`, `F454`, `F455`, `AM4890`, `MyHomeServer1`). Eliminates hardware session exhaustion and serial buffer overflows.
+- **Declarative Hardware Profiles**: Auto-detects and tunes connection limits and queue pacing specifically for your gateway model (`MH200`, `MH200N`, `MH202`, `F454`, `F455`, `AM4890`, `MyHomeServer1`, and `Legrand 3578`). Eliminates hardware session exhaustion and buffer overflows.
+- **USB / Serial Gateway & OpenZigBee Support**: Native asynchronous transport for the **Legrand 3578 USB/Serial interface** via `pyserial-asyncio` with dynamic port discovery, authentication bypass, and OpenZigBee addressing (`<8-digit id>#9`).
 - **Zero-Friction Migration**: Upgrades preserve all existing custom entity IDs (`light.keuken`, `cover.living`) and friendly names. Unique IDs migrate transparently (`MAC-WHERE` → `MAC-WHO-WHERE`) with no broken dashboards or automations.
 - **Token-Bucket Bus Pacing**: Hardened priority command queue with model-specific inter-frame delays (e.g. 150ms for legacy MH200 vs 20ms for F454) preventing command dropping during heavy automation bursts.
 - **Dynamic Bus Auto-Discovery**: Automatically discovers entities from physical bus events and status sweeps without requiring manual `myhome.yaml` configuration. Full support for **F422 cross-bus routing** (e.g. `18#4#02`).
@@ -114,12 +115,15 @@ Then restart Home Assistant (**Developer Tools → YAML → Restart**).
 
 1. Navigate to **Settings → Devices & Services → Add Integration**.
 2. Search for **MyHOME**.
-3. **Auto-Discovery**: The integration will automatically discover UPnP/SSDP-compatible gateways on your local subnet (e.g. F454, MH202, MyHomeServer1).
-4. **Manual Configuration**: If using a legacy gateway without UPnP (e.g. MH200):
-   - Enter your gateway IP address and port (default `20000`).
-   - Provide the gateway MAC address (found on the physical device sticker).
-   - Enter your OpenWebNet password (default `12345`).
-5. Select your gateway hardware profile from the dropdown if not auto-detected.
+3. Choose your gateway type:
+   - **Network Gateway (TCP/IP)**:
+     - **Auto-Discovery**: The integration automatically discovers UPnP/SSDP-compatible gateways on your local subnet (e.g. F454, MH202, MyHomeServer1).
+     - **Manual IP Setup**: For gateways without UPnP (e.g. MH200), enter the gateway IP address, port (default `20000`), MAC address, and OpenWebNet password (default `12345`).
+   - **USB / Serial Gateway (Legrand 3578 / OpenZigBee)**:
+     - Select your physical serial device (e.g. `/dev/ttyUSB0` or `COM3`) from the dynamically populated port picker.
+     - Select your baud rate (default `19200`).
+     - Serial transport operates with zero authentication overhead (no IP password challenge needed) and natively routes OpenZigBee addresses (`<8-digit id>#9`).
+4. Select or confirm your gateway hardware profile from the dropdown.
 
 ### Options Flow (Fine-Tuning)
 
