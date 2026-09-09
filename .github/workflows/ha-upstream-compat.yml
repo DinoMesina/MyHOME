@@ -40,18 +40,22 @@ jobs:
           cache: "pip"
 
       - name: Install Home Assistant (${{ matrix.ha-channel }}) & test requirements
+        id: install-deps
+        continue-on-error: ${{ matrix.allow-failure }}
         run: |
           python -m pip install --upgrade pip
-          pip install ${{ matrix.pip-install }}
+          pip install --ignore-requires-python ${{ matrix.pip-install }}
           pip install pytest pytest-asyncio pytest-cov pytest-socket "syrupy>=4.6.0,<5.0.0" time-machine python-dateutil pytz freezegun requests-mock respx paho-mqtt tqdm
           pip install pytest-homeassistant-custom-component --no-deps
 
       - name: Fast Platform Import Smoke Test
+        if: steps.install-deps.outcome == 'success'
         continue-on-error: ${{ matrix.allow-failure }}
         run: |
           PYTHONPATH=. pytest tests/test_platforms.py -k "TestPlatformImportCleanliness" -v
 
       - name: Run Core Platform Test Suite
+        if: steps.install-deps.outcome == 'success'
         continue-on-error: ${{ matrix.allow-failure }}
         run: |
           PYTHONPATH=. pytest tests/test_component_alarm.py tests/test_platforms.py -v
