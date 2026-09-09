@@ -38,16 +38,21 @@ class OWNGateway:
         self.friendly_name = (
             discovery_info["friendlyName"] if "friendlyName" in discovery_info else None
         )
-        self.manufacturer = (
-            discovery_info["manufacturer"]
-            if "manufacturer" in discovery_info
-            else "BTicino S.p.A."
-        )
-        self.manufacturer_url = (
-            discovery_info["manufacturerURL"]
-            if "manufacturerURL" in discovery_info
-            else None
-        )
+        mfg = discovery_info.get("manufacturer")
+        if isinstance(mfg, (list, tuple)):
+            self.manufacturer = str(mfg[0]) if mfg else "BTicino S.p.A."
+        elif mfg:
+            self.manufacturer = str(mfg)
+        else:
+            self.manufacturer = "BTicino S.p.A."
+
+        mfg_url = discovery_info.get("manufacturerURL")
+        if isinstance(mfg_url, (list, tuple)):
+            self.manufacturer_url = str(mfg_url[0]) if mfg_url else None
+        elif mfg_url:
+            self.manufacturer_url = str(mfg_url)
+        else:
+            self.manufacturer_url = None
         self.model_name = (
             discovery_info["modelName"]
             if "modelName" in discovery_info

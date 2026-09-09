@@ -755,6 +755,114 @@ async def test_setup_entry_prunes_empty_devices_but_preserves_cen(hass: HomeAssi
         await hass.async_block_till_done()
 
 
+async def test_setup_entry_async_customize_yaml(hass: HomeAssistant, tmp_path):
+    """Test customize.yaml is loaded asynchronously using async_add_executor_job without blocking the loop."""
+    custom_yaml_path = tmp_path / "customize.yaml"
+    custom_yaml_path.write_text("light.living:\n  friendly_name: Living Spot\n", encoding="utf-8")
+
+    with patch.object(hass.config, "path", return_value=str(custom_yaml_path)), patch(
+        "custom_components.myhome.gateway.OWNSession.test_connection",
+        return_value={"Success": True, "Message": None},
+    ), patch(
+        "custom_components.myhome.gateway.MyHOMEGatewayHandler.listening_loop"
+    ), patch(
+        "custom_components.myhome.gateway.MyHOMEGatewayHandler.sending_loop"
+    ), patch.object(
+        hass, "async_add_executor_job", wraps=hass.async_add_executor_job
+    ) as mock_executor:
+        config_entry = MockConfigEntry(
+            domain=DOMAIN,
+            data={
+                "host": "192.168.0.35",
+                "port": 20000,
+                "password": "pass",
+                "mac": "00:03:50:00:12:88",
+            },
+            unique_id="00:03:50:00:12:88",
+        )
+        config_entry.add_to_hass(hass)
+
+        assert await hass.config_entries.async_setup(config_entry.entry_id)
+        await hass.async_block_till_done()
+
+        # Verify async_add_executor_job was called to load customize.yaml
+        assert mock_executor.called
+        assert hass.data[DOMAIN]["customizations"].get("light.living", {}).get("friendly_name") == "Living Spot"
+
+        await hass.config_entries.async_unload(config_entry.entry_id)
+        await hass.async_block_till_done()
+
+
+async def test_setup_entry_manufacturer_tuple_normalization(hass: HomeAssistant):
+    """Test manufacturer passed as tuple/list is normalized to string for device registry."""
+    with patch(
+        "custom_components.myhome.gateway.OWNSession.test_connection",
+        return_value={"Success": True, "Message": None},
+    ), patch(
+        "custom_components.myhome.gateway.MyHOMEGatewayHandler.listening_loop"
+    ), patch(
+        "custom_components.myhome.gateway.MyHOMEGatewayHandler.sending_loop"
+    ):
+        config_entry = MockConfigEntry(
+            domain=DOMAIN,
+            data={
+                "host": "192.168.0.35",
+                "port": 20000,
+                "password": "pass",
+                "mac": "00:03:50:00:12:99",
+                "manufacturer": ("BTicino S.p.A.",),
+            },
+            unique_id="00:03:50:00:12:99",
+        )
+        config_entry.add_to_hass(hass)
+
+        assert await hass.config_entries.async_setup(config_entry.entry_id)
+        await hass.async_block_till_done()
+
+        dev_reg = dr.async_get(hass)
+        gw_device = dev_reg.async_get_device(identifiers={(DOMAIN, "00:03:50:00:12:99")})
+        assert gw_device is not None
+        assert isinstance(gw_device.manufacturer, str)
+        assert gw_device.manufacturer == "BTicino S.p.A."
+
+        await hass.config_entries.async_unload(config_entry.entry_id)
+        await hass.async_block_till_done()
+
+
+async def test_device_pruning_uses_async_entries_for_config_entry(hass: HomeAssistant):
+    """Test device pruning uses async_entries_for_config_entry instead of deprecated device_registry.devices."""
+    with patch(
+        "custom_components.myhome.gateway.OWNSession.test_connection",
+        return_value={"Success": True, "Message": None},
+    ), patch(
+        "custom_components.myhome.gateway.MyHOMEGatewayHandler.listening_loop"
+    ), patch(
+        "custom_components.myhome.gateway.MyHOMEGatewayHandler.sending_loop"
+    ), patch(
+        "homeassistant.helpers.device_registry.async_entries_for_config_entry",
+        wraps=dr.async_entries_for_config_entry,
+    ) as mock_async_entries:
+        config_entry = MockConfigEntry(
+            domain=DOMAIN,
+            data={
+                "host": "192.168.0.35",
+                "port": 20000,
+                "password": "pass",
+                "mac": "00:03:50:00:77:66",
+            },
+            unique_id="00:03:50:00:77:66",
+        )
+        config_entry.add_to_hass(hass)
+
+        assert await hass.config_entries.async_setup(config_entry.entry_id)
+        await hass.async_block_till_done()
+
+        assert mock_async_entries.called
+
+        await hass.config_entries.async_unload(config_entry.entry_id)
+        await hass.async_block_till_done()
+
+
 
 
 

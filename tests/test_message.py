@@ -199,3 +199,21 @@ def test_own_sound_live_capture_full_sequence():
             assert actual == value, (
                 f"{raw}: expected {attr}={value!r}, got {actual!r}"
             )
+
+
+def test_own_event_unspecialized_who_returns_own_event():
+    """Test that valid event frames for unspecialized WHO families (e.g. WHO 6 Door Entry, WHO 8 Intercom)
+    return an OWNEvent instance (satisfying isinstance(..., OWNMessage)) instead of raw string."""
+    from custom_components.myhome.ownd.message import OWNMessage
+
+    frames = [
+        ("*8*1#1#4*11##", 8, "11"),
+        ("*8*9#1#4*20##", 8, "20"),
+        ("*6*9**##", 6, "*"),
+    ]
+    for raw, expected_who, expected_where in frames:
+        msg = OWNEvent.parse(raw)
+        assert isinstance(msg, OWNMessage), f"Frame {raw} was not parsed as OWNMessage"
+        assert isinstance(msg, OWNEvent), f"Frame {raw} was not parsed as OWNEvent"
+        assert msg.who == expected_who
+        assert msg.where == expected_where

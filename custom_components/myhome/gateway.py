@@ -162,7 +162,10 @@ class MyHOMEGatewayHandler:
 
     @property
     def manufacturer(self) -> str:
-        return self.gateway.manufacturer
+        mfg = self.gateway.manufacturer
+        if isinstance(mfg, (list, tuple)):
+            return str(mfg[0]) if mfg else "BTicino S.p.A."
+        return str(mfg) if mfg else "BTicino S.p.A."
 
     @property
     def name(self) -> str:

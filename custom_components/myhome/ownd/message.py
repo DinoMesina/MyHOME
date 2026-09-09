@@ -409,8 +409,7 @@ class OWNEvent(OWNMessage):
                 if _what_int is not None and 21 <= _what_int <= 28:
                     return OWNCENPlusEvent(data)
                 return OWNDryContactEvent(data)
-            elif _who > 1000:
-                return cls(data)
+            return cls(data)
 
         return data
 

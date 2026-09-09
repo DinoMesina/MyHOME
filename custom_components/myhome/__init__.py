@@ -269,7 +269,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     customize_file = hass.config.path("customize.yaml")
     if os.path.isfile(customize_file):
         try:
-            hass.data[DOMAIN]["customizations"] = load_yaml(customize_file) or {}
+            hass.data[DOMAIN]["customizations"] = (
+                await hass.async_add_executor_job(load_yaml, customize_file) or {}
+            )
             LOGGER.info("Successfully loaded %s custom names from customize.yaml for recovery", len(hass.data[DOMAIN]["customizations"]))
         except Exception as e:
             LOGGER.error("Failed to parse customize.yaml for friendly_name recovery: %s", e)
@@ -315,13 +317,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     entity_registry = er.async_get(hass)
     device_registry = dr.async_get(hass)
 
+    _mfg = hass.data[DOMAIN][entry.data[CONF_MAC]][CONF_ENTITY].manufacturer
+    if isinstance(_mfg, (list, tuple)):
+        _mfg = _mfg[0] if _mfg else "BTicino S.p.A."
+    elif not _mfg:
+        _mfg = "BTicino S.p.A."
+
     gateway_device_entry = device_registry.async_get_or_create(
         config_entry_id=entry.entry_id,
         connections={(dr.CONNECTION_NETWORK_MAC, entry.data[CONF_MAC])},
         identifiers={
             (DOMAIN, hass.data[DOMAIN][entry.data[CONF_MAC]][CONF_ENTITY].unique_id)
         },
-        manufacturer=hass.data[DOMAIN][entry.data[CONF_MAC]][CONF_ENTITY].manufacturer,
+        manufacturer=str(_mfg),
         name=hass.data[DOMAIN][entry.data[CONF_MAC]][CONF_ENTITY].name,
         model=hass.data[DOMAIN][entry.data[CONF_MAC]][CONF_ENTITY].model,
         sw_version=hass.data[DOMAIN][entry.data[CONF_MAC]][CONF_ENTITY].firmware,
@@ -339,36 +347,35 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
         gateway_handler = hass.data[DOMAIN][entry.data[CONF_MAC]][CONF_ENTITY]
         gateway_unique_id = getattr(gateway_handler, "unique_id", None)
         gateway_id = getattr(gateway_handler, "id", None)
-        for dev in list(device_registry.devices.values()):
-            if entry.entry_id in dev.config_entries:
-                if dev.id == gateway_dev_id:
-                    continue
-                if gateway_unique_id and (DOMAIN, gateway_unique_id) in dev.identifiers:
-                    continue
-                if gateway_id and (DOMAIN, gateway_id) in dev.identifiers:
-                    continue
-                # Do not prune scenario devices (CEN / CEN+) that intentionally have no entities
-                if any(
-                    isinstance(ident[1], str)
-                    and (
-                        "-15-" in ident[1]
-                        or "-25-" in ident[1]
-                        or ident[1].startswith("cen")
-                    )
-                    for ident in dev.identifiers
-                    if ident[0] == DOMAIN
-                ):
-                    continue
-                dev_entries = er.async_entries_for_device(
-                    entity_registry, dev.id, include_disabled_entities=True
+        for dev in dr.async_entries_for_config_entry(device_registry, entry.entry_id):
+            if dev.id == gateway_dev_id:
+                continue
+            if gateway_unique_id and (DOMAIN, gateway_unique_id) in dev.identifiers:
+                continue
+            if gateway_id and (DOMAIN, gateway_id) in dev.identifiers:
+                continue
+            # Do not prune scenario devices (CEN / CEN+) that intentionally have no entities
+            if any(
+                isinstance(ident[1], str)
+                and (
+                    "-15-" in ident[1]
+                    or "-25-" in ident[1]
+                    or ident[1].startswith("cen")
                 )
-                if len(dev_entries) == 0:
-                    LOGGER.info(
-                        "Pruning empty orphaned MyHOME device from registry: %s (%s)",
-                        dev.name,
-                        dev.id,
-                    )
-                    device_registry.async_remove_device(dev.id)
+                for ident in dev.identifiers
+                if ident[0] == DOMAIN
+            ):
+                continue
+            dev_entries = er.async_entries_for_device(
+                entity_registry, dev.id, include_disabled_entities=True
+            )
+            if len(dev_entries) == 0:
+                LOGGER.info(
+                    "Pruning empty orphaned MyHOME device from registry: %s (%s)",
+                    dev.name,
+                    dev.id,
+                )
+                device_registry.async_remove_device(dev.id)
     except Exception as err:
         LOGGER.debug("Error during empty device pruning: %s", err)
 

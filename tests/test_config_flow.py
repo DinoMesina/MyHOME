@@ -794,3 +794,41 @@ async def test_custom_manual_invalid_address(hass: HomeAssistant) -> None:
     assert res["type"] == FlowResultType.FORM
     assert res["errors"]["address"] == "invalid_ip"
 
+
+async def test_custom_manual_entry_manufacturer_type(hass: HomeAssistant) -> None:
+    """Test that custom_manual step stores manufacturer and manufacturerURL as strings, not tuples."""
+    with patch(
+        "custom_components.myhome.config_flow.find_gateways",
+        return_value=[]
+    ), patch(
+        "custom_components.myhome.config_flow.get_gateway",
+        return_value=None,
+    ), patch(
+        "custom_components.myhome.config_flow.OWNSession.test_connection",
+        return_value={"Success": True},
+    ), patch(
+        "custom_components.myhome.async_setup_entry",
+        return_value=True,
+    ):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": config_entries.SOURCE_USER}
+        )
+        result2 = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {"serial": "00:00:00:00:00:00"},
+        )
+        result3 = await hass.config_entries.flow.async_configure(
+            result2["flow_id"],
+            {"address": "192.168.1.135", "port": 20000},
+        )
+        result4 = await hass.config_entries.flow.async_configure(
+            result3["flow_id"],
+            {"serialNumber": "00:03:50:00:12:34", "modelName": "MH200"},
+        )
+        assert result4["type"] == FlowResultType.CREATE_ENTRY
+        entry_data = result4["data"]
+        assert isinstance(entry_data["manufacturer"], str)
+        assert entry_data["manufacturer"] == "BTicino S.p.A."
+        assert isinstance(entry_data["manufacturerURL"], str)
+        assert entry_data["manufacturerURL"] == "http://www.bticino.it"
+
