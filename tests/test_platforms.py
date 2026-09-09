@@ -295,3 +295,34 @@ class TestMediaPlayerPlatformSetup:
         from custom_components.myhome.media_player import async_unload_entry
         result = await async_unload_entry(MagicMock(), MagicMock())
         assert result is True
+
+
+# ── Platform Import Smoke Test ─────────────────────────────────────────────
+
+class TestPlatformImportCleanliness:
+    """Smoke test ensuring every integration platform module can be imported cleanly.
+
+    Catches upstream HA breaking changes (e.g. deprecated/removed constants, changed module
+    paths) immediately at import time across all supported platforms.
+    """
+
+    def test_all_platforms_import_cleanly(self):
+        """Test importing each platform in PLATFORMS without ImportError or syntax issues."""
+        import importlib
+        from custom_components.myhome import PLATFORMS
+
+        failed_imports = {}
+        for platform in PLATFORMS:
+            try:
+                mod = importlib.import_module(f"custom_components.myhome.{platform}")
+                assert hasattr(mod, "async_setup_entry"), f"{platform} missing async_setup_entry"
+            except Exception as exc:
+                failed_imports[platform] = str(exc)
+
+        assert not failed_imports, f"Platform imports failed: {failed_imports}"
+
+    def test_diagnostics_platform_imports_cleanly(self):
+        """Test importing the diagnostics platform module."""
+        import importlib
+        mod = importlib.import_module("custom_components.myhome.diagnostics")
+        assert hasattr(mod, "async_get_config_entry_diagnostics")

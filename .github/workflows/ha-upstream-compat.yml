@@ -1,0 +1,56 @@
+name: Upstream Home Assistant Compatibility
+
+on:
+  schedule:
+    - cron: "0 3 * * 1"  # Weekly run every Monday at 03:00 UTC
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "custom_components/**"
+      - "tests/**"
+      - ".github/workflows/ha-upstream-compat.yml"
+
+jobs:
+  ha-compatibility:
+    name: HA Compatibility (${{ matrix.ha-channel }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - ha-channel: stable
+            pip-install: "homeassistant"
+            allow-failure: false
+          - ha-channel: beta
+            pip-install: "--pre homeassistant"
+            allow-failure: false
+          - ha-channel: dev
+            pip-install: "git+https://github.com/home-assistant/core.git@dev"
+            allow-failure: true
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install Home Assistant (${{ matrix.ha-channel }}) & test requirements
+        run: |
+          python -m pip install --upgrade pip
+          pip install ${{ matrix.pip-install }}
+          pip install pytest pytest-asyncio pytest-cov pytest-socket syrupy time-machine python-dateutil pytz
+          pip install pytest-homeassistant-custom-component --no-deps
+
+      - name: Fast Platform Import Smoke Test
+        continue-on-error: ${{ matrix.allow-failure }}
+        run: |
+          PYTHONPATH=. pytest tests/test_platforms.py -k "TestPlatformImportCleanliness" -v
+
+      - name: Run Core Platform Test Suite
+        continue-on-error: ${{ matrix.allow-failure }}
+        run: |
+          PYTHONPATH=. pytest tests/test_component_alarm.py tests/test_platforms.py -v

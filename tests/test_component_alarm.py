@@ -6,10 +6,6 @@ from homeassistant.components.alarm_control_panel import (
     AlarmControlPanelEntityFeature,
 )
 from homeassistant.const import (
-    STATE_ALARM_DISARMED as STATE_DISARMED,
-    STATE_ALARM_ARMED_HOME as STATE_ARMED_HOME,
-    STATE_ALARM_ARMED_AWAY as STATE_ARMED_AWAY,
-    STATE_ALARM_TRIGGERED as STATE_TRIGGERED,
     CONF_NAME,
 )
 from homeassistant.core import HomeAssistant
@@ -27,6 +23,10 @@ from custom_components.myhome.const import (
 from custom_components.myhome.alarm_control_panel import (
     MyHOMEAlarmControlPanel,
     PLATFORM,
+    STATE_DISARMED,
+    STATE_ARMED_HOME,
+    STATE_ARMED_AWAY,
+    STATE_TRIGGERED,
     async_setup_entry,
     async_unload_entry,
 )
@@ -222,3 +222,76 @@ class TestMyHOMEAlarmEntity:
         assert alarm_central.alarm_state == STATE_TRIGGERED
         assert alarm_central.extra_state_attributes["raw_state"] == "intrusion alarm"
         assert alarm_central.extra_state_attributes["state_code"] == 15
+
+
+def test_alarm_state_compatibility_modern_ha():
+    """Test compatibility when modern HA provides AlarmControlPanelState and omits STATE_ALARM_* constants (Issue #240)."""
+    import importlib
+    import sys
+    from enum import StrEnum
+    import homeassistant.components.alarm_control_panel as acp
+    import homeassistant.const
+
+    class MockAlarmControlPanelState(StrEnum):
+        DISARMED = "disarmed"
+        ARMED_HOME = "armed_home"
+        ARMED_AWAY = "armed_away"
+        TRIGGERED = "triggered"
+
+    saved_consts = {}
+    for attr in ("STATE_ALARM_DISARMED", "STATE_ALARM_ARMED_HOME", "STATE_ALARM_ARMED_AWAY", "STATE_ALARM_TRIGGERED"):
+        if hasattr(homeassistant.const, attr):
+            saved_consts[attr] = getattr(homeassistant.const, attr)
+            delattr(homeassistant.const, attr)
+
+    try:
+        with patch.object(acp, "AlarmControlPanelState", MockAlarmControlPanelState, create=True):
+            if "custom_components.myhome.alarm_control_panel" in sys.modules:
+                del sys.modules["custom_components.myhome.alarm_control_panel"]
+            mod = importlib.import_module("custom_components.myhome.alarm_control_panel")
+            assert mod.STATE_DISARMED == "disarmed"
+            assert mod.STATE_ARMED_HOME == "armed_home"
+            assert mod.STATE_ARMED_AWAY == "armed_away"
+            assert mod.STATE_TRIGGERED == "triggered"
+    finally:
+        for attr, val in saved_consts.items():
+            setattr(homeassistant.const, attr, val)
+        if "custom_components.myhome.alarm_control_panel" in sys.modules:
+            del sys.modules["custom_components.myhome.alarm_control_panel"]
+        importlib.import_module("custom_components.myhome.alarm_control_panel")
+
+
+def test_alarm_state_compatibility_fallback_strings():
+    """Test fallback when neither AlarmControlPanelState nor STATE_ALARM_* constants exist in HA."""
+    import importlib
+    import sys
+    import homeassistant.components.alarm_control_panel as acp
+    import homeassistant.const
+
+    saved_consts = {}
+    for attr in ("STATE_ALARM_DISARMED", "STATE_ALARM_ARMED_HOME", "STATE_ALARM_ARMED_AWAY", "STATE_ALARM_TRIGGERED"):
+        if hasattr(homeassistant.const, attr):
+            saved_consts[attr] = getattr(homeassistant.const, attr)
+            delattr(homeassistant.const, attr)
+
+    saved_enum = None
+    if hasattr(acp, "AlarmControlPanelState"):
+        saved_enum = getattr(acp, "AlarmControlPanelState")
+        delattr(acp, "AlarmControlPanelState")
+
+    try:
+        if "custom_components.myhome.alarm_control_panel" in sys.modules:
+            del sys.modules["custom_components.myhome.alarm_control_panel"]
+        mod = importlib.import_module("custom_components.myhome.alarm_control_panel")
+        assert mod.STATE_DISARMED == "disarmed"
+        assert mod.STATE_ARMED_HOME == "armed_home"
+        assert mod.STATE_ARMED_AWAY == "armed_away"
+        assert mod.STATE_TRIGGERED == "triggered"
+    finally:
+        for attr, val in saved_consts.items():
+            setattr(homeassistant.const, attr, val)
+        if saved_enum is not None:
+            setattr(acp, "AlarmControlPanelState", saved_enum)
+        if "custom_components.myhome.alarm_control_panel" in sys.modules:
+            del sys.modules["custom_components.myhome.alarm_control_panel"]
+        importlib.import_module("custom_components.myhome.alarm_control_panel")

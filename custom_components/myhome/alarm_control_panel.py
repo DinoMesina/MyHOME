@@ -4,11 +4,28 @@ from homeassistant.components.alarm_control_panel import (
     AlarmControlPanelEntity,
     AlarmControlPanelEntityFeature,
 )
+try:
+    from homeassistant.components.alarm_control_panel import AlarmControlPanelState
+
+    STATE_DISARMED = AlarmControlPanelState.DISARMED
+    STATE_ARMED_HOME = AlarmControlPanelState.ARMED_HOME
+    STATE_ARMED_AWAY = AlarmControlPanelState.ARMED_AWAY
+    STATE_TRIGGERED = AlarmControlPanelState.TRIGGERED
+except ImportError:
+    try:
+        from homeassistant.const import (
+            STATE_ALARM_DISARMED as STATE_DISARMED,
+            STATE_ALARM_ARMED_HOME as STATE_ARMED_HOME,
+            STATE_ALARM_ARMED_AWAY as STATE_ARMED_AWAY,
+            STATE_ALARM_TRIGGERED as STATE_TRIGGERED,
+        )
+    except ImportError:
+        STATE_DISARMED = "disarmed"
+        STATE_ARMED_HOME = "armed_home"
+        STATE_ARMED_AWAY = "armed_away"
+        STATE_TRIGGERED = "triggered"
+
 from homeassistant.const import (
-    STATE_ALARM_DISARMED as STATE_DISARMED,
-    STATE_ALARM_ARMED_HOME as STATE_ARMED_HOME,
-    STATE_ALARM_ARMED_AWAY as STATE_ARMED_AWAY,
-    STATE_ALARM_TRIGGERED as STATE_TRIGGERED,
     CONF_NAME,
     CONF_MAC,
 )
