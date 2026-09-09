@@ -38,6 +38,10 @@
           "serialNumber": "MAC address",
           "modelName": "Device type"
         }
+      },
+      "discovery_confirm": {
+        "title": "Discovered MyHOME gateway",
+        "description": "Do you want to set up the {name} gateway ({host})?"
       }
     },
     "error": {

@@ -32,6 +32,10 @@
           "serialNumber": "Adresse MAC",
           "modelName": "Type de serveur"
         }
+      },
+      "discovery_confirm": {
+        "title": "Passerelle MyHOME découverte",
+        "description": "Voulez-vous configurer la passerelle {name} ({host}) ?"
       }
     },
     "error": {

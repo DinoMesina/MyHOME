@@ -32,6 +32,10 @@
           "serialNumber": "Indirizzo MAC",
           "modelName": "Tipo di gateway"
         }
+      },
+      "discovery_confirm": {
+        "title": "Gateway MyHOME rilevato",
+        "description": "Vuoi configurare il gateway {name} ({host})?"
       }
     },
     "error": {

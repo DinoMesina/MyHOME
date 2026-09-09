@@ -32,6 +32,10 @@
           "serialNumber": "MAC address",
           "modelName": "Device type"
         }
+      },
+      "discovery_confirm": {
+        "title": "Ontdekte MyHOME gateway",
+        "description": "Wilt u de {name} gateway ({host}) instellen?"
       }
     },
     "error": {

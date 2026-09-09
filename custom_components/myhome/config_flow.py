@@ -542,10 +542,37 @@ class MyhomeFlowHandler(ConfigFlow, domain=DOMAIN):
         self._abort_if_unique_id_configured(updates=updatable)
 
         self.gateway_handler = gateway
+        self.context.update(
+            {
+                CONF_HOST: gateway.address,
+                CONF_NAME: gateway.model_name,
+                CONF_MAC: gateway.serial,
+                "title_placeholders": {
+                    CONF_HOST: gateway.address,
+                    CONF_NAME: gateway.model_name,
+                    CONF_MAC: gateway.serial,
+                },
+            }
+        )
 
-        if self.gateway_handler.port is None:
-            return await self.async_step_port()
-        return await self.async_step_test_connection()
+        return await self.async_step_discovery_confirm()
+
+    async def async_step_discovery_confirm(self, user_input=None):
+        """Handle user confirmation of discovered gateway."""
+        if user_input is not None:
+            if self.gateway_handler.port is None:
+                return await self.async_step_port()
+            return await self.async_step_test_connection()
+
+        self._set_confirm_only()
+        return self.async_show_form(
+            step_id="discovery_confirm",
+            description_placeholders={
+                CONF_HOST: self.gateway_handler.address,
+                CONF_NAME: self.gateway_handler.model_name or "MyHOME Gateway",
+            },
+        )
+
 
 
 class MyhomeOptionsFlowHandler(OptionsFlow):

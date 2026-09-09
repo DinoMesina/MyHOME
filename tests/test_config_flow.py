@@ -326,7 +326,7 @@ async def test_options_flow(mock_sending, mock_listening, mock_test_connection, 
 
 
 async def test_ssdp_discovery(hass: HomeAssistant) -> None:
-    """Test SSDP discovery flow."""
+    """Test SSDP discovery flow with user confirmation."""
     class SsdpServiceInfo:
         def __init__(self, ssdp_usn, ssdp_st, ssdp_location, upnp, ssdp_headers):
             self.ssdp_usn = ssdp_usn
@@ -349,17 +349,72 @@ async def test_ssdp_discovery(hass: HomeAssistant) -> None:
         ssdp_headers={"_host": "192.168.1.135"}
     )
 
+    # Step 1: SSDP discovery initiates flow -> shows discovery_confirm form (not auto-created)
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_SSDP}, data=ssdp_info
+    )
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == "discovery_confirm"
+    assert result["description_placeholders"]["name"] == "F454"
+    assert result["description_placeholders"]["host"] == "192.168.1.135"
+
+    # Step 2: User confirms -> tests connection and creates entry
     with patch(
         "custom_components.myhome.config_flow.OWNSession.test_connection",
         return_value={"Success": True},
     ):
-        result = await hass.config_entries.flow.async_init(
-            DOMAIN, context={"source": config_entries.SOURCE_SSDP}, data=ssdp_info
+        result2 = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            user_input={},
         )
 
-    # Note: the gateway discovery dict doesn't specify port, so it gets set to 20000 in async_step_ssdp
-    assert result["type"] == FlowResultType.CREATE_ENTRY
-    assert result["data"]["host"] == "192.168.1.135"
+    assert result2["type"] == FlowResultType.CREATE_ENTRY
+    assert result2["data"]["host"] == "192.168.1.135"
+
+
+async def test_ssdp_discovery_already_configured(hass: HomeAssistant) -> None:
+    """Test SSDP discovery flow when gateway is already configured."""
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            "host": "192.168.1.135",
+            "port": 20000,
+            "mac": "00:03:50:00:12:34",
+        },
+        unique_id="00:03:50:00:12:34",
+    )
+    entry.add_to_hass(hass)
+
+    class SsdpServiceInfo:
+        def __init__(self, ssdp_usn, ssdp_st, ssdp_location, upnp, ssdp_headers):
+            self.ssdp_usn = ssdp_usn
+            self.ssdp_st = ssdp_st
+            self.ssdp_location = ssdp_location
+            self.upnp = upnp
+            self.ssdp_headers = ssdp_headers
+
+    ssdp_info = SsdpServiceInfo(
+        ssdp_usn="mock_usn",
+        ssdp_st="mock_st",
+        ssdp_location="http://192.168.1.135:49153/description.xml",
+        upnp={
+            "modelName": "F454",
+            "serialNumber": "00:03:50:00:12:34",
+            "friendlyName": "Gateway",
+            "UDN": "uuid",
+            "modelNumber": "2.0"
+        },
+        ssdp_headers={"_host": "192.168.1.135"}
+    )
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_SSDP}, data=ssdp_info
+    )
+    assert result["type"] == FlowResultType.ABORT
+    assert result["reason"] == "already_configured"
+
 
 
 async def test_reauth_flow(hass: HomeAssistant) -> None:
@@ -604,10 +659,15 @@ async def test_step_port_and_ssdp_missing_port(hass: HomeAssistant) -> None:
     mock_gw.udn = "udn"
     mock_gw.firmware = "1.0"
 
-    with patch("custom_components.myhome.config_flow.OWNGateway.build_from_discovery_info", return_value=mock_gw), \
-         patch.object(handler, "async_step_port", return_value={"type": "form", "step_id": "port"}):
+    with patch("custom_components.myhome.config_flow.OWNGateway.build_from_discovery_info", return_value=mock_gw):
         res_ssdp = await handler.async_step_ssdp(discovery_info)
-        assert res_ssdp["step_id"] == "port"
+        assert res_ssdp["type"] == FlowResultType.FORM
+        assert res_ssdp["step_id"] == "discovery_confirm"
+
+        with patch.object(handler, "async_step_port", return_value={"type": "form", "step_id": "port"}):
+            res_confirm = await handler.async_step_discovery_confirm({})
+            assert res_confirm["step_id"] == "port"
+
 
 
 async def test_reauth_with_config_dict(hass: HomeAssistant) -> None:
