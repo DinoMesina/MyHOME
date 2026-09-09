@@ -553,6 +553,11 @@ class TestOWNSessionFullCoverage:
         session.password = "secret123"
         assert session.password == "secret123"
 
+    def test_session_default_logger(self):
+        gw = OWNGateway({"address": "127.0.0.1", "port": 20000})
+        session = OWNSession(gateway=gw)
+        assert session.logger is not None
+
     @pytest.mark.asyncio
     async def test_test_gateway_classmethod(self):
         gw = OWNGateway({"address": "127.0.0.1", "port": 20000})

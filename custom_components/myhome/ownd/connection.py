@@ -184,7 +184,7 @@ class OWNSession:
 
         self._gateway = gateway
         self._type = connection_type.lower()
-        self._logger = logger
+        self._logger = logger or logging.getLogger(__name__)
 
         self._stream_reader: Optional[asyncio.StreamReader] = None
         self._stream_writer: Optional[asyncio.StreamWriter] = None
