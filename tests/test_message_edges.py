@@ -1169,4 +1169,156 @@ class TestProtocolFixesAudit:
         assert WHO_SOUND_DIFFUSION in DEFAULT_SUPPORTED_WHO
 
 
+class TestMessageAuditExhaustiveCoverage:
+    """Exhaustive unit tests targeting all remaining edge-case branches in ownd/message.py."""
 
+    def test_status_request_with_where_param(self):
+        msg = OWNMessage("*#1*21#4#01##")
+        assert msg.is_valid is True
+        assert msg.is_request is True
+        assert msg.where == "21"
+        assert msg._where_param == ["4", "01"]
+
+    def test_own_event_parse_who25_query(self):
+        evt = OWNEvent.parse("*#25*21*0*1##")
+        assert isinstance(evt, OWNDryContactEvent)
+
+    def test_own_event_parse_who25_non_integer_what(self):
+        evt = OWNEvent.parse("*25*bad*21##")
+        assert isinstance(evt, OWNDryContactEvent)
+
+    def test_automation_event_dim10_exception(self):
+        class BadInt:
+            def __int__(self):
+                raise ValueError("boom")
+
+        orig_init = OWNMessage.__init__
+
+        def fake_init(self, data):
+            orig_init(self, data)
+            self._what = None
+            self._dimension = 10
+            self._dimension_value = [BadInt()]
+
+        with patch.object(OWNMessage, "__init__", fake_init):
+            evt = OWNAutomationEvent("*#2*21*10*10*75##")
+            assert evt._state is None
+
+    def test_gateway_event_dim0_exception(self):
+        class BadList:
+            def __len__(self):
+                return 4
+
+            def __getitem__(self, idx):
+                raise IndexError("simulated")
+
+        orig_init = OWNMessage.__init__
+
+        def fake_init(self, data):
+            orig_init(self, data)
+            self._dimension = 0
+            self._dimension_value = BadList()
+
+        with patch.object(OWNMessage, "__init__", fake_init):
+            evt = OWNGatewayEvent("*#13**0*10*20*30##")
+            assert evt._hour is None
+
+    def test_gateway_event_dim1_invalid_date(self):
+        evt = OWNGatewayEvent("*#13**1*99*99*2020##")
+        assert evt._date is None
+
+    def test_gateway_event_dim12_empty_part(self):
+        evt = OWNGatewayEvent("*#13**12**1*2*3*4*5##")
+        assert evt._mac_address is None
+
+    def test_gateway_event_dim19_empty_part(self):
+        evt = OWNGatewayEvent("*#13**19**1*2*3##")
+        assert evt._uptime is None
+
+    def test_gateway_event_dim22_invalid_datetime(self):
+        evt = OWNGatewayEvent("*#13**22*12*00*00*01*0*01*99*2020##")
+        assert evt._datetime is None
+
+    def test_energy_event_dim113_empty_value(self):
+        evt = OWNEnergyEvent("*#18*1*113*##")
+        assert evt._active_power == 0
+
+    def test_energy_event_dim511_empty_value(self):
+        evt = OWNEnergyEvent("*#18*1*511#1#1*##")
+        assert evt is not None
+
+    def test_energy_event_dim51_empty_value(self):
+        evt = OWNEnergyEvent("*#18*1*51*##")
+        assert evt._total_consumption == 0
+
+    def test_energy_event_dim54_empty_value(self):
+        evt = OWNEnergyEvent("*#18*1*54*##")
+        assert evt._current_day_partial_consumption == 0
+
+    def test_energy_event_dim52_invalid_date(self):
+        evt = OWNEnergyEvent("*#18*1*52#24#99*100##")
+        assert evt._monthly_consumption.get("date") is None
+
+    def test_energy_event_dim53_empty_value(self):
+        evt = OWNEnergyEvent("*#18*1*53*##")
+        assert evt._current_month_partial_consumption == 0
+
+    def test_dry_contact_event_param_exception(self):
+        class BadInt:
+            def __int__(self):
+                raise ValueError("boom")
+
+        orig_init = OWNMessage.__init__
+
+        def fake_init(self, data):
+            orig_init(self, data)
+            self._what = 31
+            self._what_param = [BadInt()]
+            self._where = "21"
+
+        with patch.object(OWNMessage, "__init__", fake_init):
+            evt = OWNDryContactEvent("*25*31*21##")
+            assert evt._detection == 1
+
+    def test_cenplus_event_param_exception_and_empty_where(self):
+        class BadInt:
+            def __int__(self):
+                raise ValueError("boom")
+
+        orig_init = OWNMessage.__init__
+
+        def fake_init(self, data):
+            orig_init(self, data)
+            self._what = 21
+            self._what_param = [BadInt()]
+            self._where = None
+
+        with patch.object(OWNMessage, "__init__", fake_init):
+            evt = OWNCENPlusEvent("*25*21#1*21##")
+            assert evt.push_button == 0
+            assert evt.object == ""
+
+    def test_cenplus_event_unmapped_state(self):
+        evt = OWNCENPlusEvent("*25*99#1*21##")
+        assert "state is 99" in evt.human_readable_log
+
+    def test_own_command_parse_who25_branches(self):
+        # 1872: CEN+ range (21..28)
+        cmd_cen = OWNCommand.parse("*25*21#1*21##")
+        assert cmd_cen is not None
+
+        # 1869-1870: ValueError on non-integer what
+        cmd_bad = OWNCommand.parse("*25*bad*21##")
+        assert isinstance(cmd_bad, OWNDryContactCommand)
+
+    def test_gateway_command_dim0_invalid_time(self):
+        cmd = OWNGatewayCommand("*#13**#0*99*99*99*01##")
+        assert cmd._time is None
+
+    def test_gateway_command_dim1_invalid_date(self):
+        cmd = OWNGatewayCommand("*#13**#1*1*99*2020##")
+        assert cmd._date is None
+
+    def test_gateway_command_dim22_invalid_datetime(self):
+        cmd = OWNGatewayCommand("*#13**#22*12*00*00*01*0*01*99*2020##")
+        assert cmd._datetime is None

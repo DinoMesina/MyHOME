@@ -65,8 +65,15 @@ class OWNMessage:
         self._raw = data
         self._human_readable_log = self._raw
         self._family = ""
-        self._who = ""
-        self._where = ""
+        self._who = None
+        self._what = None
+        self._what_param = None
+        self._where = None
+        self._where_param = None
+        self._dimension = None
+        self._dimension_param = None
+        self._dimension_value = None
+        self._message_type = None
         self._is_valid_message = False
 
         if self._STATUS.match(self._raw):
@@ -1442,9 +1449,12 @@ class OWNEnergyEvent(OWNEvent):
         super().__init__(data)
 
         if (
-            not self._where.startswith("5")
-            and not self._where.startswith("7")
-            and not self._where.startswith("1")
+            not self._where
+            or (
+                not self._where.startswith("5")
+                and not self._where.startswith("7")
+                and not self._where.startswith("1")
+            )
         ):
             return None
 

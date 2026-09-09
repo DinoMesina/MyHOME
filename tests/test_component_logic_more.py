@@ -225,7 +225,10 @@ class TestSwitchEntity:
                     "device_class": "outlet",
                     "manufacturer": "BTicino",
                     "model": "F411",
-                }
+                },
+                "sw_dup": {
+                    "where": "21",
+                },
             }
         }
 
@@ -259,6 +262,10 @@ class TestSwitchEntity:
             mock_registry.async_remove.assert_called_once_with("switch.corrupt")
             async_add_entities.assert_called_once()
             assert len(async_add_entities.call_args[0][0]) == 3
+
+        # Test entity registry exception (lines 50-52)
+        with patch("custom_components.myhome.switch.er.async_get", side_effect=Exception("Registry error")):
+            await async_setup_entry(mock_hass, config_entry, MagicMock())
 
         # 3. Test MyHOMESwitch async_added_to_hass with interface
         from custom_components.myhome.switch import MyHOMESwitch

@@ -737,15 +737,28 @@ async def test_light_switch_collision_and_interface_dispatch(hass):
     config_entry.data = {"mac": "mac"}
     config_entry.entry_id = "test_entry"
 
+    sw_entry = MagicMock()
+    sw_entry.domain = "switch"
+    sw_entry.unique_id = "mac-1-16#4#01"
+    sw_entry.entity_id = "switch.sw_16"
+
+    light_ghost_entry = MagicMock()
+    light_ghost_entry.domain = "light"
+    light_ghost_entry.unique_id = "mac-1-16"
+    light_ghost_entry.entity_id = "light.ghost_16"
+
+    mock_er = MagicMock()
+
     with patch(
         "custom_components.myhome.light.er.async_entries_for_config_entry",
-        return_value=[],
+        return_value=[sw_entry, light_ghost_entry],
     ), patch(
         "custom_components.myhome.light.er.async_get",
-        return_value=MagicMock(),
+        return_value=mock_er,
     ):
         async_add_entities = MagicMock()
         await async_setup_entry(hass, config_entry, async_add_entities)
+        mock_er.async_remove.assert_called_once_with("light.ghost_16")
         async_add_entities.assert_called_once()
         entities = async_add_entities.call_args[0][0]
         # Only Light 17 is added; Light 16 is skipped because it is in switch_wheres
@@ -771,4 +784,29 @@ async def test_light_switch_collision_and_interface_dispatch(hass):
         assert len(received_base) == 1
 
 
+async def test_light_setup_registry_exception(hass):
+    """Test light async_setup_entry gracefully handles entity registry exception."""
+    mock_gateway = MagicMock()
+    mock_gateway.mac = "mac_err"
+    hass.data.setdefault(DOMAIN, {})["mac_err"] = {
+        "entity": mock_gateway,
+        CONF_PLATFORMS: {
+            "light": {
+                "19": {CONF_WHERE: "19", CONF_NAME: "Light 19"},
+            },
+        },
+    }
+    config_entry = MagicMock()
+    config_entry.data = {"mac": "mac_err"}
+    config_entry.entry_id = "test_entry_err"
 
+    with patch(
+        "custom_components.myhome.light.er.async_get",
+        side_effect=Exception("Registry unavailable"),
+    ):
+        async_add_entities = MagicMock()
+        await async_setup_entry(hass, config_entry, async_add_entities)
+        async_add_entities.assert_called_once()
+        entities = async_add_entities.call_args[0][0]
+        assert len(entities) == 1
+        assert entities[0]._device_id == "19"
