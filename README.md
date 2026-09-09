@@ -239,7 +239,7 @@ check-wheel-contents dist/*.whl
 ### CI Workflows
 - **`hassfest`**: Official Home Assistant manifest and metadata validation.
 - **`validate`**: Official HACS compliance checks.
-- **`test-coverage`**: 750 automated unit tests with snapshot matching and coverage tracking.
+- **`test-coverage`**: 755 automated unit tests with snapshot matching and coverage tracking.
 - **`pypi_standards`**: Strict wheel hygiene, metadata verification, and packaging checks.
 
 ### 📊 Code Coverage & Quality Assurance
@@ -290,7 +290,7 @@ The integration maintains 739 automated unit tests (100% line coverage across al
   - [x] Declarative hardware gateway profiles (`MH200` to `F454`).
   - [x] Zero-friction migration (preserving custom entity IDs and friendly names).
   - [x] Token-bucket bus pacing and sentinel worker lifecycle.
-  - [x] Synthetic mock TCP test harness with 750+ unit tests (100% coverage).
+  - [x] Synthetic mock TCP test harness with 755+ unit tests (100% coverage).
   - [x] PyPI packaging pipeline & GitHub Actions CI green across all workflows.
 - [x] **Phase 2: Monitoring & Real-time Diagnostics**
   - [x] In-band Unified Bus Listener (500-frame circular ring buffer, 0 extra sockets).
