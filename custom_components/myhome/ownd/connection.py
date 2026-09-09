@@ -55,6 +55,7 @@ class OWNGateway:
         )
         self.model = self.model_name
         from ..gateway_profile import get_gateway_profile
+        self.profile = get_gateway_profile(self.model_name)
         model_num = (
             discovery_info["modelNumber"] if "modelNumber" in discovery_info else None
         )
