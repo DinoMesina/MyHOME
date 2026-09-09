@@ -1,5 +1,6 @@
 """ MyHOME integration. """
 import asyncio
+import os
 
 from .ownd.message import OWNCommand, OWNGatewayCommand
 from .gateway import MyHOMEGatewayHandler
@@ -33,19 +34,15 @@ PLATFORMS = ["light", "switch", "cover", "climate", "binary_sensor", "sensor", "
 
 async def _async_register_frontend(hass: HomeAssistant) -> None:
     """Register the Lovelace bus monitor card static resource and script."""
-    import os
     domain_data = hass.data.setdefault(DOMAIN, {})
     if domain_data.get("_frontend_registered"):
-        return
-
-    http = getattr(hass, "http", None)
-    if http is None:
         return
 
     card_path = os.path.join(os.path.dirname(__file__), "frontend", "myhome-bus-card.js")
     url_path = "/myhome_static/myhome-bus-card.js"
 
-    if os.path.isfile(card_path):
+    http = getattr(hass, "http", None)
+    if http is not None and os.path.isfile(card_path):
         if hasattr(http, "async_register_static_paths"):
             try:
                 from homeassistant.components.http import StaticPathConfig
@@ -64,6 +61,21 @@ async def _async_register_frontend(hass: HomeAssistant) -> None:
             LOGGER.debug("Could not add extra js url for Lovelace card: %s", e)
 
         domain_data["_frontend_registered"] = True
+
+    # Auto-register resource in Lovelace dashboard resources collection
+    try:
+        lovelace = hass.data.get("lovelace")
+        if lovelace:
+            resources = getattr(lovelace, "resources", None)
+            if resources and hasattr(resources, "async_create_item"):
+                existing = [item["url"] for item in resources.async_items()]
+                if url_path not in existing:
+                    await resources.async_create_item({
+                        "res_type": "module",
+                        "url": url_path,
+                    })
+    except Exception as e:
+        LOGGER.debug("Could not auto-register Lovelace resource: %s", e)
 
 
 async def async_setup(hass, config):
@@ -92,6 +104,56 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
             CONF_PLATFORMS: {p: {} for p in PLATFORMS},
             CONF_ENTITIES: {p: {} for p in PLATFORMS},
         }
+
+    # Load legacy myhome.yaml if present for seamless backward-compatibility
+    _opt_path = entry.options.get(CONF_FILE_PATH) or entry.options.get("file_path")
+    _config_file_path = str(_opt_path) if _opt_path else hass.config.path("myhome.yaml")
+    if not os.path.isfile(_config_file_path) and os.path.isfile("/config/myhome.yaml"):
+        _config_file_path = "/config/myhome.yaml"
+
+    if os.path.isfile(_config_file_path):
+        from homeassistant.util.yaml.loader import load_yaml
+        from .validate import config_schema
+        try:
+            raw_yaml = await hass.async_add_executor_job(load_yaml, _config_file_path)
+            if raw_yaml and isinstance(raw_yaml, dict):
+                # Ensure every gateway has mac and every device has where set if omitted
+                for gw_key, gw_val in raw_yaml.items():
+                    if isinstance(gw_val, dict):
+                        if CONF_MAC not in gw_val:
+                            gw_val[CONF_MAC] = str(gw_key)
+                        for plat, devs in gw_val.items():
+                            if isinstance(devs, dict):
+                                for d_key, d_val in devs.items():
+                                    if isinstance(d_val, dict) and "where" not in d_val and "zone" not in d_val:
+                                        d_val["where"] = str(d_key)
+
+                _validated = config_schema(raw_yaml)
+                formatted_entry_mac = dr.format_mac(entry.data[CONF_MAC])
+                mac_key = None
+                if formatted_entry_mac in _validated:
+                    mac_key = formatted_entry_mac
+                elif entry.data[CONF_MAC] in _validated:
+                    mac_key = entry.data[CONF_MAC]
+                else:
+                    for k in _validated.keys():
+                        try:
+                            if dr.format_mac(k) == formatted_entry_mac:
+                                mac_key = k
+                                break
+                        except Exception:
+                            continue
+                if mac_key and mac_key in _validated:
+                    yaml_platforms = _validated[mac_key].get(CONF_PLATFORMS, {})
+                    for plat, devices in yaml_platforms.items():
+                        if plat in hass.data[DOMAIN][entry.data[CONF_MAC]][CONF_PLATFORMS]:
+                            for d_id, d_cfg in devices.items():
+                                hass.data[DOMAIN][entry.data[CONF_MAC]][CONF_PLATFORMS][plat][d_id] = d_cfg
+                                if isinstance(d_cfg, dict) and "where" in d_cfg:
+                                    hass.data[DOMAIN][entry.data[CONF_MAC]][CONF_PLATFORMS][plat][str(d_cfg["where"])] = d_cfg
+                    LOGGER.info("Loaded legacy myhome.yaml configuration for gateway %s (%s platforms)", entry.data[CONF_MAC], len(yaml_platforms))
+        except Exception as e:
+            LOGGER.error("Failed to parse myhome.yaml from %s: %s", _config_file_path, e)
 
     _generate_events = (
         entry.options.get(CONF_GENERATE_EVENTS, False)
@@ -143,10 +205,24 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
                     except ValueError as e:
                         LOGGER.warning("Could not auto-migrate entity %s to %s: %s", reg_entry.entity_id, new_unique_id, e)
 
+                # Also migrate matching device in device_registry if present so custom device names and areas are preserved
+                device_registry = dr.async_get(hass)
+                old_device = (
+                    device_registry.async_get_device(identifiers={(DOMAIN, f"{_mac}-{where_part}")})
+                    or device_registry.async_get_device(identifiers={(DOMAIN, f"{entry.data[CONF_MAC]}-{where_part}")})
+                    or (device_registry.async_get(reg_entry.device_id) if reg_entry.device_id else None)
+                )
+                if old_device:
+                    try:
+                        device_registry.async_update_device(
+                            old_device.id,
+                            new_identifiers={(DOMAIN, f"{_mac}-{who}-{where_part}")},
+                        )
+                    except Exception as e:
+                        LOGGER.warning("Could not auto-migrate device %s to new identifier: %s", old_device.id, e)
 
     # Hack to forcefully absorb customize.yaml for users who deleted their integrations
     # and therefore lost the transparent entity_registry migration!
-    import os
     from homeassistant.util.yaml.loader import load_yaml
     
     hass.data[DOMAIN]["customizations"] = {}

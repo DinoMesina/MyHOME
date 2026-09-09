@@ -6,7 +6,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntryState
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.myhome.const import DOMAIN
+from custom_components.myhome.const import DOMAIN, CONF_PLATFORMS
 from custom_components.myhome.ownd.connection import OWNGateway
 
 
@@ -297,6 +297,12 @@ async def test_entity_migration_and_yaml_recovery_edges(hass: HomeAssistant):
             return True
         return real_isfile(p)
 
+    mock_dev_reg = MagicMock()
+    old_dev1 = MagicMock(id="dev1")
+    old_dev2 = MagicMock(id="dev2")
+    mock_dev_reg.async_get_device.side_effect = [old_dev1, None, old_dev2, None, None, None]
+    mock_dev_reg.async_update_device.side_effect = [None, Exception("Device update conflict")]
+
     with patch(
         "custom_components.myhome.gateway.OWNSession.test_connection",
         return_value={"Success": True, "Message": None}
@@ -307,6 +313,9 @@ async def test_entity_migration_and_yaml_recovery_edges(hass: HomeAssistant):
     ), patch(
         "homeassistant.helpers.entity_registry.async_get",
         return_value=mock_entry_reg,
+    ), patch(
+        "homeassistant.helpers.device_registry.async_get",
+        return_value=mock_dev_reg,
     ), patch(
         "homeassistant.helpers.entity_registry.async_entries_for_config_entry",
         return_value=[reg_e1, reg_e2, reg_e3],
@@ -432,6 +441,170 @@ async def test_register_frontend_branches(hass: HomeAssistant):
         await _async_register_frontend(hass)
         assert hass.data[DOMAIN]["_frontend_registered"] is True
         mock_http.register_static_path.assert_called_once()
+
+    # 5. async_register_static_paths raises exception and falls back to register_static_path
+    hass.data[DOMAIN]["_frontend_registered"] = False
+    mock_http.async_register_static_paths = AsyncMock(side_effect=Exception("Async static paths failed"))
+    mock_http.register_static_path.reset_mock()
+    await _async_register_frontend(hass)
+    assert hass.data[DOMAIN]["_frontend_registered"] is True
+    mock_http.register_static_path.assert_called_once()
+
+    # 6. Lovelace resource auto-registration (lines 69-78)
+    hass.data[DOMAIN]["_frontend_registered"] = False
+    mock_resources = MagicMock()
+    mock_resources.async_items.return_value = [{"url": "/other/resource.js"}]
+    mock_resources.async_create_item = AsyncMock()
+    mock_lovelace = MagicMock()
+    mock_lovelace.resources = mock_resources
+    hass.data["lovelace"] = mock_lovelace
+
+    await _async_register_frontend(hass)
+    mock_resources.async_create_item.assert_awaited_once_with({
+        "res_type": "module",
+        "url": "/myhome_static/myhome-bus-card.js",
+    })
+
+    # 7. Lovelace resource already exists
+    hass.data[DOMAIN]["_frontend_registered"] = False
+    mock_resources.async_items.return_value = [{"url": "/myhome_static/myhome-bus-card.js"}]
+    mock_resources.async_create_item.reset_mock()
+    await _async_register_frontend(hass)
+    mock_resources.async_create_item.assert_not_called()
+
+    # 8. Lovelace raises exception
+    hass.data[DOMAIN]["_frontend_registered"] = False
+    mock_resources.async_items.side_effect = Exception("Lovelace storage error")
+    await _async_register_frontend(hass)
+
+
+async def test_setup_entry_myhome_yaml_loading(hass: HomeAssistant):
+    """Test loading legacy myhome.yaml with all branches."""
+    import tempfile
+    from homeassistant.const import CONF_FILE_PATH
+
+    mac = "00:03:50:00:12:34"
+    sample_yaml = """00:03:50:00:12:34:
+  light:
+    '01':
+      name: 'Salon Plafonnier'
+      dimmable: true
+  cover:
+    '02':
+      name: 'Volet Salon'
+000350001239:
+  light:
+    '03':
+      name: 'Test'
+"""
+    with tempfile.NamedTemporaryFile("w", delete=False, suffix=".yaml") as tmp:
+        tmp.write(sample_yaml)
+        tmp_path = tmp.name
+
+    try:
+        config_entry = MockConfigEntry(
+            domain=DOMAIN,
+            data={
+                "host": "192.168.0.35",
+                "port": 20000,
+                "password": "pass",
+                "mac": mac,
+            },
+            options={
+                "file_path": tmp_path,
+            },
+            unique_id=mac,
+        )
+        config_entry.add_to_hass(hass)
+
+        with patch("custom_components.myhome.gateway.OWNSession.test_connection", return_value={"Success": True, "Message": None}), \
+             patch("custom_components.myhome.gateway.MyHOMEGatewayHandler.listening_loop"), \
+             patch("custom_components.myhome.gateway.MyHOMEGatewayHandler.sending_loop"):
+            assert await hass.config_entries.async_setup(config_entry.entry_id)
+            await hass.async_block_till_done()
+
+            assert "01" in hass.data[DOMAIN][mac][CONF_PLATFORMS]["light"]
+            assert "02" in hass.data[DOMAIN][mac][CONF_PLATFORMS]["cover"]
+
+            assert await hass.config_entries.async_unload(config_entry.entry_id)
+            await hass.async_block_till_done()
+
+        # Test mac matching branch: elif entry.data[CONF_MAC] in _validated
+        entry_raw_mac = MockConfigEntry(
+            domain=DOMAIN,
+            data={"host": "192.168.0.35", "port": 20000, "password": "pass", "mac": "000350001234"},
+            options={"file_path": tmp_path},
+            unique_id="00:03:50:00:12:34",
+        )
+        entry_raw_mac.add_to_hass(hass)
+        mock_val_raw = {"000350001234": {CONF_PLATFORMS: {"light": {"01": {"where": "01"}}}}}
+        with patch("custom_components.myhome.gateway.OWNSession.test_connection", return_value={"Success": True, "Message": None}), \
+             patch("custom_components.myhome.gateway.MyHOMEGatewayHandler.listening_loop"), \
+             patch("custom_components.myhome.gateway.MyHOMEGatewayHandler.sending_loop"), \
+             patch("custom_components.myhome.validate.config_schema", return_value=mock_val_raw):
+            assert await hass.config_entries.async_setup(entry_raw_mac.entry_id)
+            await hass.async_block_till_done()
+            assert await hass.config_entries.async_unload(entry_raw_mac.entry_id)
+            await hass.async_block_till_done()
+
+        # Test mac matching branch: else for k in _validated.keys() with invalid mac exception
+        entry_fuzzy_mac = MockConfigEntry(
+            domain=DOMAIN,
+            data={"host": "192.168.0.35", "port": 20000, "password": "pass", "mac": "00:03:50:00:12:34"},
+            options={"file_path": tmp_path},
+            unique_id="00:03:50:00:12:34",
+        )
+        entry_fuzzy_mac.add_to_hass(hass)
+        mock_val_fuzzy = {
+            12345: {},
+            "000350001234": {CONF_PLATFORMS: {"light": {"01": {"where": "01"}}}},
+        }
+        with patch("custom_components.myhome.gateway.OWNSession.test_connection", return_value={"Success": True, "Message": None}), \
+             patch("custom_components.myhome.gateway.MyHOMEGatewayHandler.listening_loop"), \
+             patch("custom_components.myhome.gateway.MyHOMEGatewayHandler.sending_loop"), \
+             patch("custom_components.myhome.validate.config_schema", return_value=mock_val_fuzzy):
+            assert await hass.config_entries.async_setup(entry_fuzzy_mac.entry_id)
+            await hass.async_block_till_done()
+            assert await hass.config_entries.async_unload(entry_fuzzy_mac.entry_id)
+            await hass.async_block_till_done()
+
+
+        # Test fallback to /config/myhome.yaml (line 112)
+        config_entry_fallback = MockConfigEntry(
+            domain=DOMAIN,
+            data={
+                "host": "192.168.0.35",
+                "port": 20000,
+                "password": "pass",
+                "mac": "00:03:50:00:12:35",
+            },
+            unique_id="00:03:50:00:12:35",
+        )
+        config_entry_fallback.add_to_hass(hass)
+
+        def fake_isfile_fallback(path):
+            if str(path) == "/config/myhome.yaml":
+                return True
+            if "customize.yaml" in str(path):
+                return False
+            return False
+
+        with patch("custom_components.myhome.gateway.OWNSession.test_connection", return_value={"Success": True, "Message": None}), \
+             patch("custom_components.myhome.gateway.MyHOMEGatewayHandler.listening_loop"), \
+             patch("custom_components.myhome.gateway.MyHOMEGatewayHandler.sending_loop"), \
+             patch("os.path.isfile", side_effect=fake_isfile_fallback), \
+             patch("homeassistant.util.yaml.loader.load_yaml", side_effect=Exception("Corrupt YAML")):
+            assert await hass.config_entries.async_setup(config_entry_fallback.entry_id)
+            await hass.async_block_till_done()
+
+            assert await hass.config_entries.async_unload(config_entry_fallback.entry_id)
+            await hass.async_block_till_done()
+
+    finally:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+
+
 
 
 

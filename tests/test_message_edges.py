@@ -1,6 +1,7 @@
 """Tests targeting remaining uncovered branches in message.py to maximize coverage."""
 import pytest
 import datetime
+from unittest.mock import patch
 from custom_components.myhome.ownd.message import (
     OWNMessage,
     OWNEvent,
@@ -897,8 +898,8 @@ class TestMoreEdgeCoverage:
 
     def test_gateway_broadcasting_no_tz(self):
         # Empty tz field in dimension 22
-        evt = OWNGatewayEvent("*#13**#22*12*14*58**03*15*04*2026##")
-        assert evt._timezone == ""
+        cmd = OWNGatewayCommand("*#13**#22*12*14*58**03*15*04*2026##")
+        assert cmd._timezone == ""
 
     def test_energy_commands(self):
         now = datetime.date.today()
@@ -952,4 +953,88 @@ class TestMoreEdgeCoverage:
 
         sha256 = OWNSignaling("*98*2##")
         assert sha256.is_sha_256() is True
+        assert sha256.sha_version == "2"
+
+    def test_remaining_message_edges(self):
+        # 1. sha_version on non-sha
+        ack = OWNSignaling("*#*1##")
+        assert ack.sha_version is None
+
+        # 2. event_content with interface & extra where params (line 248)
+        msg1 = OWNEvent.parse("*1*1*21#4#01#99##")
+        if msg1:
+            d1 = msg1.event_content
+            assert "where parameters" in d1
+
+        # 3. event_content with what params (line 254)
+        msg2 = OWNEvent.parse("*1*1#10*21##")
+        if msg2:
+            d2 = msg2.event_content
+            assert "what parameters" in d2
+
+        # 4. event_content with dimension params (line 258)
+        msg3 = OWNEvent.parse("*#4*1*#14#1*0220##")
+        if msg3:
+            d3 = msg3.event_content
+            assert "dimension parameters" in d3
+
+        # 5. is_area ValueError handling
+        msg_va = OWNEvent("*1*1*1##")
+        msg_va._where = "A"
+        assert msg_va.is_area is False
+
+        # 6. Energy dimension 511 with date in past and leap year ValueError
+        past_511 = OWNEnergyEvent.parse("*#18*71*511#1#1*1*100##")
+        assert past_511 is not None
+        assert past_511._type is not None
+
+        # Feb 29 in leap year 2024 with today Jan 1 -> _raw_message_date in future -> 2023-02-29 raises ValueError
+        import time_machine
+        with time_machine.travel("2024-01-01"):
+            leap_err = OWNEnergyEvent.parse("*#18*71*511#2#29*1*100##")
+            assert leap_err is not None
+            assert getattr(leap_err, "_type", None) is None
+
+        # 7. Energy dimension 513 future (1417-1421) and past (1436-1440)
+        future_513 = OWNEnergyEvent.parse("*#18*71*513#12*1*100##")
+        assert future_513 is not None
+        assert future_513._type is not None
+        past_513 = OWNEnergyEvent.parse("*#18*71*513#1*1*100##")
+        assert past_513 is not None
+        assert past_513._type is not None
+
+        # 8. Energy dimension 514 future (1424-1428), past (1430-1434), and invalid day in 513 (1441-1442)
+        future_514 = OWNEnergyEvent.parse("*#18*71*514#12*1*100##")
+        assert future_514 is not None
+        assert future_514._type is not None
+        past_514 = OWNEnergyEvent.parse("*#18*71*514#1*1*100##")
+        assert past_514 is not None
+        assert past_514._type is not None
+        invalid_513 = OWNEnergyEvent.parse("*#18*71*513#1*32*100##")
+        assert getattr(invalid_513, "_type", None) is None
+
+        # 9. Gateway date dimension 22 without timezone (line 1998)
+        gw_cmd_no_tz = OWNGatewayCommand("*#13**#22*12*14*58**03*15*04*2026##")
+        assert gw_cmd_no_tz._timezone == ""
+        gw_evt_no_tz = OWNGatewayEvent("*#13**22*12*14*58**03*15*04*2026##")
+        assert gw_evt_no_tz._timezone == ""
+
+        # 10. OWNEnergyCommand get_daily_consumption branches (lines 2174, 2180, 2182, 2184, 2186)
+        now = datetime.date.today()
+        # Future date -> None
+        assert OWNEnergyCommand.get_daily_consumption("1", now.year + 1, 1) is None
+        # Within last year
+        cmd_1y = OWNEnergyCommand.get_daily_consumption("71", now.year, now.month)
+        if cmd_1y:
+            assert "*18*59#" in str(cmd_1y)
+        # Between 1 and 2 years ago
+        month_15_ago = (now.month - 3) if now.month > 3 else (now.month + 9)
+        year_15_ago = now.year - 1 if now.month > 3 else now.year - 2
+        cmd_2y = OWNEnergyCommand.get_daily_consumption("1", year_15_ago, month_15_ago)
+        assert cmd_2y is not None
+        assert "*18*510#" in str(cmd_2y)
+        # Older than 2 years -> None
+        assert OWNEnergyCommand.get_daily_consumption("1", now.year - 3, 1) is None
+
+
 

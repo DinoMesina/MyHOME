@@ -49,6 +49,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     restored_covers = []
 
     gateway = hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_ENTITY]
+    _configured_covers = hass.data[DOMAIN][config_entry.data[CONF_MAC]].get(CONF_PLATFORMS, {}).get(PLATFORM, {})
 
     for entry in existing_entries:
         if entry.domain == PLATFORM:
@@ -68,21 +69,69 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
                 interface = None
 
             clean_where = where.split('-')[-1]
+            cfg = _configured_covers.get(device_id) or _configured_covers.get(where) or _configured_covers.get(clean_where) or {}
+            _advanced = cfg.get("advanced_shutter", cfg.get(CONF_ADVANCED_SHUTTER, False))
+            _name = cfg.get(CONF_NAME, f"Cover {clean_where}")
             _cover = MyHOMECover(
                 hass=hass,
-                name=f"Cover {clean_where}",
-                entity_name=None,
+                name=_name,
+                entity_name=cfg.get(CONF_ENTITY_NAME),
                 device_id=device_id,
                 who="2",
                 where=where,
                 interface=interface,
-                advanced=False,
-                manufacturer="BTicino",
-                model="Shutter / Cover",
+                advanced=_advanced,
+                manufacturer=cfg.get(CONF_MANUFACTURER, "BTicino"),
+                model=cfg.get(CONF_DEVICE_MODEL, "Shutter / Cover"),
                 gateway=gateway,
             )
             known_covers.add(device_id)
             restored_covers.append(_cover)
+
+    # Also instantiate any configured covers from myhome.yaml not yet in registry
+    seen_configured_where = set()
+    for dev_id, cfg in _configured_covers.items():
+        where = str(cfg.get(CONF_WHERE, dev_id))
+        interface = cfg.get(CONF_BUS_INTERFACE)
+        device_where_id = f"{where}#4#{interface}" if interface else str(where)
+        clean_where = where.split("-")[-1]
+
+        if clean_where in seen_configured_where or device_where_id in known_covers or dev_id in known_covers:
+            continue
+        seen_configured_where.add(clean_where)
+
+        _name = cfg.get(CONF_NAME, f"Cover {clean_where}")
+        _advanced = cfg.get("advanced_shutter", cfg.get(CONF_ADVANCED_SHUTTER, False))
+        _cover = MyHOMECover(
+            hass=hass,
+            name=_name,
+            entity_name=cfg.get(CONF_ENTITY_NAME),
+            device_id=device_where_id,
+            who=str(cfg.get(CONF_WHO, "2")),
+            where=where,
+            interface=interface,
+            advanced=_advanced,
+            manufacturer=cfg.get(CONF_MANUFACTURER, "BTicino"),
+            model=cfg.get(CONF_DEVICE_MODEL, "Shutter / Cover"),
+            gateway=gateway,
+        )
+        known_covers.add(device_where_id)
+        known_covers.add(dev_id)
+        known_covers.add(clean_where)
+        restored_covers.append(_cover)
+
+        # Signal button platform to create Lock/Unlock buttons
+        async_dispatcher_send(
+            hass,
+            f"myhome_new_device_{config_entry.data[CONF_MAC]}",
+            {
+                "who": str(cfg.get(CONF_WHO, "2")),
+                "where": where,
+                "interface": interface,
+                "name": _name,
+                "device_id": device_where_id,
+            },
+        )
 
     if restored_covers:
         async_add_entities(restored_covers)
@@ -104,22 +153,32 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
         if unique_id not in known_covers:
             # We found a new cover!
             clean_where = where.split('-')[-1]
+            cfg = _configured_covers.get(unique_id) or _configured_covers.get(where) or _configured_covers.get(clean_where) or {}
+            _advanced = cfg.get("advanced_shutter", cfg.get(CONF_ADVANCED_SHUTTER, False))
+            _name = cfg.get(CONF_NAME, f"Cover {clean_where}")
             _cover = MyHOMECover(
                 hass=hass,
-                name=f"Cover {clean_where}",
-                entity_name=None,
+                name=_name,
+                entity_name=cfg.get(CONF_ENTITY_NAME),
                 device_id=unique_id,
                 who=str(message.who),
                 where=where,
                 interface=interface,
-                advanced=False,  # Can be handled by OptionsFlow overrides later
-                manufacturer="BTicino",
-                model="Shutter / Cover",
+                advanced=_advanced,
+                manufacturer=cfg.get(CONF_MANUFACTURER, "BTicino"),
+                model=cfg.get(CONF_DEVICE_MODEL, "Shutter / Cover"),
                 gateway=hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_ENTITY],
             )
             known_covers.add(unique_id)
             async_add_entities([_cover])
             _cover.handle_event(message)
+
+            # Signal button platform to create Lock/Unlock buttons if not present
+            async_dispatcher_send(
+                hass,
+                f"myhome_new_device_{config_entry.data[CONF_MAC]}",
+                {"who": "2", "where": where, "interface": interface, "name": _name, "device_id": unique_id}
+            )
             
         async_dispatcher_send(hass, f"myhome_update_{config_entry.data[CONF_MAC]}_2_{unique_id}", message)
 

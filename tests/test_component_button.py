@@ -262,3 +262,55 @@ async def test_button_entities_lifecycle_edge_cases(hass):
     await dis_btn.async_will_remove_from_hass()
     await en_btn.async_added_to_hass()
     await en_btn.async_will_remove_from_hass()
+
+
+async def test_button_additional_edge_coverage(hass):
+    """Test button edge cases: missing mac in hass.data, invalid where."""
+    config_entry = MagicMock()
+    config_entry.data = {"mac": "nonexistent"}
+
+    # mac not in hass.data
+    hass.data = {}
+    assert await async_setup_entry(hass, config_entry, MagicMock()) is True
+    assert await async_unload_entry(hass, config_entry) is True
+
+    # configured button with where starting with '#' (should return empty list)
+    mock_gateway = MagicMock()
+    mock_gateway.mac = "mac1"
+    hass.data = {
+        DOMAIN: {
+            "mac1": {
+                "platforms": {
+                    "button": {
+                        "area_device": {
+                            "who": "1",
+                            "where": "#1",
+                        }
+                    }
+                },
+                "entity": mock_gateway,
+            }
+        }
+    }
+    config_entry.data = {"mac": "mac1"}
+    added_entities = []
+    await async_setup_entry(hass, config_entry, lambda ents: added_entities.extend(ents))
+    # Area button with '#' ignored
+    assert len(added_entities) == 0
+
+    # Test dynamic device listener
+    from homeassistant.helpers.dispatcher import async_dispatcher_send
+    async_dispatcher_send(
+        hass,
+        "myhome_new_device_mac1",
+        {"who": "1", "where": "21", "name": "Light 21", "device_id": "21"},
+    )
+    assert len(added_entities) == 2  # lock + unlock
+
+    # Send duplicate device event (triggers line 58 return [])
+    async_dispatcher_send(
+        hass,
+        "myhome_new_device_mac1",
+        {"who": "1", "where": "21", "name": "Light 21", "device_id": "21"},
+    )
+    assert len(added_entities) == 2

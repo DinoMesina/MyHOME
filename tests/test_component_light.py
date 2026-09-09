@@ -36,7 +36,66 @@ from custom_components.myhome.const import (
     TRANSITION_MODE_AUTO,
     TRANSITION_MODE_NATIVE,
     TRANSITION_MODE_SOFTWARE,
+    CONF_PLATFORMS,
+    CONF_WHERE,
+    CONF_BUS_INTERFACE,
+    CONF_DIMMABLE,
+    CONF_ENTITY_NAME,
+    CONF_ICON,
+    CONF_ICON_ON,
 )
+from homeassistant.const import CONF_NAME
+
+
+async def test_setup_configured_lights_from_yaml(hass):
+    """Test setup instantiating configured lights from YAML with duplicate handling."""
+    mock_gateway = MagicMock()
+    mock_gateway.mac = "mac"
+    hass.data = {
+        DOMAIN: {
+            "mac": {
+                "entity": mock_gateway,
+                CONF_PLATFORMS: {
+                    "light": {
+                        "14": {
+                            CONF_WHERE: "14",
+                            CONF_NAME: "Configured Light 14",
+                            CONF_DIMMABLE: True,
+                            CONF_ENTITY_NAME: "Light 14",
+                            CONF_ICON: "mdi:lamp",
+                            CONF_ICON_ON: "mdi:lamp-outline",
+                        },
+                        "14_dup": {
+                            CONF_WHERE: "14",
+                        },
+                        "15#4#01": {
+                            CONF_WHERE: "15",
+                            CONF_BUS_INTERFACE: "01",
+                        },
+                    }
+                },
+            }
+        }
+    }
+    config_entry = MagicMock()
+    config_entry.data = {"mac": "mac"}
+    config_entry.entry_id = "test_entry"
+
+    with patch(
+        "custom_components.myhome.light.er.async_entries_for_config_entry",
+        return_value=[],
+    ), patch(
+        "custom_components.myhome.light.er.async_get",
+        return_value=MagicMock(),
+    ):
+        async_add_entities = MagicMock()
+        await async_setup_entry(hass, config_entry, async_add_entities)
+        async_add_entities.assert_called_once()
+        entities = async_add_entities.call_args[0][0]
+        assert len(entities) == 2
+        assert entities[0]._device_id == "14"
+        assert entities[1]._device_id == "15#4#01"
+
 
 async def test_setup_and_unload_entry(hass):
     """Test setup dynamically restoring and dynamically creating lights."""

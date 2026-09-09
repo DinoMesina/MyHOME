@@ -1,0 +1,379 @@
+"""Tests for myhome.yaml backwards-compatibility fallback, WHO 14 buttons, and Lovelace registration."""
+import os
+from unittest.mock import AsyncMock, MagicMock, patch
+import pytest
+import yaml
+
+from homeassistant.components.cover import CoverEntityFeature
+from homeassistant.config_entries import ConfigEntryState
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr, entity_registry as er
+from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+from custom_components.myhome.const import (
+    CONF_ADVANCED_SHUTTER,
+    CONF_DIMMABLE,
+    CONF_FILE_PATH,
+    CONF_PLATFORMS,
+    CONF_WHERE,
+    DOMAIN,
+)
+from custom_components.myhome.validate import config_schema
+
+
+SAMPLE_YAML_CONTENT = """
+00:03:50:81:22:33:
+  light:
+    living_room:
+      where: "12"
+      name: "Living Room Light"
+      dimmable: true
+  cover:
+    kitchen_blind:
+      where: "25"
+      name: "Kitchen Blind"
+      advanced_shutter: true
+"""
+
+
+def test_schema_without_mac_key_and_with_advanced_shutter():
+    """Test config_schema parses gateway without mac key and advanced_shutter alias."""
+    parsed = yaml.safe_load(SAMPLE_YAML_CONTENT)
+    validated = config_schema(parsed)
+
+    # Keyed by formatted mac
+    mac_key = "00:03:50:81:22:33"
+    assert mac_key in validated
+    assert "light" in validated[mac_key][CONF_PLATFORMS]
+    assert "cover" in validated[mac_key][CONF_PLATFORMS]
+    assert "button" in validated[mac_key][CONF_PLATFORMS]
+
+    # Verify cover has advanced_shutter parsed (rekeyed to who-where "2-25")
+    cover_cfg = validated[mac_key][CONF_PLATFORMS]["cover"]["2-25"]
+    assert cover_cfg.get("advanced_shutter") is True
+    assert cover_cfg.get("advanced") is True
+
+    # Verify buttons created for both light and cover
+    button_cfgs = validated[mac_key][CONF_PLATFORMS]["button"]
+    assert "1-12" in button_cfgs
+    assert "2-25" in button_cfgs
+
+
+async def test_setup_entry_with_yaml_fallback(hass: HomeAssistant, tmp_path):
+    """Test loading myhome.yaml fallback, entity seeding, and WHO 14 button pressing."""
+    yaml_file = tmp_path / "myhome.yaml"
+    yaml_file.write_text(SAMPLE_YAML_CONTENT, encoding="utf-8")
+
+    # Mock Lovelace resources collection
+    resources_list = []
+    mock_resources = MagicMock()
+    mock_resources.async_items = MagicMock(side_effect=lambda: list(resources_list))
+    async def _mock_create(item):
+        resources_list.append(item)
+    mock_resources.async_create_item = AsyncMock(side_effect=_mock_create)
+    hass.data["lovelace"] = MagicMock()
+    hass.data["lovelace"].resources = mock_resources
+
+    mac = "00:03:50:81:22:33"
+    config_entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            "host": "192.168.1.50",
+            "port": 20000,
+            "password": "12345",
+            "mac": mac,
+            "name": "F454",
+            "firmware": "2.0.0",
+        },
+        options={
+            CONF_FILE_PATH: str(yaml_file),
+        },
+        unique_id=mac,
+    )
+    config_entry.add_to_hass(hass)
+
+    with patch(
+        "custom_components.myhome.gateway.OWNSession.test_connection",
+        return_value={"Success": True, "Message": None},
+    ), patch(
+        "custom_components.myhome.gateway.MyHOMEGatewayHandler.listening_loop"
+    ), patch(
+        "custom_components.myhome.gateway.MyHOMEGatewayHandler.sending_loop"
+    ):
+        mock_send = AsyncMock()
+        with patch("custom_components.myhome.gateway.MyHOMEGatewayHandler.send", mock_send):
+            assert await hass.config_entries.async_setup(config_entry.entry_id)
+            await hass.async_block_till_done()
+
+            assert config_entry.state is ConfigEntryState.LOADED
+
+            # Check Lovelace card registration was triggered
+            mock_resources.async_create_item.assert_called_once_with({
+                "res_type": "module",
+                "url": "/myhome_static/myhome-bus-card.js",
+            })
+
+            # Check entities were added
+            ent_reg = er.async_get(hass)
+            entries = er.async_entries_for_config_entry(ent_reg, config_entry.entry_id)
+            domains = {e.domain for e in entries}
+            assert "light" in domains
+            assert "cover" in domains
+            assert "button" in domains
+
+            # Find buttons and test WHO 14 press
+            buttons = [e for e in entries if e.domain == "button"]
+            assert len(buttons) >= 4  # Lock + Unlock for light and cover
+
+            # Retrieve button entities from hass.data
+            platforms = hass.data[DOMAIN][mac][CONF_PLATFORMS]
+            assert "button" in platforms
+
+            # Test pressing Lock on light 12 -> sends *14*0*12##
+            button_entities = []
+            for dev_id, dev_data in platforms.get("button", {}).items():
+                if "entities" in dev_data:
+                    button_entities.extend(dev_data["entities"].values())
+
+            # Find disable/enable button entities
+            for btn in button_entities:
+                await btn.async_press()
+
+            # Verify send was called with *14*
+            sent_frames = [str(call.args[0]) for call in mock_send.call_args_list]
+            assert any("*14*0*12##" in f for f in sent_frames)
+            assert any("*14*1*12##" in f for f in sent_frames)
+            assert any("*14*0*25##" in f for f in sent_frames)
+            assert any("*14*1*25##" in f for f in sent_frames)
+
+            # Cleanup
+            assert await hass.config_entries.async_unload(config_entry.entry_id)
+            await hass.async_block_till_done()
+
+
+async def test_yaml_fallback_default_locations(hass: HomeAssistant, tmp_path):
+    """Test fallback search paths when file_path option is not provided."""
+    fake_config_dir = tmp_path / "config"
+    fake_config_dir.mkdir()
+    yaml_file = fake_config_dir / "myhome.yaml"
+    yaml_file.write_text(SAMPLE_YAML_CONTENT, encoding="utf-8")
+
+    mac = "00:03:50:81:22:33"
+    config_entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            "host": "192.168.1.50",
+            "port": 20000,
+            "password": "12345",
+            "mac": mac,
+            "name": "F454",
+            "firmware": "2.0.0",
+        },
+        options={},
+        unique_id=mac,
+    )
+    config_entry.add_to_hass(hass)
+
+    with patch.object(hass.config, "path", return_value=str(yaml_file)), patch(
+        "custom_components.myhome.gateway.OWNSession.test_connection",
+        return_value={"Success": True, "Message": None},
+    ), patch(
+        "custom_components.myhome.gateway.MyHOMEGatewayHandler.listening_loop"
+    ), patch(
+        "custom_components.myhome.gateway.MyHOMEGatewayHandler.sending_loop"
+    ):
+        assert await hass.config_entries.async_setup(config_entry.entry_id)
+        await hass.async_block_till_done()
+
+        # Platforms should have been seeded from myhome.yaml
+        assert mac in hass.data[DOMAIN]
+        platforms = hass.data[DOMAIN][mac][CONF_PLATFORMS]
+        assert "light" in platforms
+        assert "cover" in platforms
+
+        assert await hass.config_entries.async_unload(config_entry.entry_id)
+        await hass.async_block_till_done()
+
+
+async def test_device_registry_migration_from_legacy(hass: HomeAssistant):
+    """Test transparent migration of device_registry identifiers from {mac}-{where} to {mac}-{who}-{where}."""
+    mac = "00:03:50:81:22:33"
+    dev_reg = dr.async_get(hass)
+    ent_reg = er.async_get(hass)
+
+    config_entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            "host": "192.168.1.50",
+            "port": 20000,
+            "password": "12345",
+            "mac": mac,
+            "name": "F454",
+            "firmware": "2.0.0",
+        },
+        options={},
+        unique_id=mac,
+    )
+    config_entry.add_to_hass(hass)
+
+    # Create legacy device and entity
+    legacy_device = dev_reg.async_get_or_create(
+        config_entry_id=config_entry.entry_id,
+        identifiers={(DOMAIN, f"{mac}-12")},
+        name="Old Light Device",
+    )
+    legacy_entity = ent_reg.async_get_or_create(
+        domain="light",
+        platform=DOMAIN,
+        unique_id=f"{mac}-12",
+        config_entry=config_entry,
+        device_id=legacy_device.id,
+    )
+
+    with patch(
+        "custom_components.myhome.gateway.OWNSession.test_connection",
+        return_value={"Success": True, "Message": None},
+    ), patch(
+        "custom_components.myhome.gateway.MyHOMEGatewayHandler.listening_loop"
+    ), patch(
+        "custom_components.myhome.gateway.MyHOMEGatewayHandler.sending_loop"
+    ):
+        assert await hass.config_entries.async_setup(config_entry.entry_id)
+        await hass.async_block_till_done()
+
+        # Check that entity unique_id was migrated
+        migrated_entry = ent_reg.async_get(legacy_entity.entity_id)
+        assert migrated_entry.unique_id == f"{mac}-1-12"
+
+        # Check that device identifier was migrated
+        updated_device = dev_reg.async_get(legacy_device.id)
+        assert (DOMAIN, f"{mac}-1-12") in updated_device.identifiers
+
+        assert await hass.config_entries.async_unload(config_entry.entry_id)
+        await hass.async_block_till_done()
+
+
+async def test_lovelace_registration_exception(hass: HomeAssistant):
+    """Test exception handling during Lovelace resource auto-registration."""
+    mock_resources = MagicMock()
+    mock_resources.async_items.return_value = []
+    mock_resources.async_create_item = AsyncMock(side_effect=Exception("Lovelace storage write failure"))
+    hass.data["lovelace"] = MagicMock()
+    hass.data["lovelace"].resources = mock_resources
+
+    from custom_components.myhome import _async_register_frontend
+    # Should safely swallow exception and log debug without raising
+    await _async_register_frontend(hass)
+
+
+async def test_yaml_root_config_fallback_and_missing_where(hass: HomeAssistant, tmp_path):
+    """Test /config/myhome.yaml fallback, where-less device dictionaries, and unformatted MAC matching."""
+    yaml_content = """
+000350812233:
+  light:
+    "12":
+      name: "Light 12 No Where"
+"""
+    yaml_file = tmp_path / "myhome.yaml"
+    yaml_file.write_text(yaml_content, encoding="utf-8")
+
+    mac = "00:03:50:81:22:33"
+    config_entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            "host": "192.168.1.50",
+            "port": 20000,
+            "password": "12345",
+            "mac": mac,
+            "name": "F454",
+            "firmware": "2.0.0",
+        },
+        options={},
+        unique_id=mac,
+    )
+    config_entry.add_to_hass(hass)
+
+    real_isfile = os.path.isfile
+    def fake_isfile(path):
+        if str(path) == "/config/myhome.yaml":
+            return True
+        if str(path) == str(yaml_file):
+            return True
+        return real_isfile(path)
+
+    with patch("os.path.isfile", side_effect=fake_isfile), \
+         patch("homeassistant.util.yaml.loader.load_yaml", return_value=yaml.safe_load(yaml_content)), \
+         patch("custom_components.myhome.gateway.OWNSession.test_connection", return_value={"Success": True, "Message": None}), \
+         patch("custom_components.myhome.gateway.MyHOMEGatewayHandler.listening_loop"), \
+         patch("custom_components.myhome.gateway.MyHOMEGatewayHandler.sending_loop"):
+        assert await hass.config_entries.async_setup(config_entry.entry_id)
+        await hass.async_block_till_done()
+
+        assert "light" in hass.data[DOMAIN][mac][CONF_PLATFORMS]
+        assert await hass.config_entries.async_unload(config_entry.entry_id)
+        await hass.async_block_till_done()
+
+
+async def test_yaml_load_error_and_device_migration_error(hass: HomeAssistant, tmp_path):
+    """Test graceful error handling when load_yaml or device migration fails."""
+    yaml_file = tmp_path / "bad.yaml"
+    yaml_file.write_text("corrupted content: [", encoding="utf-8")
+
+    mac = "00:03:50:81:22:33"
+    dev_reg = dr.async_get(hass)
+    ent_reg = er.async_get(hass)
+
+    config_entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            "host": "192.168.1.50",
+            "port": 20000,
+            "password": "12345",
+            "mac": mac,
+            "name": "F454",
+            "firmware": "2.0.0",
+        },
+        options={
+            CONF_FILE_PATH: str(yaml_file),
+        },
+        unique_id=mac,
+    )
+    config_entry.add_to_hass(hass)
+
+    # Legacy device to trigger migration error
+    legacy_device = dev_reg.async_get_or_create(
+        config_entry_id=config_entry.entry_id,
+        identifiers={(DOMAIN, f"{mac}-14")},
+        name="Old Light 14",
+    )
+    ent_reg.async_get_or_create(
+        domain="light",
+        platform=DOMAIN,
+        unique_id=f"{mac}-14",
+        config_entry=config_entry,
+        device_id=legacy_device.id,
+    )
+
+    orig_update = dev_reg.async_update_device
+    call_count = [0]
+    def fake_update(*args, **kwargs):
+        call_count[0] += 1
+        if call_count[0] == 1:
+            raise Exception("Database lock error")
+        return orig_update(*args, **kwargs)
+
+    with patch(
+        "custom_components.myhome.gateway.OWNSession.test_connection",
+        return_value={"Success": True, "Message": None},
+    ), patch(
+        "custom_components.myhome.gateway.MyHOMEGatewayHandler.listening_loop"
+    ), patch(
+        "custom_components.myhome.gateway.MyHOMEGatewayHandler.sending_loop"
+    ), patch.object(
+        dev_reg, "async_update_device", side_effect=fake_update
+    ):
+        # Should complete setup smoothly without crashing
+        assert await hass.config_entries.async_setup(config_entry.entry_id)
+        await hass.async_block_till_done()
+        assert await hass.config_entries.async_unload(config_entry.entry_id)
+        await hass.async_block_till_done()

@@ -66,6 +66,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     restored_lights = []
 
     gateway = hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_ENTITY]
+    _configured_lights = hass.data[DOMAIN][config_entry.data[CONF_MAC]].get(CONF_PLATFORMS, {}).get(PLATFORM, {})
 
     for entry in existing_entries:
         if entry.domain == PLATFORM:
@@ -84,29 +85,83 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
                 where = device_id
                 interface = None
 
-            _customs = hass.data.get(DOMAIN, {}).get("customizations", {})
             clean_where = where.split('-')[-1]
+            cfg = _configured_lights.get(device_id) or _configured_lights.get(where) or _configured_lights.get(clean_where) or {}
+
+            _customs = hass.data.get(DOMAIN, {}).get("customizations", {})
             _predicted_id = f"light.light_{clean_where.replace(' ', '_')}"
             _custom_entry = _customs.get(entry.entity_id, {}) or _customs.get(_predicted_id, {})
-            _is_dimmable = _custom_entry.get("dimmable", False)
+            _is_dimmable = cfg.get(CONF_DIMMABLE, _custom_entry.get("dimmable", False))
+            _name = cfg.get(CONF_NAME, f"Light {clean_where}")
+            _entity_name = cfg.get(CONF_ENTITY_NAME)
+            _icon = cfg.get(CONF_ICON)
+            _icon_on = cfg.get(CONF_ICON_ON)
+            _manufacturer = cfg.get(CONF_MANUFACTURER, "BTicino")
+            _model = cfg.get(CONF_DEVICE_MODEL, "Lighting Device")
 
             _light = MyHOMELight(
                 hass=hass,
-                name=f"Light {clean_where}",
-                entity_name=None,
-                icon=None,
-                icon_on=None,
+                name=_name,
+                entity_name=_entity_name,
+                icon=_icon,
+                icon_on=_icon_on,
                 device_id=device_id,
                 who="1",
                 where=where,
                 interface=interface,
                 dimmable=_is_dimmable,
-                manufacturer="BTicino",
-                model="Lighting Device",
+                manufacturer=_manufacturer,
+                model=_model,
                 gateway=gateway,
             )
             known_lights.add(device_id)
             restored_lights.append(_light)
+
+    # Also instantiate any configured lights from myhome.yaml not yet in registry
+    seen_configured_where = set()
+    for dev_id, cfg in _configured_lights.items():
+        where = str(cfg.get(CONF_WHERE, dev_id))
+        interface = cfg.get(CONF_BUS_INTERFACE)
+        device_where_id = f"{where}#4#{interface}" if interface else str(where)
+        clean_where = where.split("-")[-1]
+
+        if clean_where in seen_configured_where or device_where_id in known_lights or dev_id in known_lights:
+            continue
+        seen_configured_where.add(clean_where)
+
+        _name = cfg.get(CONF_NAME, f"Light {clean_where}")
+        _light = MyHOMELight(
+            hass=hass,
+            name=_name,
+            entity_name=cfg.get(CONF_ENTITY_NAME),
+            icon=cfg.get(CONF_ICON),
+            icon_on=cfg.get(CONF_ICON_ON),
+            device_id=device_where_id,
+            who=str(cfg.get(CONF_WHO, "1")),
+            where=where,
+            interface=interface,
+            dimmable=cfg.get(CONF_DIMMABLE, False),
+            manufacturer=cfg.get(CONF_MANUFACTURER, "BTicino"),
+            model=cfg.get(CONF_DEVICE_MODEL, "Lighting Device"),
+            gateway=gateway,
+        )
+        known_lights.add(device_where_id)
+        known_lights.add(dev_id)
+        known_lights.add(clean_where)
+        restored_lights.append(_light)
+
+        # Signal button platform to create Lock/Unlock buttons
+        async_dispatcher_send(
+            hass,
+            f"myhome_new_device_{config_entry.data[CONF_MAC]}",
+            {
+                "who": str(cfg.get(CONF_WHO, "1")),
+                "where": where,
+                "interface": interface,
+                "name": _name,
+                "device_id": device_where_id,
+            },
+        )
 
     if restored_lights:
         async_add_entities(restored_lights)
@@ -127,10 +182,13 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
 
         if unique_id not in known_lights:
             # We found a new light!
-            _customs = hass.data.get(DOMAIN, {}).get("customizations", {})
             clean_where = where.split('-')[-1]
+            cfg = _configured_lights.get(unique_id) or _configured_lights.get(where) or _configured_lights.get(clean_where) or {}
+
+            _customs = hass.data.get(DOMAIN, {}).get("customizations", {})
             _predicted_id = f"light.light_{clean_where.replace(' ', '_')}"
-            _is_dimmable = _customs.get(_predicted_id, {}).get("dimmable", False)
+            _custom_entry = _customs.get(_predicted_id, {})
+            _is_dimmable = cfg.get(CONF_DIMMABLE, _custom_entry.get("dimmable", False))
 
             # Auto-detect dimmer from the first protocol message
             if not _is_dimmable:
@@ -139,25 +197,39 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
                     or message.brightness_preset is not None
                 )
 
+            _name = cfg.get(CONF_NAME, f"Light {clean_where}")
+            _entity_name = cfg.get(CONF_ENTITY_NAME)
+            _icon = cfg.get(CONF_ICON)
+            _icon_on = cfg.get(CONF_ICON_ON)
+            _manufacturer = cfg.get(CONF_MANUFACTURER, "BTicino")
+            _model = cfg.get(CONF_DEVICE_MODEL, "Lighting Device")
+
             _light = MyHOMELight(
                 hass=hass,
-                name=f"Light {clean_where}",
-                entity_name=None,
-                icon=None,
-                icon_on=None,
+                name=_name,
+                entity_name=_entity_name,
+                icon=_icon,
+                icon_on=_icon_on,
                 device_id=unique_id,
                 who=str(message.who),
                 where=where,
                 interface=interface,
                 dimmable=_is_dimmable,
-                manufacturer="BTicino",
-                model="Lighting Device",
+                manufacturer=_manufacturer,
+                model=_model,
                 gateway=hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_ENTITY],
             )
             known_lights.add(unique_id)
             async_add_entities([_light])
             _light.handle_event(message)
-            
+
+            # Signal button platform to create Lock/Unlock buttons if not present
+            async_dispatcher_send(
+                hass,
+                f"myhome_new_device_{config_entry.data[CONF_MAC]}",
+                {"who": "1", "where": where, "interface": interface, "name": _name, "device_id": unique_id}
+            )
+
         async_dispatcher_send(hass, f"myhome_update_{config_entry.data[CONF_MAC]}_1_{unique_id}", message)
 
     @callback

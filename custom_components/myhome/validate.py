@@ -177,30 +177,31 @@ class MyHomeConfigSchema(Schema):
         data = super().__call__(data)
         _rekeyed_data = {}
         for gateway in data:
-            _rekeyed_data[data[gateway][CONF_MAC]] = {}
-            _rekeyed_data[data[gateway][CONF_MAC]][CONF_PLATFORMS] = {}
+            gateway_mac = data[gateway].get(CONF_MAC) or format_mac(gateway) or gateway
+            _rekeyed_data[gateway_mac] = {}
+            _rekeyed_data[gateway_mac][CONF_PLATFORMS] = {}
             for platform in data[gateway]:
                 if platform != CONF_MAC:
-                    _rekeyed_data[data[gateway][CONF_MAC]][CONF_PLATFORMS][platform] = data[gateway][platform]
+                    _rekeyed_data[gateway_mac][CONF_PLATFORMS][platform] = data[gateway][platform]
 
             if (
-                (LIGHT in _rekeyed_data[data[gateway][CONF_MAC]][CONF_PLATFORMS])
-                or (SWITCH in _rekeyed_data[data[gateway][CONF_MAC]][CONF_PLATFORMS])
-                or (COVER in _rekeyed_data[data[gateway][CONF_MAC]][CONF_PLATFORMS])
+                (LIGHT in _rekeyed_data[gateway_mac][CONF_PLATFORMS])
+                or (SWITCH in _rekeyed_data[gateway_mac][CONF_PLATFORMS])
+                or (COVER in _rekeyed_data[gateway_mac][CONF_PLATFORMS])
             ):
-                _rekeyed_data[data[gateway][CONF_MAC]][CONF_PLATFORMS][BUTTON] = {}
-                if LIGHT in _rekeyed_data[data[gateway][CONF_MAC]][CONF_PLATFORMS]:
-                    for key, value in _rekeyed_data[data[gateway][CONF_MAC]][CONF_PLATFORMS][LIGHT].items():
+                _rekeyed_data[gateway_mac][CONF_PLATFORMS][BUTTON] = {}
+                if LIGHT in _rekeyed_data[gateway_mac][CONF_PLATFORMS]:
+                    for key, value in _rekeyed_data[gateway_mac][CONF_PLATFORMS][LIGHT].items():
                         if not value[CONF_WHERE].startswith("#"):
-                            _rekeyed_data[data[gateway][CONF_MAC]][CONF_PLATFORMS][BUTTON][key] = value
-                if SWITCH in _rekeyed_data[data[gateway][CONF_MAC]][CONF_PLATFORMS]:
-                    for key, value in _rekeyed_data[data[gateway][CONF_MAC]][CONF_PLATFORMS][SWITCH].items():
+                            _rekeyed_data[gateway_mac][CONF_PLATFORMS][BUTTON][key] = value
+                if SWITCH in _rekeyed_data[gateway_mac][CONF_PLATFORMS]:
+                    for key, value in _rekeyed_data[gateway_mac][CONF_PLATFORMS][SWITCH].items():
                         if not value[CONF_WHERE].startswith("#"):
-                            _rekeyed_data[data[gateway][CONF_MAC]][CONF_PLATFORMS][BUTTON][key] = value
-                if COVER in _rekeyed_data[data[gateway][CONF_MAC]][CONF_PLATFORMS]:
-                    for key, value in _rekeyed_data[data[gateway][CONF_MAC]][CONF_PLATFORMS][COVER].items():
+                            _rekeyed_data[gateway_mac][CONF_PLATFORMS][BUTTON][key] = value
+                if COVER in _rekeyed_data[gateway_mac][CONF_PLATFORMS]:
+                    for key, value in _rekeyed_data[gateway_mac][CONF_PLATFORMS][COVER].items():
                         if not value[CONF_WHERE].startswith("#"):
-                            _rekeyed_data[data[gateway][CONF_MAC]][CONF_PLATFORMS][BUTTON][key] = value
+                            _rekeyed_data[gateway_mac][CONF_PLATFORMS][BUTTON][key] = value
 
         return _rekeyed_data
 
@@ -234,6 +235,8 @@ class MyHomeDeviceSchema(Schema):
                 data[device][CONF_ICON_ON] = None
             if CONF_ENTITY_NAME not in data[device]:
                 data[device][CONF_ENTITY_NAME] = None
+            if "advanced_shutter" in data[device] and data[device]["advanced_shutter"]:
+                data[device][CONF_ADVANCED_SHUTTER] = True
 
         return _rekeyed_data
 
@@ -336,6 +339,7 @@ cover_schema = MyHomeDeviceSchema(
             Required(CONF_NAME): str,
             Optional(CONF_ENTITY_NAME): str,
             Optional(CONF_ADVANCED_SHUTTER, default=False): Boolean(),
+            Optional("advanced_shutter", default=False): Boolean(),
             Optional(CONF_MANUFACTURER, default="BTicino S.p.A."): str,
             Optional(CONF_DEVICE_MODEL): Coerce(str),
         }
@@ -429,7 +433,7 @@ climate_schema = MyHomeDeviceSchema(
 # them in plain callables to force the subclass __call__ to run.
 gateway_schema = Schema(
     {
-        Required(CONF_MAC): MacAddress(),
+        Optional(CONF_MAC): MacAddress(),
         Optional(LIGHT): lambda v: light_schema(v),
         Optional(SWITCH): lambda v: switch_schema(v),
         Optional(COVER): lambda v: cover_schema(v),

@@ -17,6 +17,8 @@ from homeassistant.const import (
     CONF_ENTITIES,
     EntityCategory,
 )
+from homeassistant.core import callback
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
 from .const import (
     CONF_PLATFORMS,
@@ -32,66 +34,98 @@ from .myhome_device import MyHOMEEntity
 
 
 async def async_setup_entry(hass, config_entry, async_add_entities):
-    if PLATFORM not in hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS]:
+    mac = config_entry.data.get(CONF_MAC)
+    if not mac or mac not in hass.data.get(DOMAIN, {}):
+        return True
+    if PLATFORM not in hass.data[DOMAIN][mac].get(CONF_PLATFORMS, {}):
         return True
 
     _buttons = []
-    _configured_buttons = hass.data[DOMAIN][config_entry.data[CONF_MAC]][
-        CONF_PLATFORMS
-    ][PLATFORM]
+    _configured_buttons = hass.data[DOMAIN][mac][CONF_PLATFORMS][PLATFORM]
+    gateway = hass.data[DOMAIN][mac].get(CONF_ENTITY)
+
+    known_button_actuators = set()
+
+    def _create_buttons_for_device(dev_id, cfg):
+        who = str(cfg.get(CONF_WHO, "1"))
+        where = str(cfg.get(CONF_WHERE, dev_id))
+        interface = cfg.get(CONF_BUS_INTERFACE) if CONF_BUS_INTERFACE in cfg else cfg.get("interface")
+        if not where or str(where).startswith("#"):
+            return []
+
+        actuator_key = f"{who}-{where}#4#{interface}" if interface else f"{who}-{where}"
+        if actuator_key in known_button_actuators:
+            return []
+        known_button_actuators.add(actuator_key)
+
+        name = cfg.get(CONF_NAME, f"Device {where}")
+        manufacturer = cfg.get(CONF_MANUFACTURER, "BTicino")
+        model = cfg.get(CONF_DEVICE_MODEL, "Actuator")
+        device_id = dev_id or (f"{where}#4#{interface}" if interface else str(where))
+
+        disable_button = DisableCommandButtonEntity(
+            hass=hass,
+            platform=PLATFORM,
+            device_id=device_id,
+            who=who,
+            where=where,
+            interface=interface,
+            name=name,
+            manufacturer=manufacturer,
+            model=model,
+            gateway=gateway,
+        )
+        enable_button = EnableCommandButtonEntity(
+            hass=hass,
+            platform=PLATFORM,
+            device_id=device_id,
+            who=who,
+            where=where,
+            interface=interface,
+            name=name,
+            manufacturer=manufacturer,
+            model=model,
+            gateway=gateway,
+        )
+        return [disable_button, enable_button]
 
     for _button in list(_configured_buttons.keys()):
-        _disable_button = DisableCommandButtonEntity(
-            hass=hass,
-            platform=PLATFORM,
-            device_id=_button,
-            who=_configured_buttons[_button][CONF_WHO],
-            where=_configured_buttons[_button][CONF_WHERE],
-            interface=(
-                _configured_buttons[_button][CONF_BUS_INTERFACE]
-                if CONF_BUS_INTERFACE in _configured_buttons[_button]
-                else None
-            ),
-            name=_configured_buttons[_button][CONF_NAME],
-            manufacturer=_configured_buttons[_button][CONF_MANUFACTURER],
-            model=_configured_buttons[_button][CONF_DEVICE_MODEL],
-            gateway=hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_ENTITY],
-        )
-        _buttons.append(_disable_button)
+        _buttons.extend(_create_buttons_for_device(_button, _configured_buttons[_button]))
 
-        _enable_button = EnableCommandButtonEntity(
-            hass=hass,
-            platform=PLATFORM,
-            device_id=_button,
-            who=_configured_buttons[_button][CONF_WHO],
-            where=_configured_buttons[_button][CONF_WHERE],
-            interface=(
-                _configured_buttons[_button][CONF_BUS_INTERFACE]
-                if CONF_BUS_INTERFACE in _configured_buttons[_button]
-                else None
-            ),
-            name=_configured_buttons[_button][CONF_NAME],
-            manufacturer=_configured_buttons[_button][CONF_MANUFACTURER],
-            model=_configured_buttons[_button][CONF_DEVICE_MODEL],
-            gateway=hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_ENTITY],
-        )
-        _buttons.append(_enable_button)
+    if _buttons:
+        async_add_entities(_buttons)
 
-    async_add_entities(_buttons)
+    @callback
+    def _async_new_device_listener(dev_info):
+        """Add lock/unlock buttons dynamically for newly discovered or configured devices."""
+        new_btns = _create_buttons_for_device(dev_info.get("device_id"), dev_info)
+        if new_btns:
+            async_add_entities(new_btns)
+
+    if hasattr(config_entry, "async_on_unload"):
+        config_entry.async_on_unload(
+            async_dispatcher_connect(
+                hass,
+                f"myhome_new_device_{mac}",
+                _async_new_device_listener,
+            )
+        )
+
+    return True
 
 
 async def async_unload_entry(hass, config_entry):
-    if PLATFORM not in hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS]:
+    mac = config_entry.data.get(CONF_MAC)
+    if not mac or mac not in hass.data.get(DOMAIN, {}):
+        return True
+    if PLATFORM not in hass.data[DOMAIN][mac].get(CONF_PLATFORMS, {}):
         return True
 
-    _configured_buttons = hass.data[DOMAIN][config_entry.data[CONF_MAC]][
-        CONF_PLATFORMS
-    ][PLATFORM]
+    _configured_buttons = hass.data[DOMAIN][mac][CONF_PLATFORMS][PLATFORM]
 
     for _button in list(_configured_buttons.keys()):
-        del hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS][PLATFORM][
-            _button
-        ]
+        del hass.data[DOMAIN][mac][CONF_PLATFORMS][PLATFORM][_button]
+    return True
 
 
 class DisableCommandButtonEntity(ButtonEntity, MyHOMEEntity):
