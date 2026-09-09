@@ -32,6 +32,15 @@ class MyHomeBusCard extends HTMLElement {
     };
   }
 
+  static getConfigForm() {
+    return {
+      schema: [
+        { name: "title", label: "Title", selector: { text: {} } },
+        { name: "max_frames", label: "Max Frames in Buffer", selector: { number: { min: 50, max: 1000, step: 50, mode: "box" } } },
+      ],
+    };
+  }
+
   setConfig(config) {
     this._config = Object.assign(
       {
