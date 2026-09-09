@@ -333,6 +333,34 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
+    # Prune orphaned devices with 0 entities from the device registry
+    try:
+        gateway_dev_id = getattr(gateway_device_entry, "id", None)
+        gateway_handler = hass.data[DOMAIN][entry.data[CONF_MAC]][CONF_ENTITY]
+        gateway_unique_id = getattr(gateway_handler, "unique_id", None)
+        gateway_id = getattr(gateway_handler, "id", None)
+        for dev in list(device_registry.devices.values()):
+            if entry.entry_id in dev.config_entries:
+                if dev.id == gateway_dev_id:
+                    continue
+                if gateway_unique_id and (DOMAIN, gateway_unique_id) in dev.identifiers:
+                    continue
+                if gateway_id and (DOMAIN, gateway_id) in dev.identifiers:
+                    continue
+                dev_entries = er.async_entries_for_device(
+                    entity_registry, dev.id, include_disabled_entities=True
+                )
+                if len(dev_entries) == 0:
+                    LOGGER.info(
+                        "Pruning empty orphaned MyHOME device from registry: %s (%s)",
+                        dev.name,
+                        dev.id,
+                    )
+                    device_registry.async_remove_device(dev.id)
+    except Exception as err:
+        LOGGER.debug("Error during empty device pruning: %s", err)
+
+
     # ── Register options reload listener (rebuilds decoder pool on UI save) ──
     async def _async_options_updated(hass: HomeAssistant, entry: ConfigEntry) -> None:
         """Rebuild the decoder pool when the user saves new options via the UI.

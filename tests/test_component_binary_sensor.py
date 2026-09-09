@@ -532,3 +532,190 @@ async def test_binary_sensor_registry_exception(hass):
         assert await async_setup_entry(hass, config_entry, lambda e: added.extend(e)) is True
 
 
+async def test_dry_contact_garage_door_deduplication_and_zero_padded_where(hass):
+    """Test dry contact garage door deduplication of legacy registry entries and zero-padded WHERE frames."""
+    from custom_components.myhome.ownd.message import OWNEvent
+    from homeassistant.helpers.dispatcher import async_dispatcher_send
+
+    mac = "00:03:50:00:25:99"
+    mock_gateway = MagicMock()
+    mock_gateway.mac = mac
+    mock_gateway.send_status_request = AsyncMock()
+
+    hass.data = {
+        DOMAIN: {
+            mac: {
+                "platforms": {
+                    "binary_sensor": {
+                        "garage_door": {
+                            "who": "25",
+                            "where": "21",
+                            "name": "Garage Door",
+                            "entity_name": "Garage Door",
+                            "inverted": False,
+                            "class": BinarySensorDeviceClass.GARAGE_DOOR,
+                            "manufacturer": "BTicino",
+                            "model": "Dry Contact",
+                        },
+                        "21": {
+                            "who": "25",
+                            "where": "21",
+                            "name": "Garage Door",
+                            "entity_name": "Garage Door",
+                            "inverted": False,
+                            "class": BinarySensorDeviceClass.GARAGE_DOOR,
+                            "manufacturer": "BTicino",
+                            "model": "Dry Contact",
+                        },
+                    }
+                },
+                "entity": mock_gateway,
+            }
+        }
+    }
+    config_entry = MagicMock()
+    config_entry.data = {"mac": mac}
+    config_entry.entry_id = "test_garage_door_entry"
+
+    # Simulate existing entries in registry:
+    # 1. New v2 entry
+    entry_v2 = MagicMock()
+    entry_v2.domain = "binary_sensor"
+    entry_v2.entity_id = "binary_sensor.garage_door"
+    entry_v2.unique_id = f"{mac}-garage_door-garage_door"
+    entry_v2.original_device_class = BinarySensorDeviceClass.GARAGE_DOOR
+
+    # 2. Legacy duplicate entry that caused Device 3
+    entry_legacy = MagicMock()
+    entry_legacy.domain = "binary_sensor"
+    entry_legacy.entity_id = "binary_sensor.dry_contact_garage_door"
+    entry_legacy.unique_id = f"{mac}-25-garage_door"
+    entry_legacy.original_device_class = BinarySensorDeviceClass.OPENING
+
+    mock_er = MagicMock()
+
+    with patch(
+        "custom_components.myhome.binary_sensor.er.async_entries_for_config_entry",
+        return_value=[entry_v2, entry_legacy],
+    ), patch(
+        "custom_components.myhome.binary_sensor.er.async_get",
+        return_value=mock_er,
+    ):
+        added = []
+        assert await async_setup_entry(hass, config_entry, lambda e: added.extend(e)) is True
+        # Stale duplicate entry must be removed from ER
+        mock_er.async_remove.assert_called_with("binary_sensor.dry_contact_garage_door")
+        # Exactly 1 dry contact entity added
+        assert len(added) == 1
+        bs = added[0]
+        assert bs._where == "21"
+        assert bs._device_id == "garage_door"
+
+        bs.hass = hass
+        await bs.async_added_to_hass()
+
+        # Send zero-padded frame *25*31#1*0021## (ON)
+        msg_on = OWNEvent.parse("*25*31#1*0021##")
+        async_dispatcher_send(hass, f"myhome_message_{mac}", msg_on)
+        await hass.async_block_till_done()
+        assert bs.is_on is True
+
+        # Send zero-padded frame *25*32#1*0021## (OFF)
+        msg_off = OWNEvent.parse("*25*32#1*0021##")
+        async_dispatcher_send(hass, f"myhome_message_{mac}", msg_off)
+        await hass.async_block_till_done()
+        assert bs.is_on is False
+
+
+async def test_motion_sensor_zero_padded_where_and_legrand_048834_frames(hass):
+    """Test motion sensor handles zero-padded frames (*1*34*0015##, *#1*0015*5*2##, *#1*0015*7*0*0*10##) and defaults to False."""
+    from custom_components.myhome.ownd.message import OWNEvent
+    from homeassistant.helpers.dispatcher import async_dispatcher_send
+
+    mac = "00:03:50:00:15:99"
+    mock_gateway = MagicMock()
+    mock_gateway.mac = mac
+    mock_gateway.send_status_request = AsyncMock()
+
+    hass.data = {
+        DOMAIN: {
+            mac: {
+                "platforms": {
+                    "binary_sensor": {
+                        "motion_15": {
+                            "who": "1",
+                            "where": "15",
+                            "name": "Motion Sensor 15",
+                            "entity_name": "Motion Sensor 15",
+                            "inverted": False,
+                            "class": BinarySensorDeviceClass.MOTION,
+                            "manufacturer": "BTicino",
+                            "model": "Legrand 048834",
+                        }
+                    }
+                },
+                "entity": mock_gateway,
+            }
+        }
+    }
+    config_entry = MagicMock()
+    config_entry.data = {"mac": mac}
+    config_entry.entry_id = "test_motion_zero_padded"
+
+    # Simulate existing entries in registry:
+    # 1. Normal entry
+    entry_v2 = MagicMock()
+    entry_v2.domain = "binary_sensor"
+    entry_v2.entity_id = "binary_sensor.motion_15"
+    entry_v2.unique_id = f"{mac}-motion_15-motion"
+    entry_v2.original_device_class = BinarySensorDeviceClass.MOTION
+
+    # 2. Duplicate zero-padded entry
+    entry_dup = MagicMock()
+    entry_dup.domain = "binary_sensor"
+    entry_dup.entity_id = "binary_sensor.motion_sensor_0015"
+    entry_dup.unique_id = f"{mac}-1-0015-motion"
+    entry_dup.original_device_class = BinarySensorDeviceClass.MOTION
+
+    mock_er = MagicMock()
+
+    with patch(
+        "custom_components.myhome.binary_sensor.er.async_entries_for_config_entry",
+        return_value=[entry_v2, entry_dup],
+    ), patch(
+        "custom_components.myhome.binary_sensor.er.async_get",
+        return_value=mock_er,
+    ):
+        added = []
+        assert await async_setup_entry(hass, config_entry, lambda e: added.extend(e)) is True
+        mock_er.async_remove.assert_called_with("binary_sensor.motion_sensor_0015")
+        assert len(added) == 1
+        sensor = added[0]
+        assert sensor._where == "15"
+        # Must default to False (idle/clear), not None (unknown/unavailable)
+        assert sensor.is_on is False
+
+        sensor.hass = hass
+        sensor.async_write_ha_state = MagicMock()
+        await sensor.async_added_to_hass()
+
+        # 1. Zero-padded motion event: *1*34*0015##
+        motion_msg = OWNEvent.parse("*1*34*0015##")
+        async_dispatcher_send(hass, f"myhome_message_{mac}", motion_msg)
+        await hass.async_block_till_done()
+        assert sensor.is_on is True
+
+        # 2. Zero-padded sensitivity frame: *#1*0015*5*2##
+        sens_msg = OWNEvent.parse("*#1*0015*5*2##")
+        async_dispatcher_send(hass, f"myhome_message_{mac}", sens_msg)
+        await hass.async_block_till_done()
+        assert sensor.extra_state_attributes["Sensitivity"] == "high"
+
+        # 3. Zero-padded timeout frame: *#1*0015*7*0*0*10##
+        timeout_msg = OWNEvent.parse("*#1*0015*7*0*0*10##")
+        async_dispatcher_send(hass, f"myhome_message_{mac}", timeout_msg)
+        await hass.async_block_till_done()
+        assert sensor.extra_state_attributes["Timeout"] == 25.0
+
+
+

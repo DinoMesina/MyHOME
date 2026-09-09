@@ -660,6 +660,48 @@ async def test_setup_entry_myhome_yaml_loading(hass: HomeAssistant):
             os.remove(tmp_path)
 
 
+async def test_empty_orphaned_device_pruning(hass: HomeAssistant):
+    """Test that orphaned devices with 0 entities are pruned from the device registry on setup."""
+    from homeassistant.helpers import device_registry as dr
+    
+    with patch(
+        "custom_components.myhome.gateway.OWNSession.test_connection",
+        return_value={"Success": True, "Message": None}
+    ), patch(
+        "custom_components.myhome.gateway.MyHOMEGatewayHandler.listening_loop"
+    ), patch(
+        "custom_components.myhome.gateway.MyHOMEGatewayHandler.sending_loop"
+    ):
+        config_entry = MockConfigEntry(
+            domain=DOMAIN,
+            data={
+                "host": "192.168.0.35",
+                "port": 20000,
+                "password": "pass",
+                "mac": "00:03:50:00:88:99",
+            },
+            unique_id="00:03:50:00:88:99",
+        )
+        config_entry.add_to_hass(hass)
+
+        dev_reg = dr.async_get(hass)
+        orphan_device = dev_reg.async_get_or_create(
+            config_entry_id=config_entry.entry_id,
+            identifiers={(DOMAIN, "00:03:50:00:88:99-orphan")},
+            name="Orphaned Old Device",
+        )
+        assert orphan_device.id in dev_reg.devices
+
+        assert await hass.config_entries.async_setup(config_entry.entry_id)
+        await hass.async_block_till_done()
+
+        # The orphan device with 0 entities should have been pruned
+        assert orphan_device.id not in dev_reg.devices
+
+        await hass.config_entries.async_unload(config_entry.entry_id)
+        await hass.async_block_till_done()
+
+
 
 
 

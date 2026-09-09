@@ -921,3 +921,25 @@ async def test_light_suppresses_sensor_discovery_and_purges_registry(hass):
         async_dispatcher_send(hass, "myhome_message_mac_sensor", sensor_for_light)
         await hass.async_block_till_done()
 
+        # 6. Zero-padded Legrand 048834 sensor frames (*#1*0015*6*33338##, *#1*0015*5*2##, *1*34*0015##)
+        sens_0015_dim6 = OWNEvent.parse("*#1*0015*6*33338##")
+        async_dispatcher_send(hass, "myhome_message_mac_sensor", sens_0015_dim6)
+        await hass.async_block_till_done()
+        assert len(added) == 1
+
+        sens_0015_dim5 = OWNEvent.parse("*#1*0015*5*2##")
+        async_dispatcher_send(hass, "myhome_message_mac_sensor", sens_0015_dim5)
+        await hass.async_block_till_done()
+        assert len(added) == 1
+
+        motion_0015 = OWNEvent.parse("*1*34*0015##")
+        async_dispatcher_send(hass, "myhome_message_mac_sensor", motion_0015)
+        await hass.async_block_till_done()
+        assert len(added) == 1
+
+        # Subsequent light on message for 0015 or 15 must also be suppressed from light creation
+        light_on_0015 = OWNEvent.parse("*1*1*0015##")
+        async_dispatcher_send(hass, "myhome_message_mac_sensor", light_on_0015)
+        await hass.async_block_till_done()
+        assert len(added) == 1
+

@@ -55,6 +55,7 @@ from .const import (
     CONF_WHO,
     DOMAIN,
     LOGGER,
+    normalize_where,
 )
 from .gateway import MyHOMEGatewayHandler
 from .myhome_device import MyHOMEEntity
@@ -77,9 +78,12 @@ ENERGY_MEASUREMENTS = {
 
 
 def _sensor_address(who, where):
-    """Match energy replies with and without the local-bus suffix."""
+    """Match energy replies with and without local-bus suffix, and normalize numeric where."""
     who, where = str(who), str(where)
-    return who, where.removesuffix("#0") if who == "18" else where
+    if who == "18":
+        return who, where.removesuffix("#0")
+    return who, normalize_where(where)
+
 
 
 async def async_setup_entry(hass, config_entry, async_add_entities):
@@ -220,8 +224,15 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
 
     sensors_by_address = {}
     for sensor in _sensors:
-        address = _sensor_address(sensor._who, sensor._where)
-        sensors_by_address.setdefault(address, []).append(sensor)
+        addr = (str(sensor._who), str(sensor._where))
+        norm_addr = _sensor_address(sensor._who, sensor._where)
+        clean_where = str(sensor._where).split("-")[-1]
+        clean_norm = normalize_where(clean_where)
+        for a in (addr, norm_addr, (str(sensor._who), clean_where), (str(sensor._who), clean_norm)):
+            if a not in sensors_by_address:
+                sensors_by_address[a] = []
+            if sensor not in sensors_by_address[a]:
+                sensors_by_address[a].append(sensor)
     configured_addresses = set(sensors_by_address)
     discovered = set()
 
@@ -259,23 +270,33 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     def discover_illuminance_sensor(where, entity_id=None):
         """Create illuminance sensor for WHO 1."""
         clean_where = where.split("-")[-1]
+        norm_where = normalize_where(where)
+        clean_norm = normalize_where(clean_where)
+        primary_where = norm_where or clean_norm or where
         sensor = MyHOMEIlluminanceSensor(
             hass=hass,
-            device_id=where,
+            device_id=primary_where,
             who="1",
-            where=where,
-            name=f"Illuminance {clean_where}",
+            where=primary_where,
+            name=f"Illuminance {clean_norm or clean_where}",
             device_class=SensorDeviceClass.ILLUMINANCE,
             manufacturer="BTicino",
             model="Light Sensor",
             gateway=gateway,
         )
         sensor.entity_id = entity_id
-        sensors_by_address.setdefault(("1", where), []).append(sensor)
-        if clean_where != where:
-            sensors_by_address.setdefault(("1", clean_where), []).append(sensor)
-        discovered.add(("1", where))
-        discovered.add(("1", clean_where))
+        for a in (
+            ("1", where),
+            ("1", norm_where),
+            ("1", clean_where),
+            ("1", clean_norm),
+            ("1", primary_where),
+        ):
+            if a not in sensors_by_address:
+                sensors_by_address[a] = []
+            if sensor not in sensors_by_address[a]:
+                sensors_by_address[a].append(sensor)
+            discovered.add(a)
         return sensor
 
     # Restore discovery from the registry, including user names and disabled
@@ -304,7 +325,17 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
         elif "-illuminance" in entry.unique_id or entry.original_device_class == SensorDeviceClass.ILLUMINANCE:
             after_mac = entry.unique_id.replace(f"{gateway.mac}-", "", 1).replace(f"{config_entry.data[CONF_MAC]}-", "", 1)
             where = after_mac.replace("-illuminance", "").split("-")[-1]
-            if ("1", where) not in configured_addresses and ("1", where) not in discovered:
+            norm_where = normalize_where(where)
+            if ("1", norm_where) in discovered or ("1", norm_where) in configured_addresses:
+                # Obsolete duplicate registry entry
+                if er.async_get(hass):
+                    try:
+                        er.async_get(hass).async_remove(entry.entity_id)
+                        LOGGER.info("Removed duplicate illuminance sensor registry entry: %s", entry.entity_id)
+                    except Exception:
+                        pass
+                continue
+            if ("1", where) not in configured_addresses and ("1", where) not in discovered and ("1", norm_where) not in discovered:
                 _sensors.append(discover_illuminance_sensor(where, entry.entity_id))
 
     async_add_entities(_sensors)
@@ -316,6 +347,8 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
         message_type = getattr(message, "message_type", None)
         if message_type is None and not (isinstance(message, OWNLightingEvent) and getattr(message, "dimension", None) == 6):
             return
+        where = str(message.where)
+        norm_where = normalize_where(where)
         address = _sensor_address(message.who, message.where)
         new_sensor = None
         measurement = ENERGY_MEASUREMENTS.get(message_type)
@@ -335,10 +368,22 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
             )
             and address not in configured_addresses
             and address not in discovered
+            and ("1", where) not in configured_addresses
+            and ("1", where) not in discovered
+            and ("1", norm_where) not in configured_addresses
+            and ("1", norm_where) not in discovered
         ):
-            new_sensor = discover_illuminance_sensor(address[1])
-        for sensor in sensors_by_address.get(address, ()):
+            new_sensor = discover_illuminance_sensor(norm_where or address[1])
+
+        target_sensors = []
+        for a in (address, (str(message.who), where), (str(message.who), norm_where)):
+            for s in sensors_by_address.get(a, ()):
+                if s not in target_sensors:
+                    target_sensors.append(s)
+
+        for sensor in target_sensors:
             sensor.handle_event(message)
+
         if new_sensor is not None:
             # Register synchronously before scheduling addition: bursts of frames
             # must not create duplicate entities or lose the first measurement.
@@ -349,6 +394,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     )
 
     return True
+
 
 
 async def async_unload_entry(hass, config_entry):
@@ -751,6 +797,22 @@ class MyHOMEIlluminanceSensor(MyHOMEEntity, SensorEntity):
             device_dict[CONF_ENTITIES][self._attr_device_class] = self
         except (KeyError, TypeError):
             pass
+        target_hass = self.hass or self._hass
+        if target_hass is not None:
+            unsub = async_dispatcher_connect(
+                target_hass,
+                f"myhome_update_{self._gateway_handler.mac}_1_{self._where}",
+                self.handle_event,
+            )
+            self.async_on_remove(unsub)
+            norm_where = normalize_where(self._where)
+            if norm_where != self._where:
+                unsub2 = async_dispatcher_connect(
+                    target_hass,
+                    f"myhome_update_{self._gateway_handler.mac}_1_{norm_where}",
+                    self.handle_event,
+                )
+                self.async_on_remove(unsub2)
         await self.async_update()
 
     async def async_will_remove_from_hass(self):
@@ -789,6 +851,10 @@ class MyHOMEIlluminanceSensor(MyHOMEEntity, SensorEntity):
         self._attr_native_value = message.illuminance
         if self.hass is not None or hasattr(self.async_schedule_update_ha_state, "assert_called"):
             try:
-                self.async_schedule_update_ha_state()
+                self.async_write_ha_state()
             except Exception:
-                pass
+                try:
+                    self.async_schedule_update_ha_state()
+                except Exception:
+                    pass
+

@@ -76,3 +76,20 @@ DEFAULT_TRANSITION_MODE = TRANSITION_MODE_SOFTWARE
 SOFTWARE_TRANSITION_STEP_INTERVAL = 0.3   # target seconds between steps
 SOFTWARE_TRANSITION_MIN_STEPS = 2
 SOFTWARE_TRANSITION_MAX_STEPS = 25
+
+
+def normalize_where(where: str | int | None) -> str:
+    """Normalize OpenWebNet address by stripping leading zeros from base address while preserving sub-bus."""
+    if where is None:
+        return ""
+    where_str = str(where).strip()
+    if not where_str:
+        return ""
+    parts = where_str.split("#", 1)
+    base = parts[0]
+    if base.isdigit():
+        norm_base = str(int(base))
+    else:
+        norm_base = base
+    return f"{norm_base}#{parts[1]}" if len(parts) > 1 else norm_base
+
