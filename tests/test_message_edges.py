@@ -989,8 +989,14 @@ class TestMoreEdgeCoverage:
         assert past_511._type is not None
 
         # Feb 29 in leap year 2024 with today Jan 1 -> _raw_message_date in future -> 2023-02-29 raises ValueError
-        import time_machine
-        with time_machine.travel("2024-01-01"):
+        real_date = datetime.date
+
+        class MockDate(real_date):
+            @classmethod
+            def today(cls):
+                return real_date(2024, 1, 1)
+
+        with patch("custom_components.myhome.ownd.message.datetime.date", MockDate):
             leap_err = OWNEnergyEvent.parse("*#18*71*511#2#29*1*100##")
             assert leap_err is not None
             assert getattr(leap_err, "_type", None) is None

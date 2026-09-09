@@ -8,20 +8,32 @@ An interactive version of this page is also hosted on our [GitHub Wiki](https://
 
 ---
 
-## 📋 Community Cross-Check & Call for Documentation
+## 📋 Community Cross-Check: Call for BTicino Installers & Software Specialists
 
-If you are a professional installer or have an archive of BTicino/Legrand developer documents (such as **@xtimmy86x**, **@lyubomirtraykov**, or other community members), please help us cross-check and complete this archive:
+If you are a **certified BTicino / Legrand installer**, **system integrator**, or **MyHOME software specialist** (such as **@xtimmy86x**, **@lyubomirtraykov**, and fellow community professionals), your real-world experience across varied plant configurations and engineering software is invaluable.
 
-1. **Compare File Names and Version Numbers**: Look at the title page and updating history of your PDFs (e.g. "Last date modify", "Last version").
-2. **Check for Newer Revisions**: If your copy has a more recent date or version than listed below, please let us know!
-3. **Missing Families / Devices**: We are actively seeking official documentation for:
-   - **`WHO = 1` & `WHO = 24`**: Extended DALI / DALI-2 dimensions (tunable white, color temperature, RGB/RGBW ballasts, e.g. **F429G**).
-   - **`WHO = 14`**: Actuator diagnostics, hardware locks, and operational counters.
-   - **`WHO = 18` & `WHO = 22`**: Energy management, multi-tariff metering, and smart load control.
-   - **`WHO = 25`**: CEN+ extended scenario triggers and dry contact sensors (e.g. **3477**).
-   - Technical sheets and OpenWebNet programming guides for next-gen gateways (**F461**, **MyHomeServer1**).
+We invite installers and software specialists to review and cross-check this archive:
 
-> **How to contribute:** You can share filenames, version dates, or documents by opening an issue on the [OpenWebNet-HA/MyHOME GitHub repository](https://github.com/OpenWebNet-HA/MyHOME/issues) or commenting directly in active protocol threads.
+### 🔍 What We Need Installers & Software Specialists to Review:
+
+1. **Document Versions & Revision Dates**:
+   - Compare your PDF archive against the [Master WHO Family Inventory](#-master-who-family-inventory) table below.
+   - Look at the cover page and revision history (e.g. *Last date modify*, *Version number*). If your copy is newer than what is listed, please share the version details!
+
+2. **Plant Topologies & Gateway Quirks**:
+   - **Scenario Programmers (`MH200`, `MH200N`, `MH201`, `MH202`)**: Differences in session limits, memory banks, execution delays, and scenario frame syntax.
+   - **Cross-Bus Interfaces (`F422`)**: Edge cases with interface addressing (`WHERE#4#INTERFACE`) on complex multi-riser installations.
+   - **Next-Gen & Hybrid Gateways (`F454`, `F455`, `MyHomeServer1`, `F461`)**: Firmware variations, HMAC-SHA256 authentication behaviors, and SSDP UPnP discovery.
+
+3. **Software Tooling & Official Specifications (MyHOME_Suite / TiMyHome)**:
+   - Command definitions or exported XML dictionaries from Legrand/BTicino configuration software (**MyHOME_Suite**, **TiMyHome**, **Virtual Configurator**, **MyHOME_Up**).
+   - Any technical addenda or documentation for:
+     - **`WHO = 1` & `WHO = 24`**: DALI & DALI-2 gateway ballasts (tunable white, color temperature, RGB/RGBW, e.g. **F429G**).
+     - **`WHO = 14`**: Actuator diagnostics, hardware lock/unlock states, and operating counters.
+     - **`WHO = 18` & `WHO = 22`**: Multi-tariff smart metering, load shedding, and phase diagnostics.
+     - **`WHO = 25`**: CEN+ extended scenario pushes and dry contact interfaces (**3477**).
+
+> **💡 How to Contribute:** You can share filenames, revision dates, technical sheets, or bus monitor traces by opening an issue on the [OpenWebNet-HA/MyHOME GitHub repository](https://github.com/OpenWebNet-HA/MyHOME/issues) or commenting directly in [PR #232](https://github.com/OpenWebNet-HA/MyHOME/pull/232). Every contribution helps ensure open, permanent documentation for the entire MyHOME ecosystem.
 
 ---
 
