@@ -41,6 +41,10 @@ jobs:
           git commit -m "chore: auto-generate coverage badge & README table [skip ci]" || echo "No files changed"
           git push || echo "No files pushed"
 
+      - name: Enforce 100% test coverage on ownd core
+        run: |
+          python scripts/verify_ownd_coverage.py
+
       - name: Upload HTML coverage report
         uses: actions/upload-artifact@v4
         with:
