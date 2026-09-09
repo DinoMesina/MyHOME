@@ -15,7 +15,7 @@ Modern, async-native Home Assistant integration for **BTicino / Legrand MyHOME**
 Maintained by the **[OpenWebNet-HA](https://github.com/OpenWebNet-HA)** community organisation.
 
 > [!TIP]
-> **🧪 Community Testing Active**: The modernized Phase 1 architecture is currently undergoing community validation in **[PR #232](https://github.com/OpenWebNet-HA/MyHOME/pull/232)**. You can test it today via HACS by selecting the `v2-phase1-architecture` branch or following the testing instructions in [#229](https://github.com/OpenWebNet-HA/MyHOME/issues/229#issuecomment-5587215356)!
+> **🧪 Community Testing Active**: The modernized architecture is currently undergoing community validation in **[PR #232](https://github.com/OpenWebNet-HA/MyHOME/pull/232)**. Because HACS does not index unmerged Git branches from its default store, please see the [Testing the V2 Architecture Branch](#testing-the-v2-architecture-branch-v2-phase1-architecture) guide below to install it in 2 minutes!
 
 ---
 
@@ -64,19 +64,47 @@ Maintained by the **[OpenWebNet-HA](https://github.com/OpenWebNet-HA)** communit
 
 ## 📦 Installation
 
-### Option 1: Via HACS (Recommended)
+### Testing the V2 Architecture Branch (`v2-phase1-architecture`)
+
+While the V2 architecture is actively being validated in **[PR #232](https://github.com/OpenWebNet-HA/MyHOME/pull/232)**, HACS will not automatically display unmerged git branches or permit adding `OpenWebNet-HA/MyHOME` under *Custom repositories* (it will return `Repository 'openwebnet-ha/myhome' exists in the store`).
+
+You can easily install and test the modernized branch right now using either method below:
+
+#### Method A: Manual Installation (Recommended)
+
+1. Download the branch archive:  
+   👉 **[Download v2-phase1-architecture.zip](https://github.com/OpenWebNet-HA/MyHOME/archive/refs/heads/v2-phase1-architecture.zip)**
+2. Unzip the archive on your computer.
+3. Open your Home Assistant configuration directory (via **Samba Share**, **Studio Code Server**, or **File Editor** add-on).
+4. Copy the `custom_components/myhome` directory into your Home Assistant `/config/custom_components/myhome/` folder (overwriting the existing files).
+5. Clear your browser cache and restart Home Assistant (**Developer Tools → YAML → Restart**).
+
+> [!NOTE]
+> All existing entity names, custom entity IDs, and gateway configurations are preserved automatically.
+
+#### Method B: One-Liner via Terminal & SSH Add-on
+
+If you have the **Terminal & SSH** add-on enabled in Home Assistant, run this command:
+```bash
+cd /config/custom_components
+wget https://github.com/OpenWebNet-HA/MyHOME/archive/refs/heads/v2-phase1-architecture.zip -O temp_myhome.zip
+unzip -q temp_myhome.zip
+rm -rf myhome
+mv MyHOME-v2-phase1-architecture/custom_components/myhome ./
+rm -rf MyHOME-v2-phase1-architecture temp_myhome.zip
+```
+Then restart Home Assistant (**Developer Tools → YAML → Restart**).
+
+---
+
+### Standard Installation (Stable Releases via HACS)
+
+*(Available once PR #232 is merged into the main release channel)*
 
 1. Open **HACS** in your Home Assistant UI.
-2. Click the top-right menu (three dots) → **Custom repositories**.
-3. Enter `https://github.com/OpenWebNet-HA/MyHOME`, select **Integration** as category, and click **Add**.
-4. Search for `MyHOME` in HACS and click **Download**.
-5. Restart Home Assistant.
-
-### Option 2: Manual Installation
-
-1. Download the latest release from the [Releases page](https://github.com/OpenWebNet-HA/MyHOME/releases).
-2. Copy the `custom_components/myhome` directory into your Home Assistant `<config_dir>/custom_components/` folder.
-3. Restart Home Assistant.
+2. Search for **MyHOME** in the Integrations tab.
+3. Click **Download** and select the latest version.
+4. Restart Home Assistant.
 
 ---
 
