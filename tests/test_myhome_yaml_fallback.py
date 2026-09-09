@@ -377,3 +377,190 @@ async def test_yaml_load_error_and_device_migration_error(hass: HomeAssistant, t
         await hass.async_block_till_done()
         assert await hass.config_entries.async_unload(config_entry.entry_id)
         await hass.async_block_till_done()
+
+
+async def test_switch_yaml_fallback_deduplication_and_no_ghost_light(hass: HomeAssistant, tmp_path):
+    """Test Issue #241: switch from myhome.yaml is not duplicated, cleans ghost lights, and updates from bus."""
+    from custom_components.myhome.ownd.message import OWNLightingEvent
+    from homeassistant.components.switch import SwitchDeviceClass
+    from homeassistant.helpers.dispatcher import async_dispatcher_send
+
+    yaml_content = """
+00:03:50:81:22:33:
+  switch:
+    prise_sam:
+      where: '06'
+      name: "Living room Socket"
+      class: "outlet"
+      manufacturer: "BTicino"
+      model: "F411/4"
+"""
+    yaml_file = tmp_path / "myhome.yaml"
+    yaml_file.write_text(yaml_content, encoding="utf-8")
+
+    mac = "00:03:50:81:22:33"
+    ent_reg = er.async_get(hass)
+    dev_reg = dr.async_get(hass)
+
+    config_entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            "host": "192.168.1.50",
+            "port": 20000,
+            "password": "12345",
+            "mac": mac,
+            "name": "F454",
+            "firmware": "2.0.0",
+        },
+        options={
+            CONF_FILE_PATH: str(yaml_file),
+        },
+        unique_id=mac,
+    )
+    config_entry.add_to_hass(hass)
+
+    # Pre-seed a ghost light and a corrupted duplicate switch in entity registry
+    ghost_light = ent_reg.async_get_or_create(
+        domain="light",
+        platform=DOMAIN,
+        unique_id=f"{mac}-1-06",
+        config_entry=config_entry,
+    )
+    corrupted_switch = ent_reg.async_get_or_create(
+        domain="switch",
+        platform=DOMAIN,
+        unique_id=f"{mac}-1-1-06",
+        config_entry=config_entry,
+    )
+
+    with patch(
+        "custom_components.myhome.gateway.OWNSession.test_connection",
+        return_value={"Success": True, "Message": None},
+    ), patch(
+        "custom_components.myhome.gateway.MyHOMEGatewayHandler.listening_loop"
+    ), patch(
+        "custom_components.myhome.gateway.MyHOMEGatewayHandler.sending_loop"
+    ):
+        mock_send = AsyncMock()
+        with patch("custom_components.myhome.gateway.MyHOMEGatewayHandler.send", mock_send):
+            assert await hass.config_entries.async_setup(config_entry.entry_id)
+            await hass.async_block_till_done()
+
+            # Verify ghost light and corrupted duplicate switch were purged
+            assert ent_reg.async_get(ghost_light.entity_id) is None
+            assert ent_reg.async_get(corrupted_switch.entity_id) is None
+
+            # Verify exactly ONE switch entity exists
+            entries = er.async_entries_for_config_entry(ent_reg, config_entry.entry_id)
+            switches = [e for e in entries if e.domain == "switch"]
+            assert len(switches) == 1
+            assert switches[0].unique_id == f"{mac}-1-06"
+
+            # Check switch entity state and attributes
+            sw_state = hass.states.get("switch.living_room_socket")
+            assert sw_state is not None
+            assert sw_state.attributes.get("device_class") == SwitchDeviceClass.OUTLET
+            assert sw_state.attributes.get("friendly_name") == "Living room Socket"
+
+            # Simulate incoming WHO=1 message for where 06 (e.g. from active discovery or bus event)
+            msg = OWNLightingEvent.parse("*1*1*06##")
+            async_dispatcher_send(hass, f"myhome_message_{mac}", msg)
+            await hass.async_block_till_done()
+
+            # Verify NO light entity was created
+            assert hass.states.get("light.light_06") is None
+            assert hass.states.get("light.living_room_socket") is None
+
+            # Verify switch state updated to 'on'
+            sw_state_updated = hass.states.get("switch.living_room_socket")
+            assert sw_state_updated.state == "on"
+
+            # Test switch turn_off sends correct OWN command
+            await hass.services.async_call(
+                "switch", "turn_off", {"entity_id": "switch.living_room_socket"}, blocking=True
+            )
+            sent_frames = [str(call.args[0]) for call in mock_send.call_args_list]
+            assert any("*1*0*06##" in f for f in sent_frames)
+
+            assert await hass.config_entries.async_unload(config_entry.entry_id)
+            await hass.async_block_till_done()
+
+
+async def test_yaml_root_level_platforms_single_vs_multiple_gateways(hass: HomeAssistant, tmp_path, caplog):
+    """Test single-gateway auto-bind vs multi-gateway safe error when MAC header is omitted."""
+    import logging
+    caplog.set_level(logging.ERROR)
+
+    yaml_content = """
+switch:
+  socket_hall:
+    where: '08'
+    name: "Hall Socket"
+    class: "outlet"
+"""
+    yaml_file = tmp_path / "myhome.yaml"
+    yaml_file.write_text(yaml_content, encoding="utf-8")
+
+    mac1 = "00:03:50:81:22:33"
+    entry1 = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            "host": "192.168.1.50",
+            "port": 20000,
+            "password": "12345",
+            "mac": mac1,
+            "name": "F454 Gateway 1",
+            "firmware": "2.0.0",
+        },
+        options={
+            CONF_FILE_PATH: str(yaml_file),
+        },
+        unique_id=mac1,
+    )
+    entry1.add_to_hass(hass)
+
+    with patch(
+        "custom_components.myhome.gateway.OWNSession.test_connection",
+        return_value={"Success": True, "Message": None},
+    ), patch(
+        "custom_components.myhome.gateway.MyHOMEGatewayHandler.listening_loop"
+    ), patch(
+        "custom_components.myhome.gateway.MyHOMEGatewayHandler.sending_loop"
+    ):
+        # Single gateway: should auto-bind successfully
+        assert await hass.config_entries.async_setup(entry1.entry_id)
+        await hass.async_block_till_done()
+
+        assert "switch" in hass.data[DOMAIN][mac1][CONF_PLATFORMS]
+        assert hass.states.get("switch.hall_socket") is not None
+
+        # Add a second gateway to test multi-gateway safety
+        mac2 = "00:03:50:81:22:44"
+        entry2 = MockConfigEntry(
+            domain=DOMAIN,
+            data={
+                "host": "192.168.1.51",
+                "port": 20000,
+                "password": "12345",
+                "mac": mac2,
+                "name": "F454 Gateway 2",
+                "firmware": "2.0.0",
+            },
+            options={
+                CONF_FILE_PATH: str(yaml_file),
+            },
+            unique_id=mac2,
+        )
+        entry2.add_to_hass(hass)
+
+        # Setting up entry2 with root-level platforms in myhome.yaml should log an error and NOT guess
+        caplog.clear()
+        assert await hass.config_entries.async_setup(entry2.entry_id)
+        await hass.async_block_till_done()
+
+        assert any("myhome.yaml contains top-level platform configurations without a gateway MAC" in rec.message for rec in caplog.records)
+
+        assert await hass.config_entries.async_unload(entry1.entry_id)
+        assert await hass.config_entries.async_unload(entry2.entry_id)
+        await hass.async_block_till_done()
+

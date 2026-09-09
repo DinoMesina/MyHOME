@@ -239,6 +239,8 @@ class MyHomeDeviceSchema(Schema):
                 data[device][CONF_ENTITY_NAME] = None
             if "advanced_shutter" in data[device] and data[device]["advanced_shutter"]:
                 data[device][CONF_ADVANCED_SHUTTER] = True
+            if "device_class" in data[device] and CONF_DEVICE_CLASS not in data[device]:
+                data[device][CONF_DEVICE_CLASS] = data[device]["device_class"]
 
         return _rekeyed_data
 
@@ -319,6 +321,12 @@ switch_schema = MyHomeDeviceSchema(
             Optional(CONF_ICON): str,
             Optional(CONF_ICON_ON): str,
             Optional(CONF_DEVICE_CLASS, default=SwitchDeviceClass.SWITCH): In(
+                [
+                    SwitchDeviceClass.OUTLET,
+                    SwitchDeviceClass.SWITCH,
+                ]
+            ),
+            Optional("device_class"): In(
                 [
                     SwitchDeviceClass.OUTLET,
                     SwitchDeviceClass.SWITCH,

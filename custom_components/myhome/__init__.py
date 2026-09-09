@@ -141,6 +141,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
         try:
             raw_yaml = await hass.async_add_executor_job(load_yaml, _config_file_path)
             if raw_yaml and isinstance(raw_yaml, dict):
+                # Support single-gateway config without MAC address header at root level
+                if any(plat in raw_yaml for plat in PLATFORMS):
+                    configured_gateways = [
+                        e for e in hass.config_entries.async_entries(DOMAIN)
+                        if not getattr(e, "disabled_by", None)
+                    ]
+                    if len(configured_gateways) <= 1:
+                        raw_yaml = {entry.data[CONF_MAC]: raw_yaml}
+                    else:
+                        LOGGER.error(
+                            "myhome.yaml contains top-level platform configurations without a gateway MAC, "
+                            "but %d gateways are configured. Please specify the gateway MAC address header in myhome.yaml.",
+                            len(configured_gateways)
+                        )
+                        raw_yaml = {}
+
                 # Ensure every gateway has mac and every device has where set if omitted
                 for gw_key, gw_val in raw_yaml.items():
                     if isinstance(gw_val, dict):

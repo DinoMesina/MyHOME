@@ -61,12 +61,40 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
 
     # Restore previously discovered entities from the Entity Registry so they
     # are available immediately on restart, even before the gateway responds.
-    entity_registry = er.async_get(hass)
-    existing_entries = er.async_entries_for_config_entry(entity_registry, config_entry.entry_id)
+    try:
+        entity_registry = er.async_get(hass)
+        existing_entries = er.async_entries_for_config_entry(entity_registry, config_entry.entry_id)
+    except Exception:
+        entity_registry = None
+        existing_entries = []
     restored_lights = []
 
     gateway = hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_ENTITY]
     _configured_lights = hass.data[DOMAIN][config_entry.data[CONF_MAC]].get(CONF_PLATFORMS, {}).get(PLATFORM, {})
+
+    # Collect all WHERE addresses configured or registered as switches so dynamic discovery
+    # of WHO=1 never auto-creates a duplicate Light entity for switch/outlet devices.
+    switch_wheres = set()
+    _configured_switches = hass.data[DOMAIN][config_entry.data[CONF_MAC]].get(CONF_PLATFORMS, {}).get("switch", {})
+    for dev_id, sw_cfg in _configured_switches.items():
+        sw_where = str(sw_cfg.get(CONF_WHERE, dev_id))
+        sw_clean = sw_where.split("-")[-1]
+        sw_interface = sw_cfg.get(CONF_BUS_INTERFACE) if CONF_BUS_INTERFACE in sw_cfg else sw_cfg.get("interface")
+        sw_dev_where = f"{sw_clean}#4#{sw_interface}" if sw_interface else str(sw_clean)
+        switch_wheres.add(str(dev_id))
+        switch_wheres.add(str(sw_where))
+        switch_wheres.add(sw_dev_where)
+        switch_wheres.add(sw_clean)
+
+    for entry in existing_entries:
+        if entry.domain == "switch":
+            unique_id = entry.unique_id
+            after_mac = unique_id.replace(f"{gateway.mac}-", "", 1).replace(f"{config_entry.data[CONF_MAC]}-", "", 1)
+            parts_who = after_mac.split("-", 1)
+            dev_id = parts_who[-1] if len(parts_who) > 1 else after_mac
+            clean_sw = dev_id.split("#4#")[0].split("-")[-1]
+            switch_wheres.add(dev_id)
+            switch_wheres.add(clean_sw)
 
     for entry in existing_entries:
         if entry.domain == PLATFORM:
@@ -86,6 +114,12 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
                 interface = None
 
             clean_where = where.split('-')[-1]
+            if clean_where in switch_wheres or device_id in switch_wheres or where in switch_wheres:
+                # Ghost light erroneously created in a previous session for a switch device
+                if entity_registry:
+                    entity_registry.async_remove(entry.entity_id)
+                continue
+
             cfg = _configured_lights.get(device_id) or _configured_lights.get(where) or _configured_lights.get(clean_where) or {}
 
             _customs = hass.data.get(DOMAIN, {}).get("customizations", {})
@@ -126,6 +160,8 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
         clean_where = where.split("-")[-1]
 
         if clean_where in seen_configured_where or device_where_id in known_lights or dev_id in known_lights:
+            continue
+        if clean_where in switch_wheres or device_where_id in switch_wheres or dev_id in switch_wheres:
             continue
         seen_configured_where.add(clean_where)
 
@@ -177,8 +213,16 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
             return
 
         where = message.where
+        clean_where = where.split('-')[-1]
         interface = getattr(message, "interface", None)
         unique_id = f"{where}#4#{interface}" if interface else str(where)
+
+        if clean_where in switch_wheres or unique_id in switch_wheres or where in switch_wheres:
+            # Route to switch entities, do not auto-create a light entity
+            async_dispatcher_send(hass, f"myhome_update_{config_entry.data[CONF_MAC]}_1_{unique_id}", message)
+            if unique_id != where:
+                async_dispatcher_send(hass, f"myhome_update_{config_entry.data[CONF_MAC]}_1_{where}", message)
+            return
 
         if unique_id not in known_lights:
             # We found a new light!

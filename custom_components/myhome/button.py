@@ -61,7 +61,9 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
         name = cfg.get(CONF_NAME, f"Device {where}")
         manufacturer = cfg.get(CONF_MANUFACTURER, "BTicino")
         model = cfg.get(CONF_DEVICE_MODEL, "Actuator")
-        device_id = dev_id or (f"{where}#4#{interface}" if interface else str(where))
+        clean_where = where.split("-")[-1]
+        device_where_id = f"{clean_where}#4#{interface}" if interface else str(clean_where)
+        device_id = device_where_id
 
         disable_button = DisableCommandButtonEntity(
             hass=hass,
