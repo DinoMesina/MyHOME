@@ -1,1 +1,0 @@
-# MyHOME OpenWebNet MCP Server
