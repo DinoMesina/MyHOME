@@ -922,9 +922,9 @@ class TestOWNEventAndCommandSessionRemainingCoverage:
 
     @pytest.mark.asyncio
     async def test_command_session_send_broad_exception(self, command_session):
+        command_session._stream_reader = AsyncMock()
         command_session._stream_writer = MagicMock()
         command_session._stream_writer.write.side_effect = RuntimeError("Fatal")
         res = await command_session.send("*1*1*12##")
         assert res is None
-
-
+        assert command_session._stream_writer is None

@@ -1220,12 +1220,12 @@ class TestMessageAuditExhaustiveCoverage:
             self._dimension_value = BadList()
 
         with patch.object(OWNMessage, "__init__", fake_init):
-            evt = OWNGatewayEvent("*#13**0*10*20*30##")
-            assert evt._hour is None
+            with pytest.raises(IndexError):
+                OWNGatewayEvent("*#13**0*10*20*30##")
 
     def test_gateway_event_dim1_invalid_date(self):
-        evt = OWNGatewayEvent("*#13**1*99*99*2020##")
-        assert evt._date is None
+        with pytest.raises(ValueError):
+            OWNGatewayEvent("*#13**1*99*99*2020##")
 
     def test_gateway_event_dim12_empty_part(self):
         evt = OWNGatewayEvent("*#13**12**1*2*3*4*5##")
@@ -1236,8 +1236,8 @@ class TestMessageAuditExhaustiveCoverage:
         assert evt._uptime is None
 
     def test_gateway_event_dim22_invalid_datetime(self):
-        evt = OWNGatewayEvent("*#13**22*12*00*00*01*0*01*99*2020##")
-        assert evt._datetime is None
+        with pytest.raises(ValueError):
+            OWNGatewayEvent("*#13**22*12*00*00*01*0*01*99*2020##")
 
     def test_energy_event_dim113_empty_value(self):
         evt = OWNEnergyEvent("*#18*1*113*##")
@@ -1312,13 +1312,13 @@ class TestMessageAuditExhaustiveCoverage:
         assert isinstance(cmd_bad, OWNDryContactCommand)
 
     def test_gateway_command_dim0_invalid_time(self):
-        cmd = OWNGatewayCommand("*#13**#0*99*99*99*01##")
-        assert cmd._time is None
+        with pytest.raises(ValueError):
+            OWNGatewayCommand("*#13**#0*99*99*99*01##")
 
     def test_gateway_command_dim1_invalid_date(self):
-        cmd = OWNGatewayCommand("*#13**#1*1*99*2020##")
-        assert cmd._date is None
+        with pytest.raises(ValueError):
+            OWNGatewayCommand("*#13**#1*1*99*2020##")
 
     def test_gateway_command_dim22_invalid_datetime(self):
-        cmd = OWNGatewayCommand("*#13**#22*12*00*00*01*0*01*99*2020##")
-        assert cmd._datetime is None
+        with pytest.raises(ValueError):
+            OWNGatewayCommand("*#13**#22*12*00*00*01*0*01*99*2020##")

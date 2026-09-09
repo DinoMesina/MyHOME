@@ -101,6 +101,12 @@ class PatchedHomeAssistantSnapshotSerializer(HomeAssistantSnapshotSerializer):
             if "last_reported" not in res:
                 res["last_reported"] = ANY
             attrs = res.get("attributes")
+            if isinstance(attrs, dict):
+                from homeassistant.util.read_only_dict import ReadOnlyDict
+                # HA 2026 uses StrEnum attribute keys; snapshots compare the
+                # public state names and values, regardless of the key class.
+                attrs = ReadOnlyDict({str(key): value for key, value in attrs.items()})
+                res["attributes"] = attrs
             if isinstance(attrs, dict) and "supported_features" in attrs:
                 feat = attrs["supported_features"]
                 if hasattr(feat, "value") and (feat.value & 384) and (feat.value & 1):

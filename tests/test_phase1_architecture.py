@@ -294,14 +294,18 @@ class TestMockGatewayHarness:
         session = OWNCommandSession(gateway=gw, logger=mock_logger)
         assert (await session.connect())["Success"] is True
 
-        # Send command and verify gateway returned NACK (*#*0##) causing client retry
-        cmd = OWNCommand.parse("*1*1*21##")
-        await session.send(cmd)
-        assert harness.received_messages.count("*1*1*21##") == 2
-        mock_logger.error.assert_called_with("%s Could not send message `%s`.", gw.log_id, cmd)
-
-        await session.close()
-        await harness.stop()
+        try:
+            # An explicit NACK retries once, then reports rejection accurately.
+            cmd = OWNCommand.parse("*1*1*21##")
+            assert await session.send(cmd) is None
+            assert harness.received_messages.count("*1*1*21##") == 2
+            mock_logger.warning.assert_called_with(
+                "%s Gateway rejected message %s (NACK, %s response(s)).",
+                gw.log_id, cmd, 0,
+            )
+        finally:
+            await session.close()
+            await harness.stop()
 
     @pytest.mark.asyncio
     async def test_harness_disconnect_simulation(self):
@@ -609,8 +613,9 @@ class TestConnectionHardening:
             "serialNumber": "00:03:50:00:12:34",
         })
         session = OWNCommandSession(gateway=gw, logger=MagicMock())
-        # Stream_writer is None
-        res = await session.send(OWNCommand.parse("*1*1*21##"))
+        # An unavailable gateway must not attempt a write on a missing stream.
+        with patch.object(session, "connect", return_value={"Success": False}):
+            res = await session.send(OWNCommand.parse("*1*1*21##"))
         assert res is None
 
     @pytest.mark.asyncio

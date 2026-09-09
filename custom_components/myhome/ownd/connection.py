@@ -737,7 +737,15 @@ class OWNEventSession(OWNSession):
                 timeout=120.0
             )
             _decoded_data = data.decode()
-            _message = OWNMessage.parse(_decoded_data)
+            self._logger.debug("%s Event RX: %r", self._gateway.log_id, _decoded_data)
+            try:
+                _message = OWNMessage.parse(_decoded_data)
+            except (ValueError, IndexError, TypeError) as err:
+                self._logger.warning(
+                    "%s Malformed event frame %r: %s",
+                    self._gateway.log_id, _decoded_data, err,
+                )
+                return _decoded_data
             return _message if _message else _decoded_data
         except asyncio.TimeoutError:
             self._logger.error(
@@ -769,6 +777,8 @@ class OWNEventSession(OWNSession):
 
 
 class OWNCommandSession(OWNSession):
+    RESPONSE_TIMEOUT = 30.0
+
     def __init__(self, gateway: OWNGateway = None, logger: logging.Logger = None):
         super().__init__(gateway=gateway, connection_type="command", logger=logger)
 
@@ -801,90 +811,104 @@ class OWNCommandSession(OWNSession):
         except Exception:
             return False
 
-    async def send(self, message: str, is_status_request: bool = False):
-        """Send the attached message on an existing 'command' connection,
-        actively reconnecting it if it had been reset.
+    async def close(self) -> None:
+        """Discard a command stream so unread replies cannot reach another request."""
+        try:
+            await super().close()
+        finally:
+            self._stream_reader = None
+            self._stream_writer = None
 
-        Handles multi-frame responses (status and dimension queries) ending with
-        ACK (*#*1##) or NACK (*#*0##), preventing TCP buffer desynchronization.
-        Credit: Massimo Valla (@mvalla / openwebnet4j).
+    async def _read_response(self):
+        """Collect a complete response, including its terminal ACK or NACK."""
+        collected = []
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + self.RESPONSE_TIMEOUT
+        while True:
+            raw = await asyncio.wait_for(
+                self._stream_reader.readuntil(OWNSession.SEPARATOR),
+                timeout=max(0, deadline - loop.time()),
+            )
+            decoded = raw.decode()
+            self._logger.debug("%s Command RX: %r", self._gateway.log_id, decoded)
+            try:
+                response = OWNMessage.parse(decoded)
+            except (ValueError, IndexError, TypeError) as err:
+                self._logger.warning(
+                    "%s Malformed command response %r: %s",
+                    self._gateway.log_id, decoded, err,
+                )
+                response = None
+            if isinstance(response, OWNSignaling):
+                if response.is_ack() or response.is_nack():
+                    return collected, response.is_ack()
+            else:
+                collected.append(response if response else decoded)
+
+    async def send(self, message: str, is_status_request: bool = False):
+        """Finish one transaction before the command session can be reused.
+
+        Retry an immediate NACK once. After a lost connection, only a status
+        query or a command whose write failed may be retried; a command already
+        written may have been executed even when its acknowledgement was lost.
         """
         try:
-            self._stream_writer.write(str(message).encode())
-            await self._stream_writer.drain()
+            async with asyncio.timeout(self.RESPONSE_TIMEOUT):
+                for attempt in range(2):
+                    if self._stream_writer is None or self._stream_reader is None:
+                        result = await self.connect()
+                        if not result or not result.get("Success", False):
+                            await self.close()
+                            return None
 
-            collected = []
-            terminal_ack = False
-            max_frames = 20
-            for _ in range(max_frames):
-                raw_response = await self._stream_reader.readuntil(OWNSession.SEPARATOR)
-                msg = OWNMessage.parse(raw_response.decode())
-                if isinstance(msg, OWNSignaling):
-                    if msg.is_ack():
-                        terminal_ack = True
-                        break
-                    elif msg.is_nack():
-                        terminal_ack = False
-                        break
-                else:
-                    collected.append(msg if msg else raw_response.decode())
+                    written = False
+                    try:
+                        self._logger.debug("%s Command TX: %s", self._gateway.log_id, message)
+                        self._stream_writer.write(str(message).encode())
+                        written = True
+                        await self._stream_writer.drain()
+                        collected, accepted = await self._read_response()
+                    except (ConnectionResetError, asyncio.IncompleteReadError):
+                        await self.close()
+                        if attempt == 0 and (is_status_request or not written):
+                            self._logger.debug(
+                                "%s Command connection reset, retrying %s once.",
+                                self._gateway.log_id, message,
+                            )
+                            continue
+                        self._logger.warning(
+                            "%s Connection lost before acknowledgement of %s.",
+                            self._gateway.log_id, message,
+                        )
+                        return None
 
-            # If immediate NACK and no data collected, retry once (standard OWN behavior)
-            if not terminal_ack and not collected:
-                self._logger.debug(
-                    "%s Immediate NACK for `%s`, retrying once...",
-                    self._gateway.log_id,
-                    message,
-                )
-                self._stream_writer.write(str(message).encode())
-                await self._stream_writer.drain()
-                for _ in range(max_frames):
-                    raw_response = await self._stream_reader.readuntil(OWNSession.SEPARATOR)
-                    msg = OWNMessage.parse(raw_response.decode())
-                    if isinstance(msg, OWNSignaling):
-                        if msg.is_ack():
-                            terminal_ack = True
-                            break
-                        elif msg.is_nack():
-                            terminal_ack = False
-                            break
-                    else:
-                        collected.append(msg if msg else raw_response.decode())
-
-            if terminal_ack:
-                if collected:
+                    if accepted:
+                        self._logger.debug(
+                            "%s Message %s acknowledged with %s response(s).",
+                            self._gateway.log_id, message, len(collected),
+                        )
+                        return collected or True
+                    if collected or attempt == 1:
+                        self._logger.warning(
+                            "%s Gateway rejected message %s (NACK, %s response(s)).",
+                            self._gateway.log_id, message, len(collected),
+                        )
+                        return None
                     self._logger.debug(
-                        "%s Message `%s` collected %s responses: %s",
-                        self._gateway.log_id,
-                        message,
-                        len(collected),
-                        collected,
+                        "%s Immediate NACK for %s, retrying once.",
+                        self._gateway.log_id, message,
                     )
-                if not is_status_request:
-                    self._logger.info(
-                        "%s Message `%s` was successfully sent.",
-                        self._gateway.log_id,
-                        message,
-                    )
-                else:
-                    self._logger.debug(
-                        "%s Message `%s` was successfully sent.",
-                        self._gateway.log_id,
-                        message,
-                    )
-                return collected or True
-            else:
-                self._logger.error(
-                    "%s Could not send message `%s`.", self._gateway.log_id, message
-                )
-                return None
-
-        except (ConnectionResetError, asyncio.IncompleteReadError):
-            self._logger.debug(
-                "%s Command session connection reset, retrying...", self._gateway.log_id
+        except asyncio.CancelledError:
+            await self.close()
+            raise
+        except TimeoutError:
+            await self.close()
+            self._logger.error(
+                "%s Timed out waiting for the complete response to %s; command session closed.",
+                self._gateway.log_id, message,
             )
-            await self.connect()
-            return await self.send(message=message, is_status_request=is_status_request)
+            return None
         except Exception:  # pylint: disable=broad-except
+            await self.close()
             self._logger.exception("%s Command session crashed.", self._gateway.log_id)
             return None

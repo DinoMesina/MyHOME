@@ -115,6 +115,7 @@ class MyHOMEGatewayHandler:
         )
         self.send_buffer = asyncio.Queue(maxsize=queue_max_size)
         self.bus_monitor = BusMonitor()
+        self.device_registry_id: Optional[str] = None
 
     @property
     def mac(self) -> str:

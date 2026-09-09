@@ -235,8 +235,8 @@ async def test_play_media_all_decoders_busy(hass, player, mock_gateway):
 
 
 @pytest.mark.asyncio
-async def test_play_media_success_and_wake_standby_decoder(hass, player, mock_gateway):
-    """Test play_media claiming decoder, waking it from standby, waking amp, and playing."""
+async def test_play_media_success_and_wake_off_decoder(hass, player, mock_gateway):
+    """Test play_media claiming decoder, waking it from off, waking amp, and playing."""
     player.async_write_ha_state = MagicMock()
     player.async_schedule_update_ha_state = MagicMock()
 
@@ -245,7 +245,7 @@ async def test_play_media_success_and_wake_standby_decoder(hass, player, mock_ga
     mock_pool.claim = AsyncMock(return_value=("media_player.squeezelite_1", 1))
     hass.data = {DOMAIN: {mock_gateway.mac: {"decoder_pool": mock_pool}}}
 
-    hass.states.async_set("media_player.squeezelite_1", MediaPlayerState.STANDBY)
+    hass.states.async_set("media_player.squeezelite_1", MediaPlayerState.OFF)
 
     async def mock_sleep_wake(seconds):
         hass.states.async_set("media_player.squeezelite_1", MediaPlayerState.IDLE)
@@ -521,8 +521,8 @@ async def test_play_media_decoder_fails_to_wake_warning(hass, player, mock_gatew
     mock_pool.claim = AsyncMock(return_value=("media_player.squeezelite_1", 1))
     hass.data = {DOMAIN: {mock_gateway.mac: {"decoder_pool": mock_pool}}}
 
-    # Decoder stays in STANDBY
-    hass.states.async_set("media_player.squeezelite_1", MediaPlayerState.STANDBY)
+    # Decoder stays off
+    hass.states.async_set("media_player.squeezelite_1", MediaPlayerState.OFF)
 
     with patch("homeassistant.core.ServiceRegistry.async_call", new_callable=AsyncMock), \
          patch("asyncio.sleep", return_value=None):

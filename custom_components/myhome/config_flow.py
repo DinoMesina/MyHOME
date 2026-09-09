@@ -5,7 +5,6 @@ import re
 import os
 from typing import Dict, Optional
 
-import async_timeout
 import voluptuous as vol
 from voluptuous import (
     Schema,

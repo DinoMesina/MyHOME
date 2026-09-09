@@ -35,12 +35,30 @@ CLIMATE_MODE_AUTO = "auto"
 PIR_SENSITIVITY_MAPPING = ["low", "medium", "high", "very high"]
 
 
+def _validate_gateway_clock_values(dimension, values):
+    """Reject truncated clock frames before accessing mandatory fields."""
+    required = {0: 3, 1: 4, 22: 8}.get(dimension)
+    if required is not None and (values is None or len(values) < required):
+        raise ValueError(f"Gateway dimension {dimension} requires {required} values")
+
+
+def _gateway_timezone(values):
+    """Read an optional OWN timezone, preserving an unspecified local time."""
+    value = values[3] if len(values) > 3 else ""
+    if not value:
+        return ""
+    if re.fullmatch(r"[01]\d{2}", value) is None:
+        raise ValueError(f"Invalid gateway timezone: {value!r}")
+    sign = "+" if value[0] == "0" else "-"
+    return f"{sign}{value[1:]}:00"
+
+
 class OWNMessage:
     _ACK = re.compile(r"^\*#\*1##$")  #  *#*1##
     _NACK = re.compile(r"^\*#\*0##$")  #  *#*0##
     _COMMAND_SESSION = re.compile(r"^\*99\*0##$")  #  *99*0##
     _EVENT_SESSION = re.compile(r"^\*99\*1##$")  #  *99*1##
-    _NONCE = re.compile(r"^\*#(\d{5,})##$")  #  *#123456789##
+    _NONCE = re.compile(r"^\*#(\d{4,})##$")  #  *#123456789##
     _SHA = re.compile(r"^\*98\*(\d)##$")  #  *98*SHA##
 
     _STATUS = re.compile(
@@ -1243,37 +1261,28 @@ class OWNGatewayEvent(OWNEvent):
         self._kernel_version = None
         self._distribution_version = None
 
+        _validate_gateway_clock_values(self._dimension, self._dimension_value)
+
         if self._dimension == 0:
-            try:
-                self._hour = self._dimension_value[0] if len(self._dimension_value) > 0 else "00"
-                self._minute = self._dimension_value[1] if len(self._dimension_value) > 1 else "00"
-                self._second = self._dimension_value[2] if len(self._dimension_value) > 2 else "00"
-                # Timezone is sometimes missing from messages, assuming UTC
-                if len(self._dimension_value) > 3 and self._dimension_value[3] != "":
-                    self._timezone = (
-                        f"+{self._dimension_value[3][1:]}:00"
-                        if self._dimension_value[3][0] == "0"
-                        else f"-{self._dimension_value[3][1:]}:00"
-                    )
-                else:
-                    self._timezone = ""
-                self._human_readable_log = f"Gateway's internal time is: {self._hour}:{self._minute}:{self._second} UTC {self._timezone}."  # pylint: disable=line-too-long
-            except (ValueError, IndexError):
-                pass
+            self._hour = self._dimension_value[0]
+            self._minute = self._dimension_value[1]
+            self._second = self._dimension_value[2]
+            self._timezone = _gateway_timezone(self._dimension_value)
+            self._time = datetime.time.fromisoformat(
+                f"{self._hour}:{self._minute}:{self._second}{self._timezone}"
+            )
+            self._human_readable_log = f"Gateway's internal time is: {self._time}."
 
         elif self._dimension == 1:
-            try:
-                self._year = self._dimension_value[3] if len(self._dimension_value) > 3 else "2000"
-                self._month = self._dimension_value[2] if len(self._dimension_value) > 2 else "1"
-                self._day = self._dimension_value[1] if len(self._dimension_value) > 1 else "1"
-                self._date = datetime.date(
-                    year=int(self._year), month=int(self._month), day=int(self._day)
-                )
-                self._human_readable_log = (
-                    f"Gateway's internal date is: {self._year}-{self._month}-{self._day}."
-                )
-            except (ValueError, IndexError):
-                pass
+            self._year = self._dimension_value[3]
+            self._month = self._dimension_value[2]
+            self._day = self._dimension_value[1]
+            self._date = datetime.date(
+                year=int(self._year), month=int(self._month), day=int(self._day)
+            )
+            self._human_readable_log = (
+                f"Gateway's internal date is: {self._date}."
+            )
 
         elif self._dimension == 10:
             if len(self._dimension_value) >= 4:
@@ -1333,30 +1342,19 @@ class OWNGatewayEvent(OWNEvent):
                 pass
 
         elif self._dimension == 22:
-            try:
-                self._hour = self._dimension_value[0] if len(self._dimension_value) > 0 else "00"
-                self._minute = self._dimension_value[1] if len(self._dimension_value) > 1 else "00"
-                self._second = self._dimension_value[2] if len(self._dimension_value) > 2 else "00"
-                # Timezone is sometimes missing from messages, assuming UTC
-                if len(self._dimension_value) > 3 and self._dimension_value[3] != "":
-                    self._timezone = (
-                        f"+{self._dimension_value[3][1:]}:00"
-                        if self._dimension_value[3][0] == "0"
-                        else f"-{self._dimension_value[3][1:]}:00"
-                    )
-                else:
-                    self._timezone = ""
-                self._day = self._dimension_value[5] if len(self._dimension_value) > 5 else "01"
-                self._month = self._dimension_value[6] if len(self._dimension_value) > 6 else "01"
-                self._year = self._dimension_value[7] if len(self._dimension_value) > 7 else "2000"
-                self._datetime = datetime.datetime.fromisoformat(
-                    f"{self._year}-{self._month}-{self._day}*{self._hour}:{self._minute}:{self._second}{self._timezone}"  # pylint: disable=line-too-long
-                )
-                self._human_readable_log = (
-                    f"Gateway's internal datetime is: {self._datetime}."
-                )
-            except (ValueError, IndexError):
-                pass
+            self._hour = self._dimension_value[0]
+            self._minute = self._dimension_value[1]
+            self._second = self._dimension_value[2]
+            self._timezone = _gateway_timezone(self._dimension_value)
+            self._day = self._dimension_value[5]
+            self._month = self._dimension_value[6]
+            self._year = self._dimension_value[7]
+            self._datetime = datetime.datetime.fromisoformat(
+                f"{self._year}-{self._month}-{self._day}*{self._hour}:{self._minute}:{self._second}{self._timezone}"  # pylint: disable=line-too-long
+            )
+            self._human_readable_log = (
+                f"Gateway's internal datetime is: {self._datetime}."
+            )
 
         elif self._dimension == 23:
             if len(self._dimension_value) >= 3:
@@ -2232,68 +2230,48 @@ class OWNGatewayCommand(OWNCommand):
         self._date = None
         self._datetime = None
 
-        if self._dimension == 0 and self._dimension_value:
-            try:
-                self._hour = self._dimension_value[0] if len(self._dimension_value) > 0 else "00"
-                self._minute = self._dimension_value[1] if len(self._dimension_value) > 1 else "00"
-                self._second = self._dimension_value[2] if len(self._dimension_value) > 2 else "00"
-                # Timezone is sometimes missing from messages, assuming UTC
-                if len(self._dimension_value) > 3 and self._dimension_value[3] != "":
-                    self._timezone = (
-                        f"+{self._dimension_value[3][1:]}:00"
-                        if self._dimension_value[3][0] == "0"
-                        else f"-{self._dimension_value[3][1:]}:00"
-                    )
-                else:
-                    self._timezone = ""
-                self._time = datetime.time.fromisoformat(
-                    f"{self._hour}:{self._minute}:{self._second}{self._timezone}"
-                )
-                self._human_readable_log = (
-                    f"Gateway broadcasting internal time: {self._time}."
-                )
-            except (ValueError, IndexError):
-                pass
+        if self.is_request:
+            return
 
-        elif self._dimension == 1 and self._dimension_value:
-            try:
-                self._year = self._dimension_value[3] if len(self._dimension_value) > 3 else "2000"
-                self._month = self._dimension_value[2] if len(self._dimension_value) > 2 else "1"
-                self._day = self._dimension_value[1] if len(self._dimension_value) > 1 else "1"
-                self._date = datetime.date(
-                    year=int(self._year), month=int(self._month), day=int(self._day)
-                )
-                self._human_readable_log = (
-                    f"Gateway broadcasting internal date: {self._date}."
-                )
-            except (ValueError, IndexError):
-                pass
+        _validate_gateway_clock_values(self._dimension, self._dimension_value)
 
-        elif self._dimension == 22 and self._dimension_value:
-            try:
-                self._hour = self._dimension_value[0] if len(self._dimension_value) > 0 else "00"
-                self._minute = self._dimension_value[1] if len(self._dimension_value) > 1 else "00"
-                self._second = self._dimension_value[2] if len(self._dimension_value) > 2 else "00"
-                # Timezone is sometimes missing from messages, assuming UTC
-                if len(self._dimension_value) > 3 and self._dimension_value[3] != "":
-                    self._timezone = (
-                        f"+{self._dimension_value[3][1:]}:00"
-                        if self._dimension_value[3][0] == "0"
-                        else f"-{self._dimension_value[3][1:]}:00"
-                    )
-                else:
-                    self._timezone = ""
-                self._day = self._dimension_value[5] if len(self._dimension_value) > 5 else "01"
-                self._month = self._dimension_value[6] if len(self._dimension_value) > 6 else "01"
-                self._year = self._dimension_value[7] if len(self._dimension_value) > 7 else "2000"
-                self._datetime = datetime.datetime.fromisoformat(
-                    f"{self._year}-{self._month}-{self._day}*{self._hour}:{self._minute}:{self._second}{self._timezone}"  # pylint: disable=line-too-long
-                )
-                self._human_readable_log = (
-                    f"Gateway broadcasting internal datetime: {self._datetime}."
-                )
-            except (ValueError, IndexError):
-                pass
+        if self._dimension == 0:
+            self._hour = self._dimension_value[0]
+            self._minute = self._dimension_value[1]
+            self._second = self._dimension_value[2]
+            self._timezone = _gateway_timezone(self._dimension_value)
+            self._time = datetime.time.fromisoformat(
+                f"{self._hour}:{self._minute}:{self._second}{self._timezone}"
+            )
+            self._human_readable_log = (
+                f"Gateway broadcasting internal time: {self._time}."
+            )
+
+        elif self._dimension == 1:
+            self._year = self._dimension_value[3]
+            self._month = self._dimension_value[2]
+            self._day = self._dimension_value[1]
+            self._date = datetime.date(
+                year=int(self._year), month=int(self._month), day=int(self._day)
+            )
+            self._human_readable_log = (
+                f"Gateway broadcasting internal date: {self._date}."
+            )
+
+        elif self._dimension == 22:
+            self._hour = self._dimension_value[0]
+            self._minute = self._dimension_value[1]
+            self._second = self._dimension_value[2]
+            self._timezone = _gateway_timezone(self._dimension_value)
+            self._day = self._dimension_value[5]
+            self._month = self._dimension_value[6]
+            self._year = self._dimension_value[7]
+            self._datetime = datetime.datetime.fromisoformat(
+                f"{self._year}-{self._month}-{self._day}*{self._hour}:{self._minute}:{self._second}{self._timezone}"  # pylint: disable=line-too-long
+            )
+            self._human_readable_log = (
+                f"Gateway broadcasting internal datetime: {self._datetime}."
+            )
 
     @classmethod
     def set_datetime_to_now(cls, time_zone: str):

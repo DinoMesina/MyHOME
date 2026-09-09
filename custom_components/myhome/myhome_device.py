@@ -48,8 +48,11 @@ class MyHOMEEntity(Entity):
             name=self._attr_name,
             manufacturer=self._manufacturer,
             model=self._model,
-            via_device=(DOMAIN, self._gateway_handler.unique_id),
         )
+        if "via_device_id" in DeviceInfo.__annotations__:
+            self._attr_device_info["via_device_id"] = gateway.device_registry_id
+        else:
+            self._attr_device_info["via_device"] = (DOMAIN, gateway.unique_id)
 
     @property
     def via_device_id(self) -> str:
