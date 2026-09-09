@@ -23,7 +23,7 @@
       'icon': 'mdi:lock-alert',
     }),
     'context': <ANY>,
-    'entity_id': 'button.button_1',
+    'entity_id': 'button.button_1_lock',
     'last_changed': <ANY>,
     'last_reported': <ANY>,
     'last_updated': <ANY>,

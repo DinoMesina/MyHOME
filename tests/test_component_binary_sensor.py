@@ -628,7 +628,7 @@ async def test_dry_contact_garage_door_deduplication_and_zero_padded_where(hass)
 
 
 async def test_motion_sensor_zero_padded_where_and_legrand_048834_frames(hass):
-    """Test motion sensor handles zero-padded frames (*1*34*0015##, *#1*0015*5*2##, *#1*0015*7*0*0*10##) and defaults to False."""
+    """Test motion sensor at WHERE 0015 (Area 00, PL 15) handles Legrand 048834 frames (*1*34*0015##, *#1*0015*5*2##, *#1*0015*7*0*0*10##) and defaults to False."""
     from custom_components.myhome.ownd.message import OWNEvent
     from homeassistant.helpers.dispatcher import async_dispatcher_send
 
@@ -642,11 +642,11 @@ async def test_motion_sensor_zero_padded_where_and_legrand_048834_frames(hass):
             mac: {
                 "platforms": {
                     "binary_sensor": {
-                        "motion_15": {
+                        "motion_0015": {
                             "who": "1",
-                            "where": "15",
-                            "name": "Motion Sensor 15",
-                            "entity_name": "Motion Sensor 15",
+                            "where": "0015",
+                            "name": "Motion Sensor 0015",
+                            "entity_name": "Motion Sensor 0015",
                             "inverted": False,
                             "class": BinarySensorDeviceClass.MOTION,
                             "manufacturer": "BTicino",
@@ -660,20 +660,20 @@ async def test_motion_sensor_zero_padded_where_and_legrand_048834_frames(hass):
     }
     config_entry = MagicMock()
     config_entry.data = {"mac": mac}
-    config_entry.entry_id = "test_motion_zero_padded"
+    config_entry.entry_id = "test_motion_0015"
 
     # Simulate existing entries in registry:
-    # 1. Normal entry
+    # 1. Normal entry for 0015
     entry_v2 = MagicMock()
     entry_v2.domain = "binary_sensor"
-    entry_v2.entity_id = "binary_sensor.motion_15"
-    entry_v2.unique_id = f"{mac}-motion_15-motion"
+    entry_v2.entity_id = "binary_sensor.motion_0015"
+    entry_v2.unique_id = f"{mac}-motion_0015-motion"
     entry_v2.original_device_class = BinarySensorDeviceClass.MOTION
 
-    # 2. Duplicate zero-padded entry
+    # 2. Duplicate legacy entry for 0015
     entry_dup = MagicMock()
     entry_dup.domain = "binary_sensor"
-    entry_dup.entity_id = "binary_sensor.motion_sensor_0015"
+    entry_dup.entity_id = "binary_sensor.motion_sensor_0015_legacy"
     entry_dup.unique_id = f"{mac}-1-0015-motion"
     entry_dup.original_device_class = BinarySensorDeviceClass.MOTION
 
@@ -688,10 +688,12 @@ async def test_motion_sensor_zero_padded_where_and_legrand_048834_frames(hass):
     ):
         added = []
         assert await async_setup_entry(hass, config_entry, lambda e: added.extend(e)) is True
-        mock_er.async_remove.assert_called_with("binary_sensor.motion_sensor_0015")
+        mock_er.async_remove.assert_called_with("binary_sensor.motion_sensor_0015_legacy")
         assert len(added) == 1
         sensor = added[0]
-        assert sensor._where == "15"
+        assert sensor._where == "0015"
+        assert sensor.extra_state_attributes["A"] == "00"
+        assert sensor.extra_state_attributes["PL"] == "15"
         # Must default to False (idle/clear), not None (unknown/unavailable)
         assert sensor.is_on is False
 
@@ -699,23 +701,109 @@ async def test_motion_sensor_zero_padded_where_and_legrand_048834_frames(hass):
         sensor.async_write_ha_state = MagicMock()
         await sensor.async_added_to_hass()
 
-        # 1. Zero-padded motion event: *1*34*0015##
+        # 1. Motion event: *1*34*0015##
         motion_msg = OWNEvent.parse("*1*34*0015##")
         async_dispatcher_send(hass, f"myhome_message_{mac}", motion_msg)
         await hass.async_block_till_done()
         assert sensor.is_on is True
 
-        # 2. Zero-padded sensitivity frame: *#1*0015*5*2##
+        # 2. Sensitivity frame: *#1*0015*5*2##
         sens_msg = OWNEvent.parse("*#1*0015*5*2##")
         async_dispatcher_send(hass, f"myhome_message_{mac}", sens_msg)
         await hass.async_block_till_done()
         assert sensor.extra_state_attributes["Sensitivity"] == "high"
 
-        # 3. Zero-padded timeout frame: *#1*0015*7*0*0*10##
+        # 3. Timeout frame: *#1*0015*7*0*0*10##
         timeout_msg = OWNEvent.parse("*#1*0015*7*0*0*10##")
         async_dispatcher_send(hass, f"myhome_message_{mac}", timeout_msg)
         await hass.async_block_till_done()
         assert sensor.extra_state_attributes["Timeout"] == 25.0
+
+
+async def test_motion_sensor_0015_and_switch_15_coexistence(hass):
+    """Verify that APL 15 switch (A=1, PL=5) and APL 0015 motion sensor (A=0, PL=15) have distinct devices and do not collide."""
+    from custom_components.myhome.ownd.message import OWNEvent
+    from homeassistant.helpers.dispatcher import async_dispatcher_send
+    from custom_components.myhome.switch import async_setup_entry as async_setup_switch_entry
+
+    mac = "00:03:50:00:15:AA"
+    mock_gateway = MagicMock()
+    mock_gateway.mac = mac
+    mock_gateway.send_status_request = AsyncMock()
+
+    hass.data = {
+        DOMAIN: {
+            mac: {
+                "platforms": {
+                    "binary_sensor": {
+                        "0015": {
+                            "who": "1",
+                            "where": "0015",
+                            "name": "Motion Sensor 0015",
+                            "entity_name": "Motion Sensor 0015",
+                            "inverted": False,
+                            "class": BinarySensorDeviceClass.MOTION,
+                            "manufacturer": "BTicino",
+                            "model": "Legrand 048834",
+                        }
+                    },
+                    "switch": {
+                        "switch_15": {
+                            "who": "1",
+                            "where": "15",
+                            "name": "Switch 15",
+                            "manufacturer": "BTicino",
+                            "model": "F411",
+                        }
+                    },
+                },
+                "entity": mock_gateway,
+            }
+        }
+    }
+    config_entry = MagicMock()
+    config_entry.data = {"mac": mac}
+    config_entry.entry_id = "test_coexistence"
+
+    with patch("custom_components.myhome.binary_sensor.er.async_entries_for_config_entry", return_value=[]), \
+         patch("custom_components.myhome.switch.er.async_entries_for_config_entry", return_value=[]):
+        motion_entities = []
+        switch_entities = []
+        assert await async_setup_entry(hass, config_entry, lambda e: motion_entities.extend(e)) is True
+        assert await async_setup_switch_entry(hass, config_entry, lambda e: switch_entities.extend(e)) is True
+
+        assert len(motion_entities) == 1
+        assert len(switch_entities) == 1
+
+        motion = motion_entities[0]
+        sw = switch_entities[0]
+
+        # Crucial check: Device identifiers MUST be distinct
+        assert motion.device_info["identifiers"] == {(DOMAIN, f"{mac}-1-0015")}
+        assert sw.device_info["identifiers"] == {(DOMAIN, f"{mac}-1-15")}
+        assert motion.device_info["identifiers"] != sw.device_info["identifiers"]
+
+        motion.hass = hass
+        motion.async_write_ha_state = MagicMock()
+        await motion.async_added_to_hass()
+
+        sw.hass = hass
+        sw.async_write_ha_state = MagicMock()
+        await sw.async_added_to_hass()
+
+        # Motion frame for 0015 (*1*34*0015##) must trigger motion sensor, NOT switch
+        msg_motion = OWNEvent.parse("*1*34*0015##")
+        async_dispatcher_send(hass, f"myhome_message_{mac}", msg_motion)
+        await hass.async_block_till_done()
+        assert motion.is_on is True
+        assert sw.is_on is not True
+
+        # Switch ON frame for 15 (*1*1*15##) must trigger switch
+        msg_switch_on = OWNEvent.parse("*1*1*15##")
+        async_dispatcher_send(hass, f"myhome_update_{mac}_1_15", msg_switch_on)
+        await hass.async_block_till_done()
+        assert sw.is_on is True
+
 
 
 

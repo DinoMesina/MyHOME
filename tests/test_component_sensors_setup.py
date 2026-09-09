@@ -378,7 +378,7 @@ async def test_sensor_setup_registry_exception(mock_hass, mock_config_entry):
 
 @pytest.mark.asyncio
 async def test_illuminance_sensor_zero_padded_where_and_deduplication(hass: HomeAssistant):
-    """Test illuminance sensor handling 4-digit zero-padded WHO 1 frames (*#1*0015*6*33338##) and deduplication."""
+    """Test illuminance sensor handling 4-digit WHO 1 frames (*#1*0015*6*33338##) and deduplication."""
     from custom_components.myhome.ownd.message import OWNEvent
     from homeassistant.helpers.dispatcher import async_dispatcher_send
 
@@ -392,11 +392,11 @@ async def test_illuminance_sensor_zero_padded_where_and_deduplication(hass: Home
             mac: {
                 CONF_PLATFORMS: {
                     "sensor": {
-                        "light_sensor_15": {
+                        "light_sensor_0015": {
                             CONF_DEVICE_CLASS: SensorDeviceClass.ILLUMINANCE,
                             CONF_WHO: "1",
-                            CONF_WHERE: "15",
-                            CONF_NAME: "Illuminance 15",
+                            CONF_WHERE: "0015",
+                            CONF_NAME: "Illuminance 0015",
                             CONF_MANUFACTURER: "BTicino",
                             CONF_DEVICE_MODEL: "Light Sensor",
                         }
@@ -408,13 +408,13 @@ async def test_illuminance_sensor_zero_padded_where_and_deduplication(hass: Home
     }
     config_entry = MagicMock()
     config_entry.data = {CONF_MAC: mac}
-    config_entry.entry_id = "test_ill_zero_padded"
+    config_entry.entry_id = "test_ill_0015"
 
-    # Registry with a duplicate zero-padded entry
+    # Registry with a duplicate legacy format entry for 0015
     entry_dup = MagicMock()
     entry_dup.domain = "sensor"
-    entry_dup.entity_id = "sensor.illuminance_0015"
-    entry_dup.unique_id = f"{mac}-0015-illuminance"
+    entry_dup.entity_id = "sensor.illuminance_0015_legacy"
+    entry_dup.unique_id = f"{mac}-1-0015-illuminance"
     entry_dup.original_device_class = SensorDeviceClass.ILLUMINANCE
 
     mock_er = MagicMock()
@@ -428,27 +428,20 @@ async def test_illuminance_sensor_zero_padded_where_and_deduplication(hass: Home
     ):
         added = []
         assert await async_setup_entry(hass, config_entry, lambda e: added.extend(e)) is True
-        mock_er.async_remove.assert_called_with("sensor.illuminance_0015")
+        mock_er.async_remove.assert_called_with("sensor.illuminance_0015_legacy")
         assert len(added) == 1
         sensor = added[0]
-        assert sensor._where == "15"
+        assert sensor._where == "0015"
 
         sensor.hass = hass
         sensor.async_write_ha_state = MagicMock()
         await sensor.async_added_to_hass()
 
-        # Send zero-padded Legrand 048834 frame: *#1*0015*6*33338##
+        # Send Legrand 048834 frame: *#1*0015*6*33338##
         msg = OWNEvent.parse("*#1*0015*6*33338##")
         async_dispatcher_send(hass, f"myhome_message_{mac}", msg)
         await hass.async_block_till_done()
 
         assert sensor._attr_native_value == 33338
         sensor.async_write_ha_state.assert_called()
-
-        # Another frame with unpadded address *#1*15*6*25000##
-        msg2 = OWNEvent.parse("*#1*15*6*25000##")
-        async_dispatcher_send(hass, f"myhome_message_{mac}", msg2)
-        await hass.async_block_till_done()
-
-        assert sensor._attr_native_value == 25000
 

@@ -78,8 +78,43 @@ SOFTWARE_TRANSITION_MIN_STEPS = 2
 SOFTWARE_TRANSITION_MAX_STEPS = 25
 
 
+def is_apl_address(base: str) -> bool:
+    """Check if base address is a valid OpenWebNet Point-to-Point (APL) address.
+
+    Point-to-point addressing combinations:
+      - A = 00; PL [01-15]     -> 4 digits (e.g. 0015 = Area 00, PL 15)
+      - A [1-9]; PL [1-9]      -> 2 digits (e.g. 15 = Area 1, PL 5)
+      - A = 10; PL [01-15]     -> 4 digits (e.g. 1015 = Area 10, PL 15)
+      - A [01-09]; PL [10-15]  -> 4 digits (e.g. 0115 = Area 1, PL 15)
+    """
+    if not base.isdigit():
+        return False
+    if len(base) == 2:
+        a = int(base[0])
+        pl = int(base[1])
+        return 1 <= a <= 9 and 1 <= pl <= 9
+    if len(base) == 4:
+        a = int(base[:2])
+        pl = int(base[2:])
+        if a == 0:
+            return 1 <= pl <= 15
+        if 1 <= a <= 9:
+            return 10 <= pl <= 15
+        if a == 10:
+            return 1 <= pl <= 15
+    return False
+
+
 def normalize_where(where: str | int | None) -> str:
-    """Normalize OpenWebNet address by stripping leading zeros from base address while preserving sub-bus."""
+    """Normalize OpenWebNet address while preserving Point-to-Point (APL) addressing.
+
+    Point-to-point WHERE addresses must never have leading zeros stripped:
+      - '0015' means Area 00, Point 15 (4 digits)
+      - '15' means Area 1, Point 5 (2 digits)
+    Area broadcasts '00' (Area 0) and '100' (Area 10) are also preserved.
+    Other numeric addresses (such as zero-padded CEN+/dry contact object IDs like '0021')
+    have leading zeros stripped to match integer IDs.
+    """
     if where is None:
         return ""
     where_str = str(where).strip()
@@ -87,7 +122,9 @@ def normalize_where(where: str | int | None) -> str:
         return ""
     parts = where_str.split("#", 1)
     base = parts[0]
-    if base.isdigit():
+    if is_apl_address(base) or base in ("00", "100", "0"):
+        norm_base = base
+    elif base.isdigit():
         norm_base = str(int(base))
     else:
         norm_base = base

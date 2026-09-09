@@ -162,6 +162,7 @@ class DisableCommandButtonEntity(ButtonEntity, MyHOMEEntity):
         self._attr_entity_category = EntityCategory.CONFIG
 
         self._attr_unique_id = f"{gateway.mac}-{self._device_id}-disable"
+        self.entity_id = f"{platform.lower()}.{name.lower().replace(' ', '_')}_lock"
         self._interface = interface
         self._full_where = (
             f"{self._where}#4#{self._interface}"
@@ -232,6 +233,7 @@ class EnableCommandButtonEntity(ButtonEntity, MyHOMEEntity):
         self._attr_entity_category = EntityCategory.CONFIG
 
         self._attr_unique_id = f"{gateway.mac}-{self._device_id}-enable"
+        self.entity_id = f"{platform.lower()}.{name.lower().replace(' ', '_')}_unlock"
         self._interface = interface
         self._full_where = (
             f"{self._where}#4#{self._interface}"

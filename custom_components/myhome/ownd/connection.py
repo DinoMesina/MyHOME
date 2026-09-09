@@ -889,10 +889,16 @@ class OWNCommandSession(OWNSession):
                         )
                         return collected or True
                     if collected or attempt == 1:
-                        self._logger.warning(
-                            "%s Gateway rejected message %s (NACK, %s response(s)).",
-                            self._gateway.log_id, message, len(collected),
-                        )
+                        if is_status_request:
+                            self._logger.debug(
+                                "%s Gateway rejected status request %s (NACK, %s response(s)). Subsystem or device may not be present.",
+                                self._gateway.log_id, message, len(collected),
+                            )
+                        else:
+                            self._logger.warning(
+                                "%s Gateway rejected message %s (NACK, %s response(s)).",
+                                self._gateway.log_id, message, len(collected),
+                            )
                         return None
                     self._logger.debug(
                         "%s Immediate NACK for %s, retrying once.",

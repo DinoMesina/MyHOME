@@ -158,11 +158,11 @@ async def test_legacy_platforms_setup_and_execution(hass: HomeAssistant, mock_ga
     assert hass.states.get("sensor.sensor_1_energy") == snapshot(name="sensor_energy_state")
 
     # Hit Button Press
-    await hass.services.async_call("button", "press", {"entity_id": "button.button_1"}, blocking=True)
+    await hass.services.async_call("button", "press", {"entity_id": "button.button_1_lock"}, blocking=True)
     await hass.async_block_till_done()
     
     # Snapshot Button
-    assert hass.states.get("button.button_1") == snapshot(
+    assert hass.states.get("button.button_1_lock") == snapshot(
         name="button_state",
         matcher=path_type({"state": (str,)})
     )

@@ -54,6 +54,13 @@ async def test_setup_and_unload_entry(hass):
     
     # Each device gets 1 disable and 1 enable button
     assert len(entities) == 4
+    entity_ids = [e.entity_id for e in entities]
+    assert entity_ids == [
+        "button.light_12_lock",
+        "button.light_12_unlock",
+        "button.light_13_lock",
+        "button.light_13_unlock",
+    ]
     
     # Test unload
     await async_unload_entry(hass, config_entry)
@@ -96,6 +103,7 @@ async def test_disable_button_entity(hass):
     )
     
     assert btn1.name == "Lock"
+    assert btn1.entity_id == "button.device_lock"
     assert btn1.unique_id == "mac-device_1-disable"
     assert btn1.extra_state_attributes["A"] == "1"
     assert btn1.extra_state_attributes["PL"] == "2"
@@ -167,6 +175,7 @@ async def test_enable_button_entity(hass):
     )
     
     assert btn1.name == "Unlock"
+    assert btn1.entity_id == "button.device_unlock"
     assert btn1.unique_id == "mac-device_1-enable"
     
     await btn1.async_press()

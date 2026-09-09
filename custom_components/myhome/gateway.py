@@ -248,8 +248,6 @@ class MyHOMEGatewayHandler:
                                 "myhome_general_light_event",
                                 {"message": str(message), "event": event},
                             )
-                            await asyncio.sleep(0.1)
-                            await self.send_status_request(OWNLightingCommand.status("0"))
                         elif message.is_area:
                             event = "on" if message.is_on else "off"
                             self.hass.bus.async_fire(
