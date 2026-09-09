@@ -289,19 +289,29 @@ The integration maintains 739 automated unit tests (100% line coverage across al
 
 ## 🗺️ Roadmap
 
-- [x] **Phase 1: Architecture Decoupling & Modernization**
+The development of the MyHOME integration is organized into five strategic release milestones. For comprehensive milestone details, technical specifications, and contributor attribution, refer to the full [**ROADMAP.md**](ROADMAP.md).
+
+- [x] **Phase 1: Architecture Modernization & Core Feature Parity (v2.0 — Current)**
   - [x] Declarative hardware gateway profiles (`MH200` to `F454`).
-  - [x] Zero-friction migration (preserving custom entity IDs and friendly names).
-  - [x] Token-bucket bus pacing and sentinel worker lifecycle.
-  - [x] Synthetic mock TCP test harness with 757+ unit tests (100% coverage).
-  - [x] PyPI packaging pipeline & GitHub Actions CI green across all workflows.
-- [x] **Phase 2: Monitoring & Real-time Diagnostics**
-  - [x] In-band Unified Bus Listener (500-frame circular ring buffer, 0 extra sockets).
-  - [x] Native Home Assistant Diagnostics (`diagnostics.py`).
-  - [x] WebSocket streaming API & real-time Lovelace bus monitor card.
-  - [x] One-click diagnostic bundle & GitHub Issue Forms.
-  - [x] USB / Serial Gateway support (Legrand 3578 / OpenZigBee).
-  - [x] Stateless CEN/CEN+ scenario device triggers (`device_trigger.py`).
+  - [x] Dual asynchronous transports: Async TCP & Serial/USB (`Legrand 3578 / OpenZigBee`).
+  - [x] Token-bucket bus pacing & sentinel supervisor lifecycle.
+  - [x] In-band Lovelace Bus Monitor Card (`<myhome-bus-card>`) & WebSocket streaming proxy.
+  - [x] Native Home Assistant Diagnostics (`diagnostics.py`) & GitHub Issue Forms.
+  - [x] Full feature parity across primary subsystems: Light, Switch, Cover, Climate (Fancoil), Alarm, Binary Sensor (3477 Dry Contact / IR), Device Triggers (CEN/CEN+).
+  - [x] 100% automated test coverage across all component modules.
+- [ ] **Phase 2: Native Bus Timers & Environmental Auto-Discovery (v2.1 — Q4 2026)**
+  - [ ] Native SCS light actuator temporization / staircase timers (`WHO = 1` Dimension 2 & timed WHAT codes).
+  - [ ] Dynamic discovery for illuminance & motion detectors (Legrand 048834).
+  - [ ] Passive bus sniffing & topology auto-mapping.
+- [ ] **Phase 3: Actuator Diagnostics & Endpoint Safety Locks (v2.2 — Q4 2026)**
+  - [ ] Actuator hardware maintenance locks / endpoint disable (`WHO = 14`).
+  - [ ] Relay health telemetry, operating cycle counters, and diagnostic failure codes.
+- [ ] **Phase 4: Extended Lighting, Tunable White & DALI-2 (v2.3 — Q1 2027)**
+  - [ ] Tunable white (Kelvin/mireds) and RGB/RGBW color control for DALI via F429/F429G.
+  - [ ] Native support for Lighting Management Room Controllers (`WHO = 24` BMNE500 / 002645).
+- [ ] **Phase 5: Smart Energy Management & Advanced Sound Diffusion (v2.4 — Q1 2027)**
+  - [ ] Energy management central units & multi-function power meters (`WHO = 18` F520/F521/F522/F523/3522).
+  - [ ] Multi-room sound diffusion source navigation, FM tuner presets, and RDS metadata streaming (`WHO = 22`).
 
 ---
 

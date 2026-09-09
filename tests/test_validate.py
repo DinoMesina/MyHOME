@@ -643,3 +643,49 @@ class TestFullConfigSchema:
         }
         with pytest.raises(Invalid, match="Invalid MAC address"):
             config_schema(bad_config)
+
+    def test_device_class_remapping_and_defaults(self):
+        """Test string device_class remapping to CONF_DEVICE_CLASS and defaults in schemas."""
+        # Switch with string device_class
+        sw_data = {
+            "sw1": {
+                CONF_WHERE: "12",
+                CONF_NAME: "Outlet 12",
+                "device_class": SwitchDeviceClass.OUTLET,
+            }
+        }
+        res_sw = switch_schema(sw_data)
+        assert res_sw["1-12"][CONF_DEVICE_CLASS] == SwitchDeviceClass.OUTLET
+
+        # Switch without device_class gets default SWITCH
+        sw_no_dc = {
+            "sw2": {
+                CONF_WHERE: "13",
+                CONF_NAME: "Switch 13",
+            }
+        }
+        res_sw_no_dc = switch_schema(sw_no_dc)
+        assert res_sw_no_dc["1-13"][CONF_DEVICE_CLASS] == SwitchDeviceClass.SWITCH
+
+        # Binary sensor with string device_class
+        bs_data = {
+            "bs1": {
+                CONF_WHERE: "21",
+                CONF_NAME: "Front Door",
+                "device_class": BinarySensorDeviceClass.DOOR,
+            }
+        }
+        res_bs = binary_sensor_schema(bs_data)
+        assert res_bs["25-21"][CONF_DEVICE_CLASS] == BinarySensorDeviceClass.DOOR
+
+        # Cover with advanced_shutter
+        cov_data = {
+            "cov1": {
+                CONF_WHERE: "22",
+                CONF_NAME: "Living Cover",
+                "advanced_shutter": True,
+            }
+        }
+        res_cov = cover_schema(cov_data)
+        assert res_cov["2-22"][CONF_ADVANCED_SHUTTER] is True
+

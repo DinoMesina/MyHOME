@@ -37,6 +37,7 @@ from .ownd.message import (
     OWNLightingEvent,
     OWNLightingCommand,
     OWNEnergyEvent,
+    OWNEnergyCommand,
     OWNAutomationEvent,
     OWNDryContactEvent,
     OWNAuxEvent,
@@ -64,6 +65,10 @@ from .const import (
     CONF_SHORT_RELEASE,
     CONF_LONG_PRESS,
     CONF_LONG_RELEASE,
+    CONF_ROTARY_CW_SLOW,
+    CONF_ROTARY_CW_FAST,
+    CONF_ROTARY_CCW_SLOW,
+    CONF_ROTARY_CCW_FAST,
     DOMAIN,
     LOGGER,
 )
@@ -169,8 +174,7 @@ class MyHOMEGatewayHandler:
                 return
         self.is_connected = True
 
-        # Active Discovery
-        await self.send_status_request(OWNCommand.parse("*#1*0##")) # Lighting
+        # Active Discovery (WHO=1 general status request *#1*0## is invalid in OpenWebNet and omitted)
         await self.send_status_request(OWNCommand.parse("*#2*0##")) # Automation / Covers
         await self.send_status_request(OWNCommand.parse("*#4*0##")) # Heating / Climate
         await self.send_status_request(OWNCommand.parse("*#16*0##")) # Audio
@@ -305,6 +309,14 @@ class MyHOMEGatewayHandler:
                     event = CONF_LONG_PRESS
                 elif message.is_released:
                     event = CONF_LONG_RELEASE
+                elif getattr(message, "is_slowly_turned_cw", False) is True:
+                    event = CONF_ROTARY_CW_SLOW
+                elif getattr(message, "is_quickly_turned_cw", False) is True:
+                    event = CONF_ROTARY_CW_FAST
+                elif getattr(message, "is_slowly_turned_ccw", False) is True:
+                    event = CONF_ROTARY_CCW_SLOW
+                elif getattr(message, "is_quickly_turned_ccw", False) is True:
+                    event = CONF_ROTARY_CCW_FAST
                 else:
                     event = None
                 self.hass.bus.async_fire(
@@ -376,6 +388,15 @@ class MyHOMEGatewayHandler:
                     "%s %s",
                     self.log_id,
                     message.human_readable_log,
+                )
+            elif (
+                getattr(message, "who", None) == 18
+                or isinstance(message, (OWNEnergyEvent, OWNEnergyCommand))
+            ):
+                LOGGER.debug(
+                    "%s Energy telemetry message: `%s`",
+                    self.log_id,
+                    message,
                 )
             else:
                 LOGGER.info(

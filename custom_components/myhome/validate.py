@@ -241,6 +241,8 @@ class MyHomeDeviceSchema(Schema):
                 data[device][CONF_ADVANCED_SHUTTER] = True
             if "device_class" in data[device] and CONF_DEVICE_CLASS not in data[device]:
                 data[device][CONF_DEVICE_CLASS] = data[device]["device_class"]
+            if CONF_DEVICE_CLASS not in data[device]:
+                data[device][CONF_DEVICE_CLASS] = SwitchDeviceClass.SWITCH
 
         return _rekeyed_data
 
@@ -320,7 +322,7 @@ switch_schema = MyHomeDeviceSchema(
             Optional(CONF_ENTITY_NAME): str,
             Optional(CONF_ICON): str,
             Optional(CONF_ICON_ON): str,
-            Optional(CONF_DEVICE_CLASS, default=SwitchDeviceClass.SWITCH): In(
+            Optional(CONF_DEVICE_CLASS): In(
                 [
                     SwitchDeviceClass.OUTLET,
                     SwitchDeviceClass.SWITCH,
@@ -366,6 +368,34 @@ binary_sensor_schema = MyHomeDeviceSchema(
             Optional(CONF_ENTITY_NAME): str,
             Optional(CONF_INVERTED, default=False): Boolean(),
             Optional(CONF_DEVICE_CLASS): In(
+                [
+                    BinarySensorDeviceClass.BATTERY,
+                    BinarySensorDeviceClass.BATTERY_CHARGING,
+                    BinarySensorDeviceClass.COLD,
+                    BinarySensorDeviceClass.CONNECTIVITY,
+                    BinarySensorDeviceClass.DOOR,
+                    BinarySensorDeviceClass.GARAGE_DOOR,
+                    BinarySensorDeviceClass.GAS,
+                    BinarySensorDeviceClass.HEAT,
+                    BinarySensorDeviceClass.LIGHT,
+                    BinarySensorDeviceClass.LOCK,
+                    BinarySensorDeviceClass.MOISTURE,
+                    BinarySensorDeviceClass.MOTION,
+                    BinarySensorDeviceClass.MOVING,
+                    BinarySensorDeviceClass.OCCUPANCY,
+                    BinarySensorDeviceClass.OPENING,
+                    BinarySensorDeviceClass.PLUG,
+                    BinarySensorDeviceClass.POWER,
+                    BinarySensorDeviceClass.PRESENCE,
+                    BinarySensorDeviceClass.PROBLEM,
+                    BinarySensorDeviceClass.SAFETY,
+                    BinarySensorDeviceClass.SMOKE,
+                    BinarySensorDeviceClass.SOUND,
+                    BinarySensorDeviceClass.VIBRATION,
+                    BinarySensorDeviceClass.WINDOW,
+                ]
+            ),
+            Optional("device_class"): In(
                 [
                     BinarySensorDeviceClass.BATTERY,
                     BinarySensorDeviceClass.BATTERY_CHARGING,

@@ -331,7 +331,14 @@ class MyHOMECover(MyHOMEEntity, CoverEntity):
 
         Only used by the generic entity update service.
         """
-        await self._gateway_handler.send_status_request(OWNAutomationCommand.status(self._full_where))
+        if self._advanced:
+            await self._gateway_handler.send_status_request(
+                OWNAutomationCommand.get_shutter_status(self._full_where)
+            )
+        else:
+            await self._gateway_handler.send_status_request(
+                OWNAutomationCommand.status(self._full_where)
+            )
 
     async def async_open_cover(self, **kwargs):  # pylint: disable=unused-argument
         """Open the cover."""

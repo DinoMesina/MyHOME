@@ -248,8 +248,7 @@ class MyHOMEAlarmControlPanel(MyHOMEEntity, AlarmControlPanelEntity):
 
     async def async_alarm_trigger(self, code=None):  # pylint: disable=unused-argument
         """Send panic / alarm trigger command."""
-        from .ownd.message import OWNCommand
-        await self._gateway_handler.send(OWNCommand(f"*5*4*{self._where}##"))
+        await self._gateway_handler.send(OWNAlarmCommand.trigger(self._where))
 
     @callback
     def handle_event(self, message: OWNAlarmEvent):

@@ -61,12 +61,8 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
 
     # Restore previously discovered entities from the Entity Registry so they
     # are available immediately on restart, even before the gateway responds.
-    try:
-        entity_registry = er.async_get(hass)
-        existing_entries = er.async_entries_for_config_entry(entity_registry, config_entry.entry_id)
-    except Exception:
-        entity_registry = None
-        existing_entries = []
+    entity_registry = er.async_get(hass)
+    existing_entries = er.async_entries_for_config_entry(entity_registry, config_entry.entry_id)
     restored_lights = []
 
     gateway = hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_ENTITY]

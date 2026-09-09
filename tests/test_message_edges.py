@@ -28,6 +28,8 @@ from custom_components.myhome.ownd.message import (
     OWNEnergyCommand,
     OWNDryContactCommand,
     OWNAVCommand,
+    OWNAlarmCommand,
+    OWNStatusRequest,
     MESSAGE_TYPE_ACTIVE_POWER,
     MESSAGE_TYPE_ENERGY_TOTALIZER,
     MESSAGE_TYPE_HOURLY_CONSUMPTION,
@@ -1041,6 +1043,130 @@ class TestMoreEdgeCoverage:
         assert "*18*510#" in str(cmd_2y)
         # Older than 2 years -> None
         assert OWNEnergyCommand.get_daily_consumption("1", now.year - 3, 1) is None
+
+
+class TestProtocolFixesAudit:
+    """Tests covering OpenWebNet protocol fixes and enhancements."""
+
+    def test_who25_routing_and_bounds_safety(self):
+        # Dry contact with address starting with '2'
+        evt_dc_21 = OWNEvent.parse("*25*31*21##")
+        assert isinstance(evt_dc_21, OWNDryContactEvent)
+        assert evt_dc_21.is_on is True
+        assert evt_dc_21.sensor == "21"
+
+        evt_dc_2 = OWNEvent.parse("*25*32*2##")
+        assert isinstance(evt_dc_2, OWNDryContactEvent)
+        assert evt_dc_2.is_on is False
+        assert evt_dc_2.sensor == "2"
+
+        # CEN+ with WHAT between 21 and 28
+        evt_cp_short = OWNEvent.parse("*25*21#1*21##")
+        assert isinstance(evt_cp_short, OWNCENPlusEvent)
+        assert evt_cp_short.is_short_pressed is True
+        assert evt_cp_short.push_button == 1
+
+        evt_cp_ccw = OWNEvent.parse("*25*28#2*21##")
+        assert isinstance(evt_cp_ccw, OWNCENPlusEvent)
+        assert evt_cp_ccw.is_quickly_turned_ccw is True
+        assert evt_cp_ccw.push_button == 2
+
+        # Malformed CEN+ without _what_param does not crash with IndexError
+        evt_cp_empty_param = OWNCENPlusEvent("*25*21*21##")
+        assert evt_cp_empty_param.push_button == 0
+
+        # Dry contact without _what_param does not crash
+        evt_dc_empty_param = OWNDryContactEvent("*25*31*21##")
+        assert evt_dc_empty_param.is_detection is True
+
+        # Status request for WHO=25
+        cmd_dc_status = OWNCommand.parse("*#25*21##")
+        assert isinstance(cmd_dc_status, OWNDryContactCommand)
+        assert str(cmd_dc_status) == "*#25*21##"
+
+    def test_where_less_status_requests(self):
+        # WHO=5 without WHERE
+        msg_alarm_global = OWNMessage.parse("*#5##")
+        assert isinstance(msg_alarm_global, OWNAlarmCommand)
+        assert msg_alarm_global.where is None
+        assert msg_alarm_global.unique_id == "5"
+
+        # WHO=9 without WHERE
+        msg_aux_global = OWNMessage.parse("*#9##")
+        assert isinstance(msg_aux_global, OWNStatusRequest)
+        assert msg_aux_global.where is None
+        assert msg_aux_global.unique_id == "9"
+
+        # OWNStatusRequest helpers
+        req_9 = OWNStatusRequest.request(9)
+        assert str(req_9) == "*#9##"
+        req_9_1 = OWNStatusRequest.request(9, "1")
+        assert str(req_9_1) == "*#9*1##"
+
+    def test_alarm_commands_alignment(self):
+        assert str(OWNAlarmCommand.disarm("0")) == "*5*2*0##"
+        assert str(OWNAlarmCommand.arm_away("0")) == "*5*1*0##"
+        assert str(OWNAlarmCommand.arm_home("0")) == "*5*1*0##"
+        assert str(OWNAlarmCommand.trigger("0")) == "*5*17*0##"
+        assert str(OWNAlarmCommand.panic("0")) == "*5*17*0##"
+        assert str(OWNAlarmCommand.status("0")) == "*#5*0##"
+        assert str(OWNAlarmCommand.status("1")) == "*#5*#1##"
+        assert str(OWNAlarmCommand.status("#2")) == "*#5*#2##"
+        assert str(OWNAlarmCommand.status(None)) == "*#5##"
+        assert str(OWNAlarmCommand.status("")) == "*#5##"
+
+        # OWNCommand.parse for WHO=5
+        cmd_alarm = OWNCommand.parse("*5*2*0##")
+        assert isinstance(cmd_alarm, OWNAlarmCommand)
+
+    def test_gateway_time_and_bounds_safety(self):
+        # set_time_to_now should not have trailing asterisk before ##
+        cmd_time = OWNGatewayCommand.set_time_to_now("UTC")
+        assert str(cmd_time).endswith("##")
+        assert not str(cmd_time).endswith("*##")
+
+        # F454 broadcast without timezone in dimension 0
+        evt_time_no_tz = OWNGatewayEvent("*#13**0*14*30*45##")
+        assert evt_time_no_tz._hour == "14"
+        assert evt_time_no_tz._minute == "30"
+        assert evt_time_no_tz._second == "45"
+
+        # OWNGatewayCommand dimension 0, 1, 22 bounds safety
+        cmd_dim0 = OWNGatewayCommand("*#13**#0*12*00*00##")
+        assert cmd_dim0._hour == "12"
+
+        cmd_dim1 = OWNGatewayCommand("*#13**#1*1*15*04*2026##")
+        assert cmd_dim1._year == "2026"
+
+    def test_cover_shutter_status_dimension10(self):
+        cmd_shutter = OWNAutomationCommand.get_shutter_status("21")
+        assert str(cmd_shutter) == "*#2*21*10##"
+
+        # Dim 10 event parsing (state=10, position=75)
+        evt_shutter = OWNAutomationEvent("*#2*21*10*10*75##")
+        assert evt_shutter.current_position == 75
+
+    def test_energy_telemetry_addressing(self):
+        # Stop & Go sensor where starts with 1
+        evt_energy = OWNEnergyEvent("*#18*11*51*2500##")
+        assert evt_energy.total_consumption == 2500
+        assert evt_energy.sensor == "1"
+        assert evt_energy.where == "11"
+
+        evt_energy_single = OWNEnergyEvent("*#18*1*51*1200##")
+        assert evt_energy_single.total_consumption == 1200
+        assert evt_energy_single.sensor == "1"
+
+    def test_gateway_profile_constants(self):
+        from custom_components.myhome.gateway_profile import (
+            WHO_LOAD_CONTROL,
+            WHO_SOUND_DIFFUSION,
+            DEFAULT_SUPPORTED_WHO,
+        )
+        assert WHO_LOAD_CONTROL == 3
+        assert WHO_SOUND_DIFFUSION == 22
+        assert WHO_LOAD_CONTROL in DEFAULT_SUPPORTED_WHO
+        assert WHO_SOUND_DIFFUSION in DEFAULT_SUPPORTED_WHO
 
 
 

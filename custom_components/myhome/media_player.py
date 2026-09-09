@@ -385,8 +385,9 @@ class MyHOMEMediaPlayer(MyHOMEEntity, MediaPlayerEntity):
         self._active_decoder = decoder_id
 
         # 2. Wake the decoder if it is in standby or off
+        _standby_state = getattr(MediaPlayerState, "STANDBY", "standby")
         dec_state = self.hass.states.get(decoder_id)
-        if dec_state and dec_state.state in (MediaPlayerState.OFF, MediaPlayerState.STANDBY):
+        if dec_state and dec_state.state in (MediaPlayerState.OFF, _standby_state):
             await self.hass.services.async_call(
                 "media_player", "turn_on", {"entity_id": decoder_id}
             )
@@ -396,7 +397,7 @@ class MyHOMEMediaPlayer(MyHOMEEntity, MediaPlayerEntity):
                 dec_state = self.hass.states.get(decoder_id)
                 if dec_state and dec_state.state not in (
                     MediaPlayerState.OFF,
-                    MediaPlayerState.STANDBY,
+                    _standby_state,
                 ):
                     break
             else:

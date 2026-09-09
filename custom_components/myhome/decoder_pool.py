@@ -55,8 +55,8 @@ class DecoderPool:
     # rather than risking a claim on a device that cannot actually play.
     _IDLE_STATES: frozenset = frozenset({
         MediaPlayerState.IDLE,
+        getattr(MediaPlayerState, "STANDBY", "standby"),
         MediaPlayerState.OFF,
-        MediaPlayerState.STANDBY,
         None,  # entity not yet registered / state unknown
     })
 

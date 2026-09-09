@@ -44,12 +44,8 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
         return True
 
     known_switches = set()
-    try:
-        entity_registry = er.async_get(hass)
-        existing_entries = er.async_entries_for_config_entry(entity_registry, config_entry.entry_id)
-    except Exception:
-        entity_registry = None
-        existing_entries = []
+    entity_registry = er.async_get(hass)
+    existing_entries = er.async_entries_for_config_entry(entity_registry, config_entry.entry_id)
     restored_switches = []
 
     gateway = hass.data[DOMAIN][mac][CONF_ENTITY]

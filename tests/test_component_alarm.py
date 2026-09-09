@@ -170,11 +170,11 @@ class TestMyHOMEAlarmEntity:
         await alarm_zone1.async_added_to_hass()
         assert alarm_zone1.async_on_remove.call_count == 2
 
-    async def test_alarm_commands(self, alarm_central):
+    async def test_alarm_commands(self, alarm_central, alarm_zone1):
         # Disarm
         await alarm_central.async_alarm_disarm()
         alarm_central._gateway_handler.send.assert_awaited()
-        assert str(alarm_central._gateway_handler.send.call_args[0][0]) == "*5*0*0##"
+        assert str(alarm_central._gateway_handler.send.call_args[0][0]) == "*5*2*0##"
 
         # Arm Away
         alarm_central._gateway_handler.send.reset_mock()
@@ -186,13 +186,21 @@ class TestMyHOMEAlarmEntity:
         alarm_central._gateway_handler.send.reset_mock()
         await alarm_central.async_alarm_arm_home()
         alarm_central._gateway_handler.send.assert_awaited()
-        assert str(alarm_central._gateway_handler.send.call_args[0][0]) == "*5*2*0##"
+        assert str(alarm_central._gateway_handler.send.call_args[0][0]) == "*5*1*0##"
 
         # Trigger / Panic
         alarm_central._gateway_handler.send.reset_mock()
         await alarm_central.async_alarm_trigger()
         alarm_central._gateway_handler.send.assert_awaited()
-        assert str(alarm_central._gateway_handler.send.call_args[0][0]) == "*5*4*0##"
+        assert str(alarm_central._gateway_handler.send.call_args[0][0]) == "*5*17*0##"
+
+        # Status requests
+        cmd_central = OWNAlarmCommand.status("0")
+        assert str(cmd_central) == "*#5*0##"
+        cmd_where_less = OWNAlarmCommand.status(None)
+        assert str(cmd_where_less) == "*#5##"
+        cmd_zone1 = OWNAlarmCommand.status("1")
+        assert str(cmd_zone1) == "*#5*#1##"
 
     def test_handle_event(self, alarm_central):
         # Disarmed event (*5*2*0## - deactivation)
