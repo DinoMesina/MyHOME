@@ -32,50 +32,69 @@ CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 PLATFORMS = ["light", "switch", "cover", "climate", "binary_sensor", "sensor", "media_player", "button", "alarm_control_panel"]
 
 
+async def _async_register_lovelace_resource(hass: HomeAssistant, url_path: str) -> bool:
+    """Auto-register resource in Lovelace dashboard resources collection."""
+    try:
+        lovelace = hass.data.get("lovelace")
+        if not lovelace:
+            return False
+        resources = getattr(lovelace, "resources", None)
+        if not resources:
+            return False
+        if hasattr(resources, "loaded") and not resources.loaded:
+            await resources.async_load()
+            resources.loaded = True
+        if hasattr(resources, "async_create_item"):
+            existing = [item["url"] for item in (resources.async_items() or []) if isinstance(item, dict) and "url" in item]
+            if url_path not in existing:
+                await resources.async_create_item({
+                    "res_type": "module",
+                    "url": url_path,
+                })
+        return True
+    except Exception as e:
+        LOGGER.debug("Could not auto-register Lovelace resource: %s", e)
+        return False
+
+
 async def _async_register_frontend(hass: HomeAssistant) -> None:
     """Register the Lovelace bus monitor card static resource and script."""
     domain_data = hass.data.setdefault(DOMAIN, {})
-    if domain_data.get("_frontend_registered"):
-        return
 
     card_path = os.path.join(os.path.dirname(__file__), "frontend", "myhome-bus-card.js")
     url_path = "/myhome_static/myhome-bus-card.js"
 
     http = getattr(hass, "http", None)
-    if http is not None and os.path.isfile(card_path):
-        if hasattr(http, "async_register_static_paths"):
-            try:
-                from homeassistant.components.http import StaticPathConfig
-                await http.async_register_static_paths([
-                    StaticPathConfig(url_path, card_path, False)
-                ])
-            except Exception:
+    if not domain_data.get("_frontend_registered"):
+        if http is not None and os.path.isfile(card_path):
+            if hasattr(http, "async_register_static_paths"):
+                try:
+                    from homeassistant.components.http import StaticPathConfig
+                    await http.async_register_static_paths([
+                        StaticPathConfig(url_path, card_path, False)
+                    ])
+                except Exception:
+                    http.register_static_path(url_path, card_path, False)
+            elif hasattr(http, "register_static_path"):
                 http.register_static_path(url_path, card_path, False)
-        elif hasattr(http, "register_static_path"):
-            http.register_static_path(url_path, card_path, False)
 
-        try:
-            from homeassistant.components import frontend
-            frontend.add_extra_js_url(hass, url_path)
-        except Exception as e:
-            LOGGER.debug("Could not add extra js url for Lovelace card: %s", e)
+            try:
+                from homeassistant.components import frontend
+                frontend.add_extra_js_url(hass, url_path)
+            except Exception as e:
+                LOGGER.debug("Could not add extra js url for Lovelace card: %s", e)
 
-        domain_data["_frontend_registered"] = True
+            domain_data["_frontend_registered"] = True
 
     # Auto-register resource in Lovelace dashboard resources collection
-    try:
-        lovelace = hass.data.get("lovelace")
-        if lovelace:
-            resources = getattr(lovelace, "resources", None)
-            if resources and hasattr(resources, "async_create_item"):
-                existing = [item["url"] for item in resources.async_items()]
-                if url_path not in existing:
-                    await resources.async_create_item({
-                        "res_type": "module",
-                        "url": url_path,
-                    })
-    except Exception as e:
-        LOGGER.debug("Could not auto-register Lovelace resource: %s", e)
+    if not await _async_register_lovelace_resource(hass, url_path):
+        if not domain_data.get("_lovelace_listener_registered"):
+            async def _on_ha_started(event):
+                await _async_register_lovelace_resource(hass, url_path)
+
+            from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
+            hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, _on_ha_started)
+            domain_data["_lovelace_listener_registered"] = True
 
 
 async def async_setup(hass, config):

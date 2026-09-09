@@ -3,7 +3,8 @@
   "name": "MyHOME",
   "after_dependencies": [
     "frontend",
-    "http"
+    "http",
+    "lovelace"
   ],
   "codeowners": [
     "@anotherjulien",

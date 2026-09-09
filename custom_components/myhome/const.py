@@ -6,6 +6,7 @@ DOMAIN = "myhome"
 
 ATTR_GATEWAY = "gateway"
 ATTR_MESSAGE = "message"
+INTEGRATION_VERSION = "1.0.0-beta"
 
 CONF = "config"
 CONF_ENTITY = "entity"

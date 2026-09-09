@@ -18,6 +18,11 @@ class MyHomeBusCard extends HTMLElement {
     this._unsub = null;
     this._stats = { captured: 0, total_rx: 0, total_tx: 0 };
     this._gatewayInfo = {};
+    this._connectionStatus = "connecting"; // "connecting" | "connected" | "disconnected" | "paused"
+    this._retryTimeout = null;
+    this._retryDelay = 1000;
+    this._maxRetryDelay = 30000;
+    this._isSubscribing = false;
   }
 
   setConfig(config) {
@@ -44,32 +49,47 @@ class MyHomeBusCard extends HTMLElement {
     // Connect stream once hass is available
     if (!oldHass && hass) {
       this._subscribeStream();
-      this._loadHistory();
+    } else if (oldHass && hass && oldHass.connection !== hass.connection) {
+      if (this._unsub) {
+        try { this._unsub(); } catch (e) {}
+        this._unsub = null;
+      }
+      this._subscribeStream();
     }
   }
 
   connectedCallback() {
-    if (this._hass && !this._unsub) {
+    if (this._hass && !this._unsub && !this._isSubscribing) {
       this._subscribeStream();
-      this._loadHistory();
     }
   }
 
   disconnectedCallback() {
+    if (this._retryTimeout) {
+      clearTimeout(this._retryTimeout);
+      this._retryTimeout = null;
+    }
     if (this._unsub) {
-      this._unsub();
+      try { this._unsub(); } catch (e) {}
       this._unsub = null;
     }
+    this._isSubscribing = false;
+  }
+
+  _wsPayload(type, extra = {}) {
+    const payload = Object.assign({ type }, extra);
+    if (this._config && this._config.mac != null && String(this._config.mac).trim() !== "") {
+      payload.mac = String(this._config.mac).trim();
+    }
+    return payload;
   }
 
   async _loadHistory() {
     if (!this._hass) return;
     try {
-      const res = await this._hass.callWS({
-        type: "myhome/bus_monitor/history",
-        mac: this._config.mac,
-        limit: 50,
-      });
+      const res = await this._hass.callWS(
+        this._wsPayload("myhome/bus_monitor/history", { limit: 50 })
+      );
       if (res && res.frames) {
         this._frames = res.frames;
         if (res.stats) this._stats = res.stats;
@@ -83,21 +103,90 @@ class MyHomeBusCard extends HTMLElement {
   }
 
   async _subscribeStream() {
-    if (!this._hass || this._unsub) return;
+    if (!this._hass || this._unsub || this._isSubscribing) return;
+    this._isSubscribing = true;
+    this._updateConnectionStatus("connecting");
+
     try {
       this._unsub = await this._hass.connection.subscribeMessage(
         (frame) => this._onNewFrame(frame),
-        {
-          type: "myhome/bus_monitor/stream",
-          mac: this._config.mac,
-        }
+        this._wsPayload("myhome/bus_monitor/stream")
       );
+      this._isSubscribing = false;
+      this._retryDelay = 1000;
+      this._updateConnectionStatus("connected");
+      this._loadHistory();
     } catch (err) {
-      console.error("MyHOME Bus Monitor: Failed to subscribe to stream", err);
+      this._isSubscribing = false;
+      console.warn(`MyHOME Bus Monitor: Failed to subscribe to stream, retrying in ${this._retryDelay / 1000}s`, err);
+      this._updateConnectionStatus("disconnected");
+      this._scheduleRetry();
+    }
+  }
+
+  _scheduleRetry() {
+    if (this._retryTimeout) {
+      clearTimeout(this._retryTimeout);
+      this._retryTimeout = null;
+    }
+    const delay = this._retryDelay;
+    this._retryTimeout = setTimeout(() => {
+      this._retryTimeout = null;
+      if (this._hass && !this._unsub && !this._isSubscribing) {
+        this._subscribeStream();
+      }
+    }, delay);
+
+    this._retryDelay = Math.min(this._retryDelay * 2, this._maxRetryDelay);
+  }
+
+  _updateConnectionStatus(status) {
+    if (this._isPaused) {
+      this._connectionStatus = "paused";
+    } else {
+      this._connectionStatus = status;
+    }
+    this._updateBadge();
+    this._updatePlaceholder();
+  }
+
+  _updateBadge() {
+    const badge = this.shadowRoot && this.shadowRoot.getElementById("badge");
+    if (!badge) return;
+
+    if (this._isPaused) {
+      badge.textContent = "PAUSED";
+      badge.className = "badge badge-paused";
+    } else if (this._connectionStatus === "connected") {
+      badge.textContent = "LIVE";
+      badge.className = "badge badge-live";
+    } else if (this._connectionStatus === "connecting") {
+      badge.textContent = "CONNECTING...";
+      badge.className = "badge badge-connecting";
+    } else if (this._connectionStatus === "disconnected") {
+      badge.textContent = "DISCONNECTED";
+      badge.className = "badge badge-disconnected";
+    }
+  }
+
+  _updatePlaceholder() {
+    const container = this.shadowRoot && this.shadowRoot.getElementById("stream");
+    if (!container) return;
+    if (this._frames.length === 0) {
+      let msg = "Waiting for OpenWebNet bus frames...";
+      if (this._connectionStatus === "connecting") {
+        msg = "Connecting to MyHOME gateway stream...";
+      } else if (this._connectionStatus === "disconnected") {
+        msg = `Disconnected from MyHOME gateway. Reconnecting in ${Math.round(this._retryDelay / 1000)}s...`;
+      }
+      container.innerHTML = `<div class="placeholder-msg">${msg}</div>`;
     }
   }
 
   _onNewFrame(frame) {
+    if (this._connectionStatus !== "connected" && !this._isPaused) {
+      this._updateConnectionStatus("connected");
+    }
     if (this._isPaused) return;
 
     if (frame.direction === "rx") this._stats.total_rx++;
@@ -190,9 +279,23 @@ class MyHomeBusCard extends HTMLElement {
           background: rgba(76, 175, 80, 0.15);
           color: #2e7d32;
         }
+        .badge-connecting {
+          background: rgba(255, 152, 0, 0.15);
+          color: #f57c00;
+        }
+        .badge-disconnected {
+          background: rgba(244, 67, 54, 0.15);
+          color: #d32f2f;
+        }
         .badge-paused {
           background: rgba(244, 67, 54, 0.15);
           color: #d32f2f;
+        }
+        .placeholder-msg {
+          color: #888;
+          font-style: italic;
+          padding: 24px 16px;
+          text-align: center;
         }
         .stats-bar {
           display: flex;
@@ -338,7 +441,7 @@ class MyHomeBusCard extends HTMLElement {
         <div class="header">
           <div class="title">
             <span>📡 ${this._config.title}</span>
-            <span id="badge" class="badge badge-live">LIVE</span>
+            <span id="badge" class="badge badge-connecting">CONNECTING...</span>
           </div>
           <div class="actions">
             <button id="btn-report" class="btn-report" title="Bundle system diagnostics & bus trace to clipboard, then open GitHub issue form">
@@ -389,6 +492,8 @@ class MyHomeBusCard extends HTMLElement {
     `;
 
     this._bindEvents();
+    this._updateBadge();
+    this._updatePlaceholder();
   }
 
   _bindEvents() {
@@ -417,27 +522,21 @@ class MyHomeBusCard extends HTMLElement {
   _togglePause() {
     this._isPaused = !this._isPaused;
     const btn = this.shadowRoot.getElementById("btn-pause");
-    const badge = this.shadowRoot.getElementById("badge");
-    if (this._isPaused) {
-      btn.textContent = "Resume";
-      badge.textContent = "PAUSED";
-      badge.className = "badge badge-paused";
-    } else {
-      btn.textContent = "Pause";
-      badge.textContent = "LIVE";
-      badge.className = "badge badge-live";
+    if (btn) {
+      btn.textContent = this._isPaused ? "Resume" : "Pause";
     }
+    this._updateBadge();
   }
 
   async _clearBuffer() {
     this._frames = [];
     this._updateFrameList();
+    this._updateStats();
     if (this._hass) {
       try {
-        await this._hass.callWS({
-          type: "myhome/bus_monitor/clear",
-          mac: this._config.mac,
-        });
+        await this._hass.callWS(
+          this._wsPayload("myhome/bus_monitor/clear")
+        );
       } catch (err) {
         console.warn("Could not clear backend bus monitor", err);
       }
@@ -446,16 +545,14 @@ class MyHomeBusCard extends HTMLElement {
 
   async _sendCustomFrame() {
     const input = this.shadowRoot.getElementById("send-frame");
-    const frame = input.value.trim();
+    const frame = input ? input.value.trim() : "";
     if (!frame || !this._hass) return;
 
     try {
-      await this._hass.callWS({
-        type: "myhome/bus_monitor/send",
-        mac: this._config.mac,
-        frame: frame,
-      });
-      input.value = "";
+      await this._hass.callWS(
+        this._wsPayload("myhome/bus_monitor/send", { frame: frame })
+      );
+      if (input) input.value = "";
     } catch (err) {
       alert(`Error sending frame: ${err.message || err}`);
     }
@@ -601,10 +698,9 @@ ${framesText}
     // Try fetching the freshest gateway & buffer telemetry from backend
     if (this._hass) {
       try {
-        const infoRes = await this._hass.callWS({
-          type: "myhome/bus_monitor/info",
-          mac: this._config.mac,
-        });
+        const infoRes = await this._hass.callWS(
+          this._wsPayload("myhome/bus_monitor/info")
+        );
         if (infoRes) {
           if (infoRes.gateway) this._gatewayInfo = infoRes.gateway;
           if (infoRes.stats) {
@@ -680,11 +776,14 @@ ${framesText}
   _updateFrameList() {
     const container = this.shadowRoot.getElementById("stream");
     if (!container) return;
+    const matching = this._frames.filter((f) => this._matchesFilter(f));
+    if (matching.length === 0) {
+      this._updatePlaceholder();
+      return;
+    }
     container.innerHTML = "";
-    for (const frame of this._frames) {
-      if (this._matchesFilter(frame)) {
-        container.appendChild(this._createFrameNode(frame));
-      }
+    for (const frame of matching) {
+      container.appendChild(this._createFrameNode(frame));
     }
     container.scrollTop = container.scrollHeight;
   }
@@ -693,6 +792,10 @@ ${framesText}
     if (!this._matchesFilter(frame)) return;
     const container = this.shadowRoot.getElementById("stream");
     if (!container) return;
+    const placeholder = container.querySelector(".placeholder-msg");
+    if (placeholder) {
+      container.innerHTML = "";
+    }
     container.appendChild(this._createFrameNode(frame));
     container.scrollTop = container.scrollHeight;
   }
@@ -734,12 +837,16 @@ ${framesText}
   }
 }
 
-customElements.define("myhome-bus-card", MyHomeBusCard);
+if (!customElements.get("myhome-bus-card")) {
+  customElements.define("myhome-bus-card", MyHomeBusCard);
+}
 
 window.customCards = window.customCards || [];
-window.customCards.push({
-  type: "myhome-bus-card",
-  name: "MyHOME Bus Monitor",
-  description: "Real-time OpenWebNet bus traffic stream and diagnostic frame sender.",
-  preview: true,
-});
+if (!window.customCards.some((c) => c.type === "myhome-bus-card")) {
+  window.customCards.push({
+    type: "myhome-bus-card",
+    name: "MyHOME Bus Monitor",
+    description: "Real-time OpenWebNet bus traffic stream and diagnostic frame sender.",
+    preview: true,
+  });
+}

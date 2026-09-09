@@ -16,7 +16,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import config_validation as cv, device_registry as dr
 
 from .bus_monitor import BusFrame, BusMonitor
-from .const import CONF_ENTITY, CONF_FIRMWARE, CONF_WORKER_COUNT, DOMAIN
+from .const import CONF_ENTITY, CONF_FIRMWARE, CONF_WORKER_COUNT, DOMAIN, INTEGRATION_VERSION
 from .ownd.message import OWNMessage
 
 _LOGGER = logging.getLogger(__name__)
@@ -27,48 +27,38 @@ WS_TYPE_SEND = "myhome/bus_monitor/send"
 WS_TYPE_CLEAR = "myhome/bus_monitor/clear"
 WS_TYPE_INFO = "myhome/bus_monitor/info"
 
-SCHEMA_WS_INFO = websocket_api.BASE_COMMAND_MESSAGE_SCHEMA.extend(
-    {
-        vol.Required("type"): WS_TYPE_INFO,
-        vol.Optional("mac"): cv.string,
-    }
-)
+SCHEMA_WS_INFO = {
+    vol.Required("type"): WS_TYPE_INFO,
+    vol.Optional("mac"): vol.Any(cv.string, None),
+}
 
-SCHEMA_WS_HISTORY = websocket_api.BASE_COMMAND_MESSAGE_SCHEMA.extend(
-    {
-        vol.Required("type"): WS_TYPE_HISTORY,
-        vol.Optional("mac"): cv.string,
-        vol.Optional("limit", default=100): vol.All(vol.Coerce(int), vol.Range(min=1, max=500)),
-        vol.Optional("who"): vol.Any(cv.string, vol.Coerce(int)),
-        vol.Optional("where"): cv.string,
-        vol.Optional("direction"): vol.In(["rx", "tx", "all"]),
-    }
-)
+SCHEMA_WS_HISTORY = {
+    vol.Required("type"): WS_TYPE_HISTORY,
+    vol.Optional("mac"): vol.Any(cv.string, None),
+    vol.Optional("limit", default=100): vol.All(vol.Coerce(int), vol.Range(min=1, max=500)),
+    vol.Optional("who"): vol.Any(cv.string, vol.Coerce(int)),
+    vol.Optional("where"): cv.string,
+    vol.Optional("direction"): vol.In(["rx", "tx", "all"]),
+}
 
-SCHEMA_WS_STREAM = websocket_api.BASE_COMMAND_MESSAGE_SCHEMA.extend(
-    {
-        vol.Required("type"): WS_TYPE_STREAM,
-        vol.Optional("mac"): cv.string,
-        vol.Optional("who"): vol.Any(cv.string, vol.Coerce(int)),
-        vol.Optional("where"): cv.string,
-        vol.Optional("direction"): vol.In(["rx", "tx", "all"]),
-    }
-)
+SCHEMA_WS_STREAM = {
+    vol.Required("type"): WS_TYPE_STREAM,
+    vol.Optional("mac"): vol.Any(cv.string, None),
+    vol.Optional("who"): vol.Any(cv.string, vol.Coerce(int)),
+    vol.Optional("where"): cv.string,
+    vol.Optional("direction"): vol.In(["rx", "tx", "all"]),
+}
 
-SCHEMA_WS_SEND = websocket_api.BASE_COMMAND_MESSAGE_SCHEMA.extend(
-    {
-        vol.Required("type"): WS_TYPE_SEND,
-        vol.Required("frame"): cv.string,
-        vol.Optional("mac"): cv.string,
-    }
-)
+SCHEMA_WS_SEND = {
+    vol.Required("type"): WS_TYPE_SEND,
+    vol.Required("frame"): cv.string,
+    vol.Optional("mac"): vol.Any(cv.string, None),
+}
 
-SCHEMA_WS_CLEAR = websocket_api.BASE_COMMAND_MESSAGE_SCHEMA.extend(
-    {
-        vol.Required("type"): WS_TYPE_CLEAR,
-        vol.Optional("mac"): cv.string,
-    }
-)
+SCHEMA_WS_CLEAR = {
+    vol.Required("type"): WS_TYPE_CLEAR,
+    vol.Optional("mac"): vol.Any(cv.string, None),
+}
 
 
 def _extract_gateway_info(gw: Optional[Any]) -> dict[str, Any]:
@@ -195,7 +185,7 @@ def _extract_gateway_info(gw: Optional[Any]) -> dict[str, Any]:
         "worker_count": worker_count,
         "queue_depth": queue_depth,
         "is_connected": is_connected,
-        "integration_version": "1.0.0-beta",
+        "integration_version": INTEGRATION_VERSION,
     }
 
 
@@ -223,7 +213,7 @@ def _get_gateway_and_monitor(
 
     # Fallback to the first available gateway entry
     for key, val in domain_data.items():
-        if isinstance(val, dict) and CONF_ENTITY in val:
+        if isinstance(val, dict) and (CONF_ENTITY in val or "bus_monitor" in val):
             gw = val.get(CONF_ENTITY)
             bm = val.get("bus_monitor") or getattr(gw, "bus_monitor", None)
             if gw or bm:
@@ -257,6 +247,7 @@ def _matches_filter(
     return True
 
 
+@websocket_api.websocket_command(SCHEMA_WS_HISTORY)
 @websocket_api.async_response
 async def ws_bus_monitor_history(
     hass: HomeAssistant,
@@ -297,6 +288,7 @@ async def ws_bus_monitor_history(
     )
 
 
+@websocket_api.websocket_command(SCHEMA_WS_STREAM)
 @websocket_api.async_response
 async def ws_bus_monitor_stream(
     hass: HomeAssistant,
@@ -329,6 +321,7 @@ async def ws_bus_monitor_stream(
     connection.send_result(msg["id"])
 
 
+@websocket_api.websocket_command(SCHEMA_WS_SEND)
 @websocket_api.async_response
 async def ws_bus_monitor_send(
     hass: HomeAssistant,
@@ -374,6 +367,7 @@ async def ws_bus_monitor_send(
     )
 
 
+@websocket_api.websocket_command(SCHEMA_WS_CLEAR)
 @websocket_api.async_response
 async def ws_bus_monitor_clear(
     hass: HomeAssistant,
@@ -394,6 +388,7 @@ async def ws_bus_monitor_clear(
     connection.send_result(msg["id"], {"success": True})
 
 
+@websocket_api.websocket_command(SCHEMA_WS_INFO)
 @websocket_api.async_response
 async def ws_bus_monitor_info(
     hass: HomeAssistant,
@@ -423,34 +418,15 @@ async def ws_bus_monitor_info(
 def async_setup_websocket_api(hass: HomeAssistant) -> None:
     """Register all MyHOME WebSocket commands."""
     domain_data = hass.data.setdefault(DOMAIN, {})
-    if domain_data.get("_ws_registered"):
+    ws_handlers = hass.data.get(websocket_api.DOMAIN, {})
+    if domain_data.get("_ws_registered") and WS_TYPE_HISTORY in ws_handlers:
         return
 
-    websocket_api.async_register_command(
-        hass,
-        ws_bus_monitor_history,
-        SCHEMA_WS_HISTORY,
-    )
-    websocket_api.async_register_command(
-        hass,
-        ws_bus_monitor_stream,
-        SCHEMA_WS_STREAM,
-    )
-    websocket_api.async_register_command(
-        hass,
-        ws_bus_monitor_send,
-        SCHEMA_WS_SEND,
-    )
-    websocket_api.async_register_command(
-        hass,
-        ws_bus_monitor_clear,
-        SCHEMA_WS_CLEAR,
-    )
-    websocket_api.async_register_command(
-        hass,
-        ws_bus_monitor_info,
-        SCHEMA_WS_INFO,
-    )
+    websocket_api.async_register_command(hass, ws_bus_monitor_history)
+    websocket_api.async_register_command(hass, ws_bus_monitor_stream)
+    websocket_api.async_register_command(hass, ws_bus_monitor_send)
+    websocket_api.async_register_command(hass, ws_bus_monitor_clear)
+    websocket_api.async_register_command(hass, ws_bus_monitor_info)
 
     domain_data["_ws_registered"] = True
     _LOGGER.info("Registered MyHOME WebSocket API commands for Bus Monitor")

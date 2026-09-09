@@ -477,6 +477,44 @@ async def test_register_frontend_branches(hass: HomeAssistant):
     mock_resources.async_items.side_effect = Exception("Lovelace storage error")
     await _async_register_frontend(hass)
 
+    # 9. Lovelace has no resources attribute (returns False)
+    hass.data[DOMAIN]["_frontend_registered"] = False
+    mock_lovelace_no_res = MagicMock()
+    mock_lovelace_no_res.resources = None
+    hass.data["lovelace"] = mock_lovelace_no_res
+    await _async_register_frontend(hass)
+
+    # 10. Lovelace resources.loaded is False, verifies async_load is called
+    hass.data[DOMAIN]["_frontend_registered"] = False
+    unloaded_res = MagicMock()
+    unloaded_res.loaded = False
+    unloaded_res.async_load = AsyncMock()
+    unloaded_res.async_items.return_value = []
+    unloaded_res.async_create_item = AsyncMock()
+    mock_lovelace.resources = unloaded_res
+    hass.data["lovelace"] = mock_lovelace
+    await _async_register_frontend(hass)
+    unloaded_res.async_load.assert_awaited_once()
+    assert unloaded_res.loaded is True
+    unloaded_res.async_create_item.assert_awaited_once()
+
+    # 11. Lovelace deferred registration on EVENT_HOMEASSISTANT_STARTED
+    from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
+    del hass.data["lovelace"]
+
+    deferred_res = MagicMock()
+    deferred_res.loaded = True
+    deferred_res.async_items.return_value = []
+    deferred_res.async_create_item = AsyncMock()
+    hass.data["lovelace"] = MagicMock(resources=deferred_res)
+
+    hass.bus.async_fire(EVENT_HOMEASSISTANT_STARTED)
+    await hass.async_block_till_done()
+    deferred_res.async_create_item.assert_awaited_once_with({
+        "res_type": "module",
+        "url": "/myhome_static/myhome-bus-card.js",
+    })
+
 
 async def test_setup_entry_myhome_yaml_loading(hass: HomeAssistant):
     """Test loading legacy myhome.yaml with all branches."""

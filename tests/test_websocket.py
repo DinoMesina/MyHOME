@@ -36,11 +36,69 @@ async def test_websocket_registration_idempotent(hass: HomeAssistant):
     """Test that async_setup_websocket_api can be called multiple times safely."""
     async_setup_websocket_api(hass)
     assert hass.data[DOMAIN]["_ws_registered"] is True
+    assert websocket_api.DOMAIN in hass.data
+    assert "myhome/bus_monitor/history" in hass.data[websocket_api.DOMAIN]
+    assert "myhome/bus_monitor/stream" in hass.data[websocket_api.DOMAIN]
+    assert "myhome/bus_monitor/send" in hass.data[websocket_api.DOMAIN]
+    assert "myhome/bus_monitor/clear" in hass.data[websocket_api.DOMAIN]
+    assert "myhome/bus_monitor/info" in hass.data[websocket_api.DOMAIN]
 
     # Second call should be a no-op
     with patch("homeassistant.components.websocket_api.async_register_command") as mock_reg:
         async_setup_websocket_api(hass)
         mock_reg.assert_not_called()
+
+    # If handlers dictionary lost the command, it safely re-registers
+    del hass.data[websocket_api.DOMAIN]["myhome/bus_monitor/history"]
+    async_setup_websocket_api(hass)
+    assert "myhome/bus_monitor/history" in hass.data[websocket_api.DOMAIN]
+
+
+async def test_websocket_schemas_validation():
+    """Test schema validation for all bus monitor websocket commands."""
+    from custom_components.myhome.websocket import (
+        ws_bus_monitor_clear,
+        ws_bus_monitor_history,
+        ws_bus_monitor_info,
+        ws_bus_monitor_send,
+        ws_bus_monitor_stream,
+    )
+
+    # All handlers have _ws_schema attached by @websocket_command
+    schema_hist = ws_bus_monitor_history._ws_schema
+    res1 = schema_hist({"id": 1, "type": "myhome/bus_monitor/history", "mac": None})
+    assert res1["mac"] is None
+    assert res1["limit"] == 100
+
+    schema_stream = ws_bus_monitor_stream._ws_schema
+    res2 = schema_stream({"id": 2, "type": "myhome/bus_monitor/stream", "mac": None})
+    assert res2["mac"] is None
+
+    schema_send = ws_bus_monitor_send._ws_schema
+    res3 = schema_send({"id": 3, "type": "myhome/bus_monitor/send", "frame": "*1*1*12##", "mac": None})
+    assert res3["mac"] is None
+    assert res3["frame"] == "*1*1*12##"
+
+    schema_clear = ws_bus_monitor_clear._ws_schema
+    res4 = schema_clear({"id": 4, "type": "myhome/bus_monitor/clear", "mac": None})
+    assert res4["mac"] is None
+
+    schema_info = ws_bus_monitor_info._ws_schema
+    res5 = schema_info({"id": 5, "type": "myhome/bus_monitor/info", "mac": None})
+    assert res5["mac"] is None
+
+
+def test_get_gateway_and_monitor_with_bus_monitor_only(hass: HomeAssistant):
+    """Test fallback finds entry when bus_monitor exists without CONF_ENTITY."""
+    monitor = BusMonitor(maxlen=10)
+    hass.data[DOMAIN] = {
+        "some_entry": {
+            "bus_monitor": monitor,
+        }
+    }
+    gw, bm = _get_gateway_and_monitor(hass)
+    assert gw is None
+    assert bm is monitor
 
 
 async def test_ws_history_no_gateway(hass: HomeAssistant, mock_ws_connection):
