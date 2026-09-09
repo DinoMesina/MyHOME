@@ -25,10 +25,10 @@ If you are a **certified BTicino / Legrand installer**, **system integrator**, o
    - Look at the cover page and revision history (e.g. *Last date modify*, *Version number*). If your copy is newer than what is listed, please share the version details!
 
 2. **Remaining Missing / Legacy Specifications**:
-   - **`WHO = 14`**: Actuator diagnostics, hardware lock/unlock states, and operating counters (Seeking official PDF).
    - **`WHO = 3`**: Load control legacy central unit (F421) (Seeking newer official PDF than 2006).
    - **`WHO = 6`**: Dedicated audio door entry call frames (Seeking standalone document beyond WHO 7 / Intro).
    - **`WHO = 9`**: Auxiliary channels (AUX 1–9) (Seeking newer official PDF than 2006).
+   - *(Note: **`WHO = 14`** Actuator Lock is fully reverse-engineered and documented below; Legrand never published a public standalone PDF).*
 
 3. **Software Tooling & Dictionaries (MyHOME_Suite / TiMyHome)**:
    - Command definitions or exported XML dictionaries from Legrand/BTicino configuration software (**MyHOME_Suite**, **TiMyHome**, **Virtual Configurator**, **MyHOME_Up**).
@@ -58,7 +58,7 @@ The table below catalogs every known OpenWebNet function family (`WHO`), its off
 | **7** | **Video Door Entry / Multimedia** | `Open Web Net WHO=7` / `WHO_7.pdf` | **v1.0.1 (2011-12-01)** | 🟢 | `camera` | Video session establishment, camera selection, video stream routing over IP for Video Server F453AV. Contributed by GianlucaCh. |
 | **9** | **Auxiliary (Comandi Ausiliari)** | `OpenWebNet_Community_Auxiliary` / `WHO_9.pdf` | v1.0.0 (2006) | 🟡 | `switch` | Auxiliary channels (AUX 1 to AUX 9) for triggering remote relays, annunciators, or inter-system signals without occupying lighting addresses. |
 | **13** | **Gateway Management** | `OpenWebNet_Community_2_device_v1_0_0_EN` / `WHO_13.pdf` | **v1.0.0 (2006-06-13)** | 🟢 | Core diagnostics | Date/time synchronization (`*#13**0*...`), firmware version query, IP configuration, MAC address, uptime, reboot command. Contributed by GianlucaCh. |
-| **14** | **Actuator Diagnostics** | `OpenWebNet_Community_Diagnostics` / `WHO_14.pdf` | Pending check | 🔴 | Core diagnostics / maintenance | Actuator operating state queries, hardware fault reports, locking/unlocking APL endpoints, operating hours counters. |
+| **14** | **Actuators Lock (Light & Shutters)** | `Light & Shutter Actuators Lock` *(No Public PDF)* | v1.0.0 (2008) | 🟢 | Core diagnostics, `button`, `lock` | Physical endpoint lock/unlock. Lock (`*14*0*<WHERE>##`), Unlock (`*14*1*<WHERE>##`), Status query (`*#14*<WHERE>##`). Inverts/locks physical wall button input. Legrand never distributed a public standalone PDF (internal diagnostic spec). |
 | **15** | **CEN Scenario Control (Scheduler)** | `CEN Frames for Scenario Scheduler` / `WHO_15-25.pdf` | **v1.0.0 (2010-10-01)** | 🟢 | `event`, device triggers | Pushbutton scenario events for Scenario Scheduler (MH200, MH200N, Legrand 03565): Virtual/physical pressure, short release, extended pressure, release after extended pressure. Contributed by GianlucaCh. |
 | **16** | **Sound Distribution (Zone/Amp Control)** | `OpenWebNet_Community_4_soundsystem` / `WHO_16.pdf` | **v1.0.1 (2011-11-24)** | 🟢 | `media_player` | Multi-room audio matrix & zone control: Amplifier ON/OFF, volume control (step & %), audio input source selection (RDS tuner, RCA/aux, USB, Bluetooth), equalizer (bass, treble, balance), station presets (F441, F441M, F450, 3487). |
 | **17** | **Scenario Programmer (Scenes)** | `Who = 17 SCENES` / `WHO_17.pdf` | **v1.0.0 (2015-04-09)** | 🟢 | `switch`, `event` | MH200 / MH200N / MH202 scenario programmer integration, enable/disable automated schedules, trigger macro executions. Contributed by GianlucaCh. |
@@ -122,6 +122,22 @@ The sound subsystem is split across two dedicated OpenWebNet WHO families:
      - RDS text string display streaming (`WHAT = 31` start / `WHAT = 32` stop).
      - Direct frequency tuning and preset memorization (`WHAT = 33`).
      - Speaker volume adjustment (`WHAT = 3` increase / `WHAT = 4` decrease).
+
+---
+
+### 3. Actuator Diagnostics & Endpoint Safety Locks (`WHO = 14`)
+
+BTicino and Legrand never distributed a standalone `WHO_14.pdf` in their public developer distributions, retaining it as an internal/installer diagnostic function. However, the protocol grammar is fully reverse-engineered and verified across live systems:
+
+- **Protocol Function**: Inhibits physical wall buttons (rocker switches, CEN pushbuttons) and remote actuation for safety, maintenance, or child locking on lighting and cover/shutter actuators (F411, F411U2, F418, LN4672M2).
+- **Lock Actuator (Disable Controls)**: `*14*0*<WHERE>##`
+  - Freezes the relay in its current position and disables physical switch inputs.
+- **Unlock Actuator (Enable Controls)**: `*14*1*<WHERE>##`
+  - Restores normal operation and re-enables physical wall buttons and bus commands.
+- **Status Query**: `*#14*<WHERE>##`
+  - Returns `*14*0*<WHERE>##` (Locked) or `*14*1*<WHERE>##` (Unlocked).
+- **Home Assistant Integration**: Represented via configuration button entities (`DisableCommandButtonEntity` and `EnableCommandButtonEntity`) under each actuator device.
+- **Gateway Support**: Supported on modern gateways (F454, MyHomeServer1). Older gateways (e.g. early F455 firmware) return NACK (`*#*0##`).
 
 ---
 
