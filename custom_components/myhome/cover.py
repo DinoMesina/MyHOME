@@ -2,6 +2,7 @@
 import asyncio
 import time
 from homeassistant.components.cover import (
+    ATTR_CURRENT_POSITION,
     ATTR_POSITION,
     DOMAIN as PLATFORM,
     CoverDeviceClass,
@@ -12,9 +13,12 @@ from homeassistant.components.cover import (
 from homeassistant.const import (
     CONF_NAME,
     CONF_MAC,
+    STATE_CLOSED,
+    STATE_OPEN,
 )
 from homeassistant.core import callback
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.restore_state import RestoreEntity
 
 from .ownd.message import (
     OWNAutomationEvent,
@@ -147,11 +151,20 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     @callback
     def async_add_cover(message):
         """Add a cover from a discovered message."""
+        # Handle general cover commands (WHERE=0, is_general=True)
+        if getattr(message, "is_general", False) or str(getattr(message, "where", "")) == "0":
+            async_dispatcher_send(
+                hass,
+                f"myhome_update_{config_entry.data[CONF_MAC]}_2_general",
+                message,
+            )
+            return
+
         if not hasattr(message, "where") or not message.where:
             return
 
-        # Skip groups, areas and general for now, as they represent many physical devices
-        if getattr(message, "is_group", False) or getattr(message, "is_area", False) or getattr(message, "is_general", False):
+        # Skip groups and areas for now, as they represent many physical devices
+        if getattr(message, "is_group", False) or getattr(message, "is_area", False):
             return
 
         where = message.where
@@ -212,7 +225,7 @@ async def async_unload_entry(hass, config_entry):  # pylint: disable=unused-argu
     return True
 
 
-class MyHOMECover(MyHOMEEntity, CoverEntity):
+class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
     device_class = CoverDeviceClass.SHUTTER
 
     def __init__(
@@ -320,6 +333,39 @@ class MyHOMECover(MyHOMEEntity, CoverEntity):
                 self.handle_event,
             )
         )
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                f"myhome_update_{self._gateway_handler.mac}_2_general",
+                self.handle_event,
+            )
+        )
+
+        if not self._advanced:
+            try:
+                state = await self.async_get_last_state()
+            except Exception:
+                state = None
+            if state is not None:
+                restored = False
+                last_pos = state.attributes.get(ATTR_CURRENT_POSITION)
+                if last_pos is not None:
+                    try:
+                        self._attr_current_cover_position = max(0, min(100, int(round(float(last_pos)))))
+                        self._start_position = self._attr_current_cover_position
+                        self._attr_is_closed = (self._attr_current_cover_position == 0)
+                        restored = True
+                    except (ValueError, TypeError):
+                        restored = False
+                if not restored:
+                    if state.state in (STATE_CLOSED, "closed"):
+                        self._attr_current_cover_position = 0
+                        self._start_position = 0
+                        self._attr_is_closed = True
+                    elif state.state in (STATE_OPEN, "open"):
+                        self._attr_current_cover_position = 100
+                        self._start_position = 100
+                        self._attr_is_closed = False
 
     async def async_will_remove_from_hass(self):
         """Run when entity will be removed from hass."""
@@ -410,6 +456,7 @@ class MyHOMECover(MyHOMEEntity, CoverEntity):
                     self._attr_current_cover_position = min(100, int(self._start_position + delta))
                 elif self._attr_is_closing:
                     self._attr_current_cover_position = max(0, int(self._start_position - delta))
+                self._start_position = self._attr_current_cover_position
                 self._move_start_time = None
             self._attr_is_opening = False
             self._attr_is_closing = False
@@ -430,6 +477,8 @@ class MyHOMECover(MyHOMEEntity, CoverEntity):
         if message.current_position is not None:
             self._cancel_stop_task()
             self._attr_current_cover_position = message.current_position
+            if not self._advanced:
+                self._start_position = message.current_position
             self._move_start_time = None
             self._attr_is_opening = False
             self._attr_is_closing = False
@@ -439,7 +488,7 @@ class MyHOMECover(MyHOMEEntity, CoverEntity):
                 self._attr_is_closed = (self._attr_current_cover_position == 0)
         elif message.is_opening:
             self._cancel_stop_task()
-            if not self._attr_is_opening:
+            if not self._advanced and not self._attr_is_opening:
                 self._start_position = self.current_cover_position if self.current_cover_position is not None else 0
                 self._move_start_time = time.monotonic()
             self._attr_is_opening = True
@@ -447,7 +496,7 @@ class MyHOMECover(MyHOMEEntity, CoverEntity):
             self._attr_is_closed = False
         elif message.is_closing:
             self._cancel_stop_task()
-            if not self._attr_is_closing:
+            if not self._advanced and not self._attr_is_closing:
                 self._start_position = self.current_cover_position if self.current_cover_position is not None else 100
                 self._move_start_time = time.monotonic()
             self._attr_is_opening = False
@@ -455,14 +504,16 @@ class MyHOMECover(MyHOMEEntity, CoverEntity):
         else:
             # Stopped (state == 0 or other)
             self._cancel_stop_task()
-            if self._move_start_time is not None:
-                elapsed = time.monotonic() - self._move_start_time
-                delta = (elapsed / self._travel_time) * 100
-                if self._attr_is_opening:
-                    self._attr_current_cover_position = min(100, int(self._start_position + delta))
-                elif self._attr_is_closing:
-                    self._attr_current_cover_position = max(0, int(self._start_position - delta))
-                self._move_start_time = None
+            if not self._advanced:
+                if self._move_start_time is not None:
+                    elapsed = time.monotonic() - self._move_start_time
+                    delta = (elapsed / self._travel_time) * 100
+                    if self._attr_is_opening:
+                        self._attr_current_cover_position = min(100, int(self._start_position + delta))
+                    elif self._attr_is_closing:
+                        self._attr_current_cover_position = max(0, int(self._start_position - delta))
+                    self._start_position = self._attr_current_cover_position
+                    self._move_start_time = None
             self._attr_is_opening = False
             self._attr_is_closing = False
             if message.is_closed is not None:

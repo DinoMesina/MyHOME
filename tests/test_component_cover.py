@@ -6,13 +6,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from homeassistant.const import (
     CONF_NAME,
 )
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, State, callback
 from homeassistant.components.cover import (
     CoverDeviceClass,
     CoverEntityFeature,
     ATTR_POSITION,
+    ATTR_CURRENT_POSITION,
 )
-from homeassistant.helpers.dispatcher import async_dispatcher_send
+from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dispatcher_send
 
 from custom_components.myhome.const import (
     DOMAIN,
@@ -205,7 +206,7 @@ class TestMyHOMECoverEntity:
     async def test_async_lifecycle_and_update(self, basic_cover, hass):
         basic_cover.async_on_remove = MagicMock()
         await basic_cover.async_added_to_hass()
-        basic_cover.async_on_remove.assert_called_once()
+        assert basic_cover.async_on_remove.call_count == 2
 
         await basic_cover.async_update()
         basic_cover._gateway_handler.send_status_request.assert_awaited_once()
@@ -348,5 +349,343 @@ class TestMyHOMECoverEntity:
         # Test RuntimeError exception safety in handle_event
         cover.async_schedule_update_ha_state = MagicMock(side_effect=RuntimeError("Loop closing"))
         cover.handle_event(OWNEvent.parse("*2*0*21##"))
+
+        # Advanced cover does not use travel time estimation on move/stop
+        cover._attr_current_cover_position = 70
+        cover.handle_event(OWNEvent.parse("*2*1*21##"))
+        assert cover.is_opening is True
+        assert cover._move_start_time is None
+
+        # Stop does not overwrite exact position with travel time math
+        cover.handle_event(OWNEvent.parse("*2*0*21##"))
+        assert cover.is_opening is False
+        assert cover.current_cover_position == 70
+
+    @pytest.mark.asyncio
+    async def test_restore_entity_position(self, basic_cover):
+        """Test position restoration from RestoreEntity when current_position is restored."""
+        # 1. Restored to 75%
+        basic_cover.async_get_last_state = AsyncMock(
+            return_value=State("cover.basic_shutter", "open", {ATTR_CURRENT_POSITION: 75})
+        )
+        await basic_cover.async_added_to_hass()
+        assert basic_cover.current_cover_position == 75
+        assert basic_cover._start_position == 75
+        assert basic_cover.is_closed is False
+
+        # 2. Restored to 0% (closed)
+        basic_cover.async_get_last_state = AsyncMock(
+            return_value=State("cover.basic_shutter", "closed", {ATTR_CURRENT_POSITION: 0})
+        )
+        await basic_cover.async_added_to_hass()
+        assert basic_cover.current_cover_position == 0
+        assert basic_cover._start_position == 0
+        assert basic_cover.is_closed is True
+
+        # 3. Restored to 100% (open)
+        basic_cover.async_get_last_state = AsyncMock(
+            return_value=State("cover.basic_shutter", "open", {ATTR_CURRENT_POSITION: 100})
+        )
+        await basic_cover.async_added_to_hass()
+        assert basic_cover.current_cover_position == 100
+        assert basic_cover._start_position == 100
+        assert basic_cover.is_closed is False
+
+        # 4. Restored from float value 42.6 -> 43%
+        basic_cover.async_get_last_state = AsyncMock(
+            return_value=State("cover.basic_shutter", "open", {ATTR_CURRENT_POSITION: 42.6})
+        )
+        await basic_cover.async_added_to_hass()
+        assert basic_cover.current_cover_position == 43
+        assert basic_cover._start_position == 43
+        assert basic_cover.is_closed is False
+
+        # 5. Invalid position attribute with state 'open' -> falls back to 100%
+        basic_cover._attr_current_cover_position = 50
+        basic_cover.async_get_last_state = AsyncMock(
+            return_value=State("cover.basic_shutter", "open", {ATTR_CURRENT_POSITION: "invalid"})
+        )
+        await basic_cover.async_added_to_hass()
+        assert basic_cover.current_cover_position == 100
+        assert basic_cover._start_position == 100
+        assert basic_cover.is_closed is False
+
+        # 6. Invalid position attribute with state 'closed' -> falls back to 0%
+        basic_cover.async_get_last_state = AsyncMock(
+            return_value=State("cover.basic_shutter", "closed", {ATTR_CURRENT_POSITION: "invalid"})
+        )
+        await basic_cover.async_added_to_hass()
+        assert basic_cover.current_cover_position == 0
+        assert basic_cover._start_position == 0
+        assert basic_cover.is_closed is True
+
+        # 7. Invalid position attribute with state 'unknown' -> retains default 50%
+        basic_cover._attr_current_cover_position = 50
+        basic_cover._start_position = 50
+        basic_cover.async_get_last_state = AsyncMock(
+            return_value=State("cover.basic_shutter", "unknown", {ATTR_CURRENT_POSITION: "invalid"})
+        )
+        await basic_cover.async_added_to_hass()
+        assert basic_cover.current_cover_position == 50
+        assert basic_cover._start_position == 50
+
+    @pytest.mark.asyncio
+    async def test_restore_entity_fallback_from_state(self, basic_cover):
+        """Test fallback restoration when state.state is 'closed' or 'open' without position."""
+        # 1. State 'closed' -> position 0%, is_closed True
+        basic_cover.async_get_last_state = AsyncMock(
+            return_value=State("cover.basic_shutter", "closed", {})
+        )
+        await basic_cover.async_added_to_hass()
+        assert basic_cover.current_cover_position == 0
+        assert basic_cover._start_position == 0
+        assert basic_cover.is_closed is True
+
+        # 2. State 'open' -> position 100%, is_closed False
+        basic_cover.async_get_last_state = AsyncMock(
+            return_value=State("cover.basic_shutter", "open", {})
+        )
+        await basic_cover.async_added_to_hass()
+        assert basic_cover.current_cover_position == 100
+        assert basic_cover._start_position == 100
+        assert basic_cover.is_closed is False
+
+        # 3. State 'unknown' -> position remains unchanged (default 50)
+        basic_cover._attr_current_cover_position = 50
+        basic_cover._start_position = 50
+        basic_cover.async_get_last_state = AsyncMock(
+            return_value=State("cover.basic_shutter", "unknown", {})
+        )
+        await basic_cover.async_added_to_hass()
+        assert basic_cover.current_cover_position == 50
+        assert basic_cover._start_position == 50
+        assert basic_cover.is_closed is False
+
+    @pytest.mark.asyncio
+    async def test_restore_none_or_advanced_cover(self, basic_cover, advanced_cover):
+        """Test fallback to 50% when no last state exists and verify advanced covers do not restore."""
+        # 1. No last state (None) -> remains default 50%
+        basic_cover._attr_current_cover_position = 50
+        basic_cover._start_position = 50
+        basic_cover.async_get_last_state = AsyncMock(return_value=None)
+        await basic_cover.async_added_to_hass()
+        assert basic_cover.current_cover_position == 50
+        assert basic_cover._start_position == 50
+        assert basic_cover.is_closed is False
+
+        # 2. Exception in async_get_last_state -> handled gracefully
+        basic_cover._attr_current_cover_position = 50
+        basic_cover.async_get_last_state = AsyncMock(side_effect=RuntimeError("Storage failure"))
+        await basic_cover.async_added_to_hass()
+        assert basic_cover.current_cover_position == 50
+
+        # 3. Advanced cover does not call async_get_last_state (relies on hardware status)
+        advanced_cover._attr_current_cover_position = 50
+        advanced_cover.async_get_last_state = AsyncMock(
+            return_value=State("cover.advanced_shutter", "open", {ATTR_CURRENT_POSITION: 80})
+        )
+        await advanced_cover.async_added_to_hass()
+        advanced_cover.async_get_last_state.assert_not_called()
+        assert advanced_cover._attr_current_cover_position == 50
+
+
+async def test_cover_general_commands_update_all_covers(hass: HomeAssistant, mock_gateway):
+    """Test that general cover events (*2*1*0##, *2*2*0##, *2*0*0##) update all covers."""
+    mac = mock_gateway.mac
+
+    with patch("custom_components.myhome.myhome_device.Entity.__init__", return_value=None):
+        cover1 = MyHOMECover(
+            hass=hass,
+            name="Cover 21",
+            entity_name="Cover 21",
+            device_id="21",
+            who="2",
+            where="21",
+            interface=None,
+            advanced=False,
+            manufacturer="BTicino",
+            model="Shutter",
+            gateway=mock_gateway,
+            travel_time=25,
+        )
+        cover2 = MyHOMECover(
+            hass=hass,
+            name="Cover 22",
+            entity_name="Cover 22",
+            device_id="22",
+            who="2",
+            where="22",
+            interface=None,
+            advanced=False,
+            manufacturer="BTicino",
+            model="Shutter",
+            gateway=mock_gateway,
+            travel_time=25,
+        )
+
+    cover1.hass = hass
+    cover2.hass = hass
+    cover1.async_schedule_update_ha_state = MagicMock()
+    cover2.async_schedule_update_ha_state = MagicMock()
+
+    await cover1.async_added_to_hass()
+    await cover2.async_added_to_hass()
+
+    cover1._attr_current_cover_position = 50
+    cover1._start_position = 50
+    cover2._attr_current_cover_position = 50
+    cover2._start_position = 50
+
+    # 1. General Open (*2*1*0##)
+    msg_open = OWNEvent.parse("*2*1*0##")
+    async_dispatcher_send(hass, f"myhome_update_{mac}_2_general", msg_open)
+
+    assert cover1.is_opening is True
+    assert cover1.is_closing is False
+    assert cover2.is_opening is True
+    assert cover2.is_closing is False
+
+    # 2. General Stop (*2*0*0##) after 5 seconds (5s / 25s * 100 = 20% increase -> 70%)
+    with patch("time.monotonic", return_value=cover1._move_start_time + 5):
+        msg_stop = OWNEvent.parse("*2*0*0##")
+        async_dispatcher_send(hass, f"myhome_update_{mac}_2_general", msg_stop)
+
+    assert cover1.is_opening is False
+    assert cover1.is_closing is False
+    assert cover2.is_opening is False
+    assert cover2.is_closing is False
+    assert cover1.current_cover_position == 70
+    assert cover2.current_cover_position == 70
+
+    # 3. General Close (*2*2*0##)
+    msg_close = OWNEvent.parse("*2*2*0##")
+    async_dispatcher_send(hass, f"myhome_update_{mac}_2_general", msg_close)
+
+    assert cover1.is_closing is True
+    assert cover1.is_opening is False
+    assert cover2.is_closing is True
+    assert cover2.is_opening is False
+
+    # 4. General Stop (*2*0*0##) after 5 seconds (70% - 20% = 50%)
+    with patch("time.monotonic", return_value=cover1._move_start_time + 5):
+        async_dispatcher_send(hass, f"myhome_update_{mac}_2_general", msg_stop)
+
+    assert cover1.is_closing is False
+    assert cover2.is_closing is False
+    assert cover1.current_cover_position == 50
+    assert cover2.current_cover_position == 50
+
+    # 5. Verify individual commands only affect the target cover
+    msg_single_open = OWNEvent.parse("*2*1*21##")
+    async_dispatcher_send(hass, f"myhome_update_{mac}_2_21", msg_single_open)
+    assert cover1.is_opening is True
+    assert cover2.is_opening is False
+
+
+async def test_cover_setup_dispatches_general_messages_from_gateway(hass: HomeAssistant, mock_gateway):
+    """Test that incoming gateway messages for general cover (WHERE=0) dispatch to all covers."""
+    mac = mock_gateway.mac
+    hass.data = {
+        DOMAIN: {
+            mac: {
+                "entity": mock_gateway,
+                CONF_PLATFORMS: {PLATFORM: {}},
+            }
+        }
+    }
+    config_entry = MagicMock()
+    config_entry.data = {"mac": mac}
+    config_entry.entry_id = "test_entry"
+
+    with patch("homeassistant.helpers.entity_registry.async_get", return_value=MagicMock()), \
+         patch("homeassistant.helpers.entity_registry.async_entries_for_config_entry", return_value=[]):
+        await async_setup_entry(hass, config_entry, lambda entities: None)
+
+    dispatched = []
+
+    @callback
+    def on_general_event(msg):
+        dispatched.append(msg)
+
+    async_dispatcher_connect(hass, f"myhome_update_{mac}_2_general", on_general_event)
+
+    # Dispatch general open from gateway
+    async_dispatcher_send(hass, f"myhome_message_{mac}", OWNEvent.parse("*2*1*0##"))
+    assert len(dispatched) == 1
+    assert dispatched[0].is_general is True
+    assert dispatched[0].is_opening is True
+
+    # Dispatch general close from gateway
+    async_dispatcher_send(hass, f"myhome_message_{mac}", OWNEvent.parse("*2*2*0##"))
+    assert len(dispatched) == 2
+    assert dispatched[1].is_general is True
+    assert dispatched[1].is_closing is True
+
+    # Dispatch general stop from gateway
+    async_dispatcher_send(hass, f"myhome_message_{mac}", OWNEvent.parse("*2*0*0##"))
+    assert len(dispatched) == 3
+    assert dispatched[2].is_general is True
+    assert dispatched[2].is_opening is False
+    assert dispatched[2].is_closing is False
+
+
+async def test_cover_gateway_general_message_updates_all_active_entities(hass: HomeAssistant, mock_gateway):
+    """Test full end-to-end path: gateway general messages update live cover entities."""
+    mac = mock_gateway.mac
+    hass.data = {
+        DOMAIN: {
+            mac: {
+                "entity": mock_gateway,
+                CONF_PLATFORMS: {
+                    PLATFORM: {
+                        "21": {CONF_WHERE: "21", CONF_NAME: "Cover 21"},
+                        "22": {CONF_WHERE: "22", CONF_NAME: "Cover 22"},
+                    }
+                },
+            }
+        }
+    }
+    config_entry = MagicMock()
+    config_entry.data = {"mac": mac}
+    config_entry.entry_id = "test_entry"
+
+    added_entities = []
+
+    def fake_add_entities(entities):
+        added_entities.extend(entities)
+
+    with patch("homeassistant.helpers.entity_registry.async_get", return_value=MagicMock()), \
+         patch("homeassistant.helpers.entity_registry.async_entries_for_config_entry", return_value=[]):
+        await async_setup_entry(hass, config_entry, fake_add_entities)
+
+    assert len(added_entities) == 2
+    cover1, cover2 = added_entities[0], added_entities[1]
+    cover1.hass = hass
+    cover2.hass = hass
+    cover1.async_schedule_update_ha_state = MagicMock()
+    cover2.async_schedule_update_ha_state = MagicMock()
+
+    await cover1.async_added_to_hass()
+    await cover2.async_added_to_hass()
+
+    cover1._attr_current_cover_position = 50
+    cover1._start_position = 50
+    cover2._attr_current_cover_position = 50
+    cover2._start_position = 50
+
+    # 1. Gateway receives general open (*2*1*0##)
+    async_dispatcher_send(hass, f"myhome_message_{mac}", OWNEvent.parse("*2*1*0##"))
+    assert cover1.is_opening is True
+    assert cover2.is_opening is True
+
+    # 2. Gateway receives general stop (*2*0*0##) after 5 seconds
+    with patch("time.monotonic", return_value=cover1._move_start_time + 5):
+        async_dispatcher_send(hass, f"myhome_message_{mac}", OWNEvent.parse("*2*0*0##"))
+
+    assert cover1.is_opening is False
+    assert cover2.is_opening is False
+    assert cover1.current_cover_position == 70
+    assert cover2.current_cover_position == 70
+
 
 

@@ -521,7 +521,7 @@ class TestCoverEntity:
         cover.hass = mock_hass
         cover.async_on_remove = MagicMock()
         await cover.async_added_to_hass()
-        cover.async_on_remove.assert_called_once()
+        assert cover.async_on_remove.call_count == 2
 
 
 # ── Button Entities ────────────────────────────────────────────────────────
