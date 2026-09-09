@@ -38,7 +38,10 @@ async def _async_register_lovelace_resource(hass: HomeAssistant, url_path: str) 
         lovelace = hass.data.get("lovelace")
         if not lovelace:
             return False
-        resources = getattr(lovelace, "resources", None)
+        if isinstance(lovelace, dict):
+            resources = lovelace.get("resources")
+        else:
+            resources = getattr(lovelace, "resources", None)
         if not resources:
             return False
         if hasattr(resources, "loaded") and not resources.loaded:
@@ -95,7 +98,7 @@ async def _async_register_frontend(hass: HomeAssistant) -> None:
     if not await _async_register_lovelace_resource(hass, url_path):
         if not domain_data.get("_lovelace_listener_registered"):
             async def _on_ha_started(event):
-                await _async_register_frontend(hass)
+                await _async_register_lovelace_resource(hass, url_path)
 
             from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
             hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, _on_ha_started)

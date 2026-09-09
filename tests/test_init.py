@@ -899,6 +899,33 @@ async def test_setup_entry_sw_version_list_normalization(hass: HomeAssistant):
         await hass.async_block_till_done()
 
 
+async def test_async_register_lovelace_resource_dict_storage_collection(hass: HomeAssistant):
+    """Test auto-registering lovelace resource when hass.data['lovelace'] is a dictionary (real HA Core structure)."""
+    from custom_components.myhome import _async_register_lovelace_resource
+
+    mock_resources = MagicMock()
+    mock_resources.loaded = False
+    mock_resources.async_load = AsyncMock()
+    mock_resources.async_items.return_value = []
+    mock_resources.async_create_item = AsyncMock()
+
+    hass.data["lovelace"] = {
+        "mode": "storage",
+        "dashboards": {},
+        "resources": mock_resources,
+    }
+
+    result = await _async_register_lovelace_resource(hass, "/myhome_static/myhome-bus-card.js")
+    assert result is True
+    mock_resources.async_load.assert_awaited_once()
+    assert mock_resources.loaded is True
+    mock_resources.async_create_item.assert_awaited_once_with({
+        "res_type": "module",
+        "url": "/myhome_static/myhome-bus-card.js",
+    })
+
+
+
 
 
 

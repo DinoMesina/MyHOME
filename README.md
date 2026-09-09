@@ -202,6 +202,10 @@ The integration includes an in-band real-time bus monitor operating over the exi
 
 ### Lovelace Bus Monitor Card (`<myhome-bus-card>`)
 
+<p align="center">
+  <img src="docs/images/myhome-bus-card.jpg" alt="MyHOME Bus Monitor Lovelace Card" width="750">
+</p>
+
 A modern custom Lovelace element is automatically registered with zero configuration:
 
 - **Visual Card Picker & GUI Editor**: Fully integrated with Home Assistant's card picker — simply search for **"MyHOME Bus Monitor"** under `+ Add Card` and configure the title or buffer size visually without touching raw YAML.
