@@ -3,6 +3,7 @@ import os
 import pytest
 from unittest.mock import patch, AsyncMock, MagicMock
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
 from homeassistant.config_entries import ConfigEntryState
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -700,6 +701,59 @@ async def test_empty_orphaned_device_pruning(hass: HomeAssistant):
 
         await hass.config_entries.async_unload(config_entry.entry_id)
         await hass.async_block_till_done()
+
+
+async def test_setup_entry_prunes_empty_devices_but_preserves_cen(hass: HomeAssistant):
+    """Test that setup prunes empty orphaned devices but preserves CEN scenario devices."""
+    with patch(
+        "custom_components.myhome.gateway.OWNSession.test_connection",
+        return_value={"Success": True, "Message": None},
+    ), patch(
+        "custom_components.myhome.gateway.MyHOMEGatewayHandler.listening_loop"
+    ), patch(
+        "custom_components.myhome.gateway.MyHOMEGatewayHandler.sending_loop"
+    ):
+        config_entry = MockConfigEntry(
+            domain=DOMAIN,
+            data={
+                "host": "192.168.0.35",
+                "port": 20000,
+                "password": "pass",
+                "mac": "00:03:50:00:88:77",
+            },
+            unique_id="00:03:50:00:88:77",
+        )
+        config_entry.add_to_hass(hass)
+
+        dev_reg = dr.async_get(hass)
+        cen_device = dev_reg.async_get_or_create(
+            config_entry_id=config_entry.entry_id,
+            identifiers={(DOMAIN, "00:03:50:00:88:77-15-3")},
+            name="CEN Unit 3",
+        )
+        cenplus_device = dev_reg.async_get_or_create(
+            config_entry_id=config_entry.entry_id,
+            identifiers={(DOMAIN, "00:03:50:00:88:77-25-10")},
+            name="CEN+ Unit 10",
+        )
+        orphan_device = dev_reg.async_get_or_create(
+            config_entry_id=config_entry.entry_id,
+            identifiers={(DOMAIN, "00:03:50:00:88:77-orphan")},
+            name="Orphaned Device",
+        )
+
+        assert await hass.config_entries.async_setup(config_entry.entry_id)
+        await hass.async_block_till_done()
+
+        # The orphan device with 0 entities should have been pruned
+        assert orphan_device.id not in dev_reg.devices
+        # The CEN and CEN+ devices must be preserved
+        assert cen_device.id in dev_reg.devices
+        assert cenplus_device.id in dev_reg.devices
+
+        await hass.config_entries.async_unload(config_entry.entry_id)
+        await hass.async_block_till_done()
+
 
 
 

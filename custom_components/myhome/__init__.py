@@ -347,6 +347,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
                     continue
                 if gateway_id and (DOMAIN, gateway_id) in dev.identifiers:
                     continue
+                # Do not prune scenario devices (CEN / CEN+) that intentionally have no entities
+                if any(
+                    isinstance(ident[1], str)
+                    and (
+                        "-15-" in ident[1]
+                        or "-25-" in ident[1]
+                        or ident[1].startswith("cen")
+                    )
+                    for ident in dev.identifiers
+                    if ident[0] == DOMAIN
+                ):
+                    continue
                 dev_entries = er.async_entries_for_device(
                     entity_registry, dev.id, include_disabled_entities=True
                 )

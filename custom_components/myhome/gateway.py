@@ -116,6 +116,32 @@ class MyHOMEGatewayHandler:
         self.send_buffer = asyncio.Queue(maxsize=queue_max_size)
         self.bus_monitor = BusMonitor()
         self.device_registry_id: Optional[str] = None
+        self._cen_devices: set[tuple[int, int]] = set()
+
+    def _ensure_cen_device(self, who: int, object_id: int) -> None:
+        """Ensure CEN/CEN+ scenario unit is registered in device registry."""
+        device_key = (who, object_id)
+        if device_key in self._cen_devices:
+            return
+
+        self._cen_devices.add(device_key)
+        if not self.config_entry or not hasattr(self.config_entry, "entry_id"):
+            return
+
+        try:
+            device_registry = dr.async_get(self.hass)
+            type_name = "CEN+" if who == 25 else "CEN"
+            device_registry.async_get_or_create(
+                config_entry_id=self.config_entry.entry_id,
+                identifiers={(DOMAIN, f"{self.mac}-{who}-{object_id}")},
+                name=f"{type_name} Unit {object_id}",
+                manufacturer="BTicino",
+                model=f"{type_name} Scenario Control",
+                via_device=(DOMAIN, self.mac),
+            )
+        except Exception as err:
+            LOGGER.debug("Could not auto-register %s device %s: %s", who, object_id, err)
+
 
     @property
     def mac(self) -> str:
@@ -320,6 +346,7 @@ class MyHOMEGatewayHandler:
                     event = CONF_ROTARY_CCW_FAST
                 else:
                     event = None
+                self._ensure_cen_device(25, int(message.object))
                 self.hass.bus.async_fire(
                     "myhome_cenplus_event",
                     {
@@ -345,6 +372,7 @@ class MyHOMEGatewayHandler:
                     event = CONF_LONG_RELEASE
                 else:
                     event = None
+                self._ensure_cen_device(15, int(message.object))
                 self.hass.bus.async_fire(
                     "myhome_cen_event",
                     {

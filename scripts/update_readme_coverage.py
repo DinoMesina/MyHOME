@@ -25,7 +25,7 @@ COMPONENT_NOTES = {
     "custom_components/myhome/myhome_device.py": "Home Assistant device registry schema compliance",
     "custom_components/myhome/sensor.py": "Power meters, energy counters, and pulse sensors",
     "custom_components/myhome/climate.py": "Heating, cooling, 4-pipe systems, and thermostat controls",
-    "custom_components/myhome/gateway.py": "Hardware handler, lockout prevention, token-bucket queue",
+    "custom_components/myhome/gateway.py": "Hardware handler, lockout prevention, adaptive queue pacing",
     "custom_components/myhome/media_player.py": "F441/F441M sound system zones, dynamic proxy, gain-staging",
     "custom_components/myhome/ownd/connection.py": "Hardened TCP stream, fail-closed auth, watchdog loop",
     "custom_components/myhome/bus_monitor.py": "In-band 500-frame circular ring buffer tap (0 extra sockets)",

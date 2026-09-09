@@ -644,3 +644,107 @@ async def test_sending_loop_collected_responses_and_pacing(gateway_handler):
             )
             assert len(gateway_handler.bus_monitor.get_recent_frames()) >= 2
             mock_cmd_session.close.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_gateway_cen_event_and_auto_registration(gateway_handler: MyHOMEGatewayHandler):
+    """Test receiving OWNCENEvent dispatches bus event and registers CEN scenario device."""
+    mock_dr = MagicMock()
+    gateway_handler.config_entry.entry_id = "test_entry_123"
+
+    cen_msg = MagicMock(spec=OWNCENEvent)
+    cen_msg.object = "5"
+    cen_msg.push_button = "1"
+    cen_msg.is_pressed = True
+    cen_msg.is_released_after_short_press = False
+    cen_msg.is_held = False
+    cen_msg.is_released_after_long_press = False
+    cen_msg.human_readable_log = "Button 1 pressed on CEN 5"
+
+    with patch("custom_components.myhome.gateway.OWNEventSession") as mock_session_class:
+        mock_session = MagicMock()
+        mock_session.connect = AsyncMock(return_value={"Success": True})
+        mock_session.get_next = AsyncMock(side_effect=[cen_msg, cen_msg, asyncio.CancelledError()])
+        mock_session_class.return_value = mock_session
+
+        with patch("homeassistant.helpers.device_registry.async_get", return_value=mock_dr):
+            with patch.object(gateway_handler.hass.bus, "async_fire") as mock_fire:
+                try:
+                    await gateway_handler.listening_loop()
+                except asyncio.CancelledError:
+                    pass
+
+                # Check bus event fired with object, pushbutton, event
+                mock_fire.assert_any_call(
+                    "myhome_cen_event",
+                    {
+                        "object": 5,
+                        "pushbutton": 1,
+                        "event": CONF_SHORT_PRESS,
+                    },
+                )
+
+                # Check device registry auto-registration called once (deduplicated)
+                mock_dr.async_get_or_create.assert_called_once_with(
+                    config_entry_id="test_entry_123",
+                    identifiers={(DOMAIN, f"{gateway_handler.mac}-15-5")},
+                    name="CEN Unit 5",
+                    manufacturer="BTicino",
+                    model="CEN Scenario Control",
+                    via_device=(DOMAIN, gateway_handler.mac),
+                )
+
+
+@pytest.mark.asyncio
+async def test_gateway_cenplus_event_and_auto_registration(gateway_handler: MyHOMEGatewayHandler):
+    """Test receiving OWNCENPlusEvent dispatches bus event and registers CEN+ scenario device."""
+    mock_dr = MagicMock()
+    gateway_handler.config_entry.entry_id = "test_entry_456"
+
+    cenplus_msg = MagicMock(spec=OWNCENPlusEvent)
+    cenplus_msg.object = "12"
+    cenplus_msg.push_button = "3"
+    cenplus_msg.is_short_pressed = False
+    cenplus_msg.is_held = False
+    cenplus_msg.is_still_held = False
+    cenplus_msg.is_released = False
+    cenplus_msg.is_slowly_turned_cw = False
+    cenplus_msg.is_quickly_turned_cw = True
+    cenplus_msg.is_slowly_turned_ccw = False
+    cenplus_msg.is_quickly_turned_ccw = False
+    cenplus_msg.human_readable_log = "Button 3 quickly rotated CW on CEN+ 12"
+
+    with patch("custom_components.myhome.gateway.OWNEventSession") as mock_session_class:
+        mock_session = MagicMock()
+        mock_session.connect = AsyncMock(return_value={"Success": True})
+        mock_session.get_next = AsyncMock(side_effect=[cenplus_msg, asyncio.CancelledError()])
+        mock_session_class.return_value = mock_session
+
+        with patch("homeassistant.helpers.device_registry.async_get", return_value=mock_dr):
+            with patch.object(gateway_handler.hass.bus, "async_fire") as mock_fire:
+                try:
+                    await gateway_handler.listening_loop()
+                except asyncio.CancelledError:
+                    pass
+
+                # Check bus event fired
+                mock_fire.assert_called_once_with(
+                    "myhome_cenplus_event",
+                    {
+                        "object": 12,
+                        "pushbutton": 3,
+                        "event": CONF_ROTARY_CW_FAST,
+                    },
+                )
+
+                # Check device registry auto-registration
+                mock_dr.async_get_or_create.assert_called_once_with(
+                    config_entry_id="test_entry_456",
+                    identifiers={(DOMAIN, f"{gateway_handler.mac}-25-12")},
+                    name="CEN+ Unit 12",
+                    manufacturer="BTicino",
+                    model="CEN+ Scenario Control",
+                    via_device=(DOMAIN, gateway_handler.mac),
+                )
+
+

@@ -37,7 +37,7 @@ The foundational rebuild of the integration engine, eliminating legacy concurren
   - Unified asynchronous TCP (`AsyncTcpTransport`) and Serial/USB (`AsyncSerialTransport`).
   - Native support for **Legrand 3578 OpenZigBee USB interfaces** with auto-port detection and baudrate negotiation.
 - **Declarative Gateway Profiles & Adaptive Pacing**:
-  - Tuned session concurrency and token-bucket pacing (e.g. 150 ms for MH200, 80 ms for F454, 30 ms for MyHomeServer1).
+  - Tuned session concurrency and adaptive inter-frame pacing (e.g. 150 ms for MH200, 80 ms for F454, 30 ms for MyHomeServer1).
 - **Stream Framing & Connection Watchdog**:
   - Chunk-free `readuntil(b"##")` stream delimiter parsing.
   - Active keep-alive supervisor with exponential backoff and fail-closed authentication (HMAC-SHA256, HMAC-SHA1, OpenWebNet password hashing).
