@@ -178,7 +178,6 @@ class MyHOMEAlarmControlPanel(MyHOMEEntity, AlarmControlPanelEntity):
             | AlarmControlPanelEntityFeature.TRIGGER
         )
         self._attr_alarm_state = STATE_DISARMED
-        self._attr_state = STATE_DISARMED
         self._attr_extra_state_attributes = {
             "where": self._where,
             "raw_state": "disarmed",
@@ -251,7 +250,6 @@ class MyHOMEAlarmControlPanel(MyHOMEEntity, AlarmControlPanelEntity):
             self._attr_alarm_state = STATE_ARMED_HOME
         elif message.is_disarmed:
             self._attr_alarm_state = STATE_DISARMED
-        self._attr_state = self._attr_alarm_state
 
         self._attr_extra_state_attributes["raw_state"] = message.state_name
         self._attr_extra_state_attributes["state_code"] = message.state_code
