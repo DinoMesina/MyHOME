@@ -42,7 +42,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install ${{ matrix.pip-install }}
-          pip install pytest pytest-asyncio pytest-cov pytest-socket syrupy time-machine python-dateutil pytz freezegun requests-mock respx paho-mqtt tqdm
+          pip install pytest pytest-asyncio pytest-cov pytest-socket "syrupy>=4.6.0,<5.0.0" time-machine python-dateutil pytz freezegun requests-mock respx paho-mqtt tqdm
           pip install pytest-homeassistant-custom-component --no-deps
 
       - name: Fast Platform Import Smoke Test
