@@ -204,6 +204,7 @@ The integration includes an in-band real-time bus monitor operating over the exi
 
 A modern custom Lovelace element is automatically registered with zero configuration:
 
+- **Visual Card Picker & GUI Editor**: Fully integrated with Home Assistant's card picker — simply search for **"MyHOME Bus Monitor"** under `+ Add Card` and configure the title or buffer size visually without touching raw YAML.
 - **Live Bus Stream**: High-performance scrolling feed with color-coded badges for subsystems (Lighting `WHO=1`, Automation `WHO=2`, Climate `WHO=4`, Sound `WHO=16`, Energy `WHO=18`, CEN `WHO=15/25`) and ACK (`*#*1##`) / NACK (`*#*0##`) highlighting.
 - **Interactive Controls**: Live Pause/Resume, buffer clearing, and instant filtering by subsystem, WHERE address, and Direction (RX/TX).
 - **Manual Frame Injector**: Send raw OpenWebNet diagnostic frames directly to the bus with syntax validation.
