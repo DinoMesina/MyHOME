@@ -863,6 +863,43 @@ async def test_device_pruning_uses_async_entries_for_config_entry(hass: HomeAssi
         await hass.async_block_till_done()
 
 
+async def test_setup_entry_sw_version_list_normalization(hass: HomeAssistant):
+    """Test sw_version passed as tuple/list is normalized to string for device registry."""
+    with patch(
+        "custom_components.myhome.gateway.OWNSession.test_connection",
+        return_value={"Success": True, "Message": None},
+    ), patch(
+        "custom_components.myhome.gateway.MyHOMEGatewayHandler.listening_loop"
+    ), patch(
+        "custom_components.myhome.gateway.MyHOMEGatewayHandler.sending_loop"
+    ):
+        config_entry = MockConfigEntry(
+            domain=DOMAIN,
+            data={
+                "host": "192.168.0.35",
+                "port": 20000,
+                "password": "pass",
+                "mac": "00:03:50:00:55:44",
+                "firmware": ["2", "1", "0"],
+            },
+            unique_id="00:03:50:00:55:44",
+        )
+        config_entry.add_to_hass(hass)
+
+        assert await hass.config_entries.async_setup(config_entry.entry_id)
+        await hass.async_block_till_done()
+
+        dev_reg = dr.async_get(hass)
+        gw_device = dev_reg.async_get_device(identifiers={(DOMAIN, "00:03:50:00:55:44")})
+        assert gw_device is not None
+        assert isinstance(gw_device.sw_version, str)
+        assert gw_device.sw_version == "2.1.0"
+
+        await hass.config_entries.async_unload(config_entry.entry_id)
+        await hass.async_block_till_done()
+
+
+
 
 
 

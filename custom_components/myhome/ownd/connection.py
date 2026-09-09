@@ -55,10 +55,15 @@ class OWNGateway:
         )
         self.model = self.model_name
         from ..gateway_profile import get_gateway_profile
-        self.profile = get_gateway_profile(self.model_name)
-        self.model_number = (
+        model_num = (
             discovery_info["modelNumber"] if "modelNumber" in discovery_info else None
         )
+        if isinstance(model_num, (list, tuple)):
+            self.model_number = ".".join(str(x) for x in model_num) if model_num else None
+        elif model_num is not None:
+            self.model_number = str(model_num)
+        else:
+            self.model_number = None
         # self.presentationURL = (
         #     discovery_info["presentationURL"]
         #     if "presentationURL" in discovery_info
@@ -95,7 +100,12 @@ class OWNGateway:
 
     @firmware.setter
     def firmware(self, firmware: str) -> None:
-        self.model_number = firmware
+        if isinstance(firmware, (list, tuple)):
+            self.model_number = ".".join(str(x) for x in firmware) if firmware else None
+        elif firmware is not None:
+            self.model_number = str(firmware)
+        else:
+            self.model_number = None
 
     @property
     def serial(self) -> str:

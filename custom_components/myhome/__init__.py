@@ -323,6 +323,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     elif not _mfg:
         _mfg = "BTicino S.p.A."
 
+    _fw = hass.data[DOMAIN][entry.data[CONF_MAC]][CONF_ENTITY].firmware
+    if isinstance(_fw, (list, tuple)):
+        _fw = ".".join(str(x) for x in _fw) if _fw else None
+    elif _fw is not None:
+        _fw = str(_fw)
+    else:
+        _fw = None
+
     gateway_device_entry = device_registry.async_get_or_create(
         config_entry_id=entry.entry_id,
         connections={(dr.CONNECTION_NETWORK_MAC, entry.data[CONF_MAC])},
@@ -332,7 +340,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
         manufacturer=str(_mfg),
         name=hass.data[DOMAIN][entry.data[CONF_MAC]][CONF_ENTITY].name,
         model=hass.data[DOMAIN][entry.data[CONF_MAC]][CONF_ENTITY].model,
-        sw_version=hass.data[DOMAIN][entry.data[CONF_MAC]][CONF_ENTITY].firmware,
+        sw_version=_fw,
     )
 
     hass.data[DOMAIN][entry.data[CONF_MAC]][CONF_ENTITY].device_registry_id = (

@@ -65,6 +65,44 @@ class TestOWNGateway:
         gw.firmware = "4.5.6"
         assert gw.firmware == "4.5.6"
 
+    def test_firmware_normalization(self):
+        # List of strings/ints in discovery info
+        gw_list = OWNGateway({"address": "127.0.0.1", "modelNumber": ["2", "1", "0"]})
+        assert gw_list.firmware == "2.1.0"
+        assert gw_list.model_number == "2.1.0"
+
+        # Tuple in discovery info
+        gw_tuple = OWNGateway({"address": "127.0.0.1", "modelNumber": ("1", "0")})
+        assert gw_tuple.firmware == "1.0"
+
+        # Empty list in discovery info
+        gw_empty = OWNGateway({"address": "127.0.0.1", "modelNumber": []})
+        assert gw_empty.firmware is None
+
+        # None / missing in discovery info
+        gw_none = OWNGateway({"address": "127.0.0.1", "modelNumber": None})
+        assert gw_none.firmware is None
+
+        gw_missing = OWNGateway({"address": "127.0.0.1"})
+        assert gw_missing.firmware is None
+
+        # Setter normalization
+        gw = OWNGateway({"address": "127.0.0.1"})
+        gw.firmware = ["3", "4", "5"]
+        assert gw.firmware == "3.4.5"
+
+        gw.firmware = ("4", "0")
+        assert gw.firmware == "4.0"
+
+        gw.firmware = []
+        assert gw.firmware is None
+
+        gw.firmware = None
+        assert gw.firmware is None
+
+        gw.firmware = "9.9.9"
+        assert gw.firmware == "9.9.9"
+
     def test_serial_accessor(self, gateway_info):
         gw = OWNGateway(gateway_info)
         assert gw.serial == "00:03:50:00:12:34"

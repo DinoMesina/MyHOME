@@ -177,7 +177,10 @@ class MyHOMEGatewayHandler:
 
     @property
     def firmware(self) -> str:
-        return self.gateway.firmware
+        fw = self.gateway.firmware
+        if isinstance(fw, (list, tuple)):
+            return ".".join(str(x) for x in fw) if fw else None
+        return str(fw) if fw else None
 
     @property
     def profile(self):
