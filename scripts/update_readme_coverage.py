@@ -183,20 +183,20 @@ def update_readme_and_svg():
             content,
         )
 
-    # Update summary test count mention
+    # Update summary test count mentions dynamically
     content = re.sub(
-        r"The integration maintains over \d+ automated tests(?:\s*\(\d+% line coverage\))?",
-        f"The integration maintains over {test_count_rounded} automated tests ({rate_round}% line coverage)",
+        r"(\*\*Comprehensive Test Suite\*\*:\s*(?:[Oo]ver\s+)?)\d+\s+automated unit tests\s*\(\d+%\s+line coverage\)",
+        rf"\g<1>{test_count} automated unit tests ({rate_round}% line coverage)",
         content,
     )
     content = re.sub(
-        r"Over \d+ automated unit tests(?:\s*\(\d+% line coverage\))?",
-        f"Over {test_count_rounded} automated unit tests ({rate_round}% line coverage)",
+        r"(\*\*`test-coverage`\*\*:\s*)\d+\s+automated unit tests",
+        rf"\g<1>{test_count} automated unit tests",
         content,
     )
     content = re.sub(
-        r"\*\*`test-coverage`\*\*: \d+\+? automated unit tests",
-        f"**`test-coverage`**: {test_count} automated unit tests",
+        r"(The integration maintains\s+(?:over\s+)?)\d+\s+automated unit tests\s*\(\d+%\s+line coverage(?: across all modules)?\)",
+        rf"\g<1>{test_count} automated unit tests ({rate_round}% line coverage across all modules)",
         content,
     )
     content = re.sub(

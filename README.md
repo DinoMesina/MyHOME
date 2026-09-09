@@ -34,7 +34,7 @@ Maintained by the **[OpenWebNet-HA](https://github.com/OpenWebNet-HA)** communit
 - **Sound System 2.0 & Audio Matrix (WHO=16)**: Complete multi-room audio support for F441 / F441M matrices and amplifiers, including zone power, volume normalization (0–31 scale), software mute emulation, and dynamic streaming proxy.
 - **Streaming Audio Dynamic Proxy**: Seamlessly stream from **Music Assistant**, **Spotify Connect**, or any HA media player to wired BTicino audio zones using a thread-safe `DecoderPool` with analog gain-staging.
 - **Dimmable Light Detection**: Auto-detects dimming capabilities directly from bus events with transition support.
-- **Comprehensive Test Suite**: Over 790 automated unit tests (100% line coverage) executed across modern Python 3.12+ and Home Assistant core standards.
+- **Comprehensive Test Suite**: Over 795 automated unit tests (100% line coverage) executed across modern Python 3.12+ and Home Assistant core standards.
 
 ---
 
