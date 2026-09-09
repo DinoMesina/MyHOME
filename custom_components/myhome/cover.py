@@ -302,9 +302,9 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
             elapsed = time.monotonic() - self._move_start_time
             delta = (elapsed / self._travel_time) * 100
             if self._attr_is_opening:
-                return min(100, int(self._start_position + delta))
+                return min(100, int(round(self._start_position + delta)))
             if self._attr_is_closing:
-                return max(0, int(self._start_position - delta))
+                return max(0, int(round(self._start_position - delta)))
         return self._attr_current_cover_position
 
     @property
@@ -453,9 +453,9 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
                 elapsed = time.monotonic() - self._move_start_time
                 delta = (elapsed / self._travel_time) * 100
                 if self._attr_is_opening:
-                    self._attr_current_cover_position = min(100, int(self._start_position + delta))
+                    self._attr_current_cover_position = min(100, int(round(self._start_position + delta)))
                 elif self._attr_is_closing:
-                    self._attr_current_cover_position = max(0, int(self._start_position - delta))
+                    self._attr_current_cover_position = max(0, int(round(self._start_position - delta)))
                 self._start_position = self._attr_current_cover_position
                 self._move_start_time = None
             self._attr_is_opening = False
@@ -509,9 +509,9 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
                     elapsed = time.monotonic() - self._move_start_time
                     delta = (elapsed / self._travel_time) * 100
                     if self._attr_is_opening:
-                        self._attr_current_cover_position = min(100, int(self._start_position + delta))
+                        self._attr_current_cover_position = min(100, int(round(self._start_position + delta)))
                     elif self._attr_is_closing:
-                        self._attr_current_cover_position = max(0, int(self._start_position - delta))
+                        self._attr_current_cover_position = max(0, int(round(self._start_position - delta)))
                     self._start_position = self._attr_current_cover_position
                     self._move_start_time = None
             self._attr_is_opening = False

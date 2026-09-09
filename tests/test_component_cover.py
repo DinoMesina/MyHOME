@@ -538,7 +538,8 @@ async def test_cover_general_commands_update_all_covers(hass: HomeAssistant, moc
 
     # 1. General Open (*2*1*0##)
     msg_open = OWNEvent.parse("*2*1*0##")
-    async_dispatcher_send(hass, f"myhome_update_{mac}_2_general", msg_open)
+    with patch("time.monotonic", return_value=1000.0):
+        async_dispatcher_send(hass, f"myhome_update_{mac}_2_general", msg_open)
 
     assert cover1.is_opening is True
     assert cover1.is_closing is False
@@ -546,7 +547,7 @@ async def test_cover_general_commands_update_all_covers(hass: HomeAssistant, moc
     assert cover2.is_closing is False
 
     # 2. General Stop (*2*0*0##) after 5 seconds (5s / 25s * 100 = 20% increase -> 70%)
-    with patch("time.monotonic", return_value=cover1._move_start_time + 5):
+    with patch("time.monotonic", return_value=1005.0):
         msg_stop = OWNEvent.parse("*2*0*0##")
         async_dispatcher_send(hass, f"myhome_update_{mac}_2_general", msg_stop)
 
@@ -559,7 +560,8 @@ async def test_cover_general_commands_update_all_covers(hass: HomeAssistant, moc
 
     # 3. General Close (*2*2*0##)
     msg_close = OWNEvent.parse("*2*2*0##")
-    async_dispatcher_send(hass, f"myhome_update_{mac}_2_general", msg_close)
+    with patch("time.monotonic", return_value=2000.0):
+        async_dispatcher_send(hass, f"myhome_update_{mac}_2_general", msg_close)
 
     assert cover1.is_closing is True
     assert cover1.is_opening is False
@@ -567,7 +569,7 @@ async def test_cover_general_commands_update_all_covers(hass: HomeAssistant, moc
     assert cover2.is_opening is False
 
     # 4. General Stop (*2*0*0##) after 5 seconds (70% - 20% = 50%)
-    with patch("time.monotonic", return_value=cover1._move_start_time + 5):
+    with patch("time.monotonic", return_value=2005.0):
         async_dispatcher_send(hass, f"myhome_update_{mac}_2_general", msg_stop)
 
     assert cover1.is_closing is False
@@ -674,12 +676,13 @@ async def test_cover_gateway_general_message_updates_all_active_entities(hass: H
     cover2._start_position = 50
 
     # 1. Gateway receives general open (*2*1*0##)
-    async_dispatcher_send(hass, f"myhome_message_{mac}", OWNEvent.parse("*2*1*0##"))
+    with patch("time.monotonic", return_value=1000.0):
+        async_dispatcher_send(hass, f"myhome_message_{mac}", OWNEvent.parse("*2*1*0##"))
     assert cover1.is_opening is True
     assert cover2.is_opening is True
 
     # 2. Gateway receives general stop (*2*0*0##) after 5 seconds
-    with patch("time.monotonic", return_value=cover1._move_start_time + 5):
+    with patch("time.monotonic", return_value=1005.0):
         async_dispatcher_send(hass, f"myhome_message_{mac}", OWNEvent.parse("*2*0*0##"))
 
     assert cover1.is_opening is False
