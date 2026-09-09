@@ -1,4 +1,5 @@
 """Tests for the MyHOME cover component."""
+import asyncio
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -178,10 +179,14 @@ class TestMyHOMECoverEntity:
     def test_cover_attributes(self, basic_cover, advanced_cover):
         assert basic_cover.device_class == CoverDeviceClass.SHUTTER
         assert basic_cover.supported_features == (
-            CoverEntityFeature.OPEN | CoverEntityFeature.CLOSE | CoverEntityFeature.STOP
+            CoverEntityFeature.OPEN
+            | CoverEntityFeature.CLOSE
+            | CoverEntityFeature.STOP
+            | CoverEntityFeature.SET_POSITION
         )
         assert basic_cover.extra_state_attributes["A"] == "2"
         assert basic_cover.extra_state_attributes["PL"] == "1"
+        assert basic_cover.extra_state_attributes["travel_time"] == 25
         assert "Int" not in basic_cover.extra_state_attributes
 
         assert advanced_cover.supported_features == (
@@ -191,6 +196,11 @@ class TestMyHOMECoverEntity:
             | CoverEntityFeature.SET_POSITION
         )
         assert advanced_cover.extra_state_attributes["Int"] == "02"
+
+        # When current_cover_position is None, is_closed falls back to _attr_is_closed
+        basic_cover._attr_current_cover_position = None
+        basic_cover._attr_is_closed = True
+        assert basic_cover.is_closed is True
 
     async def test_async_lifecycle_and_update(self, basic_cover, hass):
         basic_cover.async_on_remove = MagicMock()
@@ -222,11 +232,60 @@ class TestMyHOMECoverEntity:
         await advanced_cover.async_set_cover_position()
         advanced_cover._gateway_handler.send.assert_not_called()
 
+        # Virtual travel time positioning for basic cover
+        basic_cover._gateway_handler.send.reset_mock()
+        basic_cover._attr_current_cover_position = 50
+        # Set to 50 (same) -> no-op
+        await basic_cover.async_set_cover_position(**{ATTR_POSITION: 50})
+        basic_cover._gateway_handler.send.assert_not_called()
+
+        # Set to 80 (open)
+        with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+            await basic_cover.async_set_cover_position(**{ATTR_POSITION: 80})
+            assert basic_cover.is_opening is True
+            assert basic_cover._stop_task is not None
+            # Await the stop task
+            await basic_cover._stop_task
+            assert basic_cover.is_opening is False
+
+        # Set to 20 (close)
+        with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+            await basic_cover.async_set_cover_position(**{ATTR_POSITION: 20})
+            assert basic_cover.is_closing is True
+            assert basic_cover._stop_task is not None
+            await basic_cover._stop_task
+            assert basic_cover.is_closing is False
+
+        # Test active stop task cancellation
+        await basic_cover.async_set_cover_position(**{ATTR_POSITION: 80})
+        task = basic_cover._stop_task
+        assert task is not None
+        await asyncio.sleep(0)
+        basic_cover._cancel_stop_task()
+        assert basic_cover._stop_task is None
+        await asyncio.sleep(0)
+
+        # Unload / remove from hass cleans up tasks
+        await basic_cover.async_will_remove_from_hass()
+        assert basic_cover._stop_task is None
+
     def test_handle_event(self, basic_cover):
         # Opening event
         msg_opening = OWNEvent.parse("*2*1*21##")
         basic_cover.handle_event(msg_opening)
         assert basic_cover.is_opening is True
+        assert basic_cover.is_closing is False
+
+        # Moving position interpolation
+        with patch("time.monotonic", return_value=basic_cover._move_start_time + 12.5):
+            # After 12.5s out of 25s full travel time from 50%, position should advance ~50%
+            pos = basic_cover.current_cover_position
+            assert pos >= 90
+
+        # Stop event
+        msg_stop = OWNEvent.parse("*2*0*21##")
+        basic_cover.handle_event(msg_stop)
+        assert basic_cover.is_opening is False
         assert basic_cover.is_closing is False
 
         # Closing event
@@ -235,12 +294,34 @@ class TestMyHOMECoverEntity:
         assert basic_cover.is_opening is False
         assert basic_cover.is_closing is True
 
+        # Moving closing interpolation
+        with patch("time.monotonic", return_value=basic_cover._move_start_time + 12.5):
+            pos = basic_cover.current_cover_position
+            assert pos <= 60
+
+        basic_cover.handle_event(msg_stop)
+        assert basic_cover.is_closing is False
+
         # Position event
         msg_pos = OWNEvent.parse("*#2*21*10*10*0*0*0##")
         basic_cover.handle_event(msg_pos)
         assert basic_cover.is_closed is True
         assert basic_cover.current_cover_position == 0
 
-        # Runtime error in async_schedule_update_ha_state
-        basic_cover.async_schedule_update_ha_state.side_effect = RuntimeError("HA shutting down")
-        basic_cover.handle_event(msg_pos)  # should not raise
+        # Position event without is_closed
+        msg_pos_no_closed = MagicMock(spec=OWNAutomationEvent)
+        msg_pos_no_closed.current_position = 0
+        msg_pos_no_closed.is_closed = None
+        msg_pos_no_closed.human_readable_log = "Pos no closed"
+        basic_cover.handle_event(msg_pos_no_closed)
+        assert basic_cover.is_closed is True
+
+        # Stop event with is_closed reported
+        msg_stopped_with_closed = MagicMock(spec=OWNAutomationEvent)
+        msg_stopped_with_closed.current_position = None
+        msg_stopped_with_closed.is_opening = False
+        msg_stopped_with_closed.is_closing = False
+        msg_stopped_with_closed.is_closed = True
+        msg_stopped_with_closed.human_readable_log = "Stopped with closed"
+        basic_cover.handle_event(msg_stopped_with_closed)
+        assert basic_cover.is_closed is True

@@ -42,6 +42,8 @@ from .ownd.message import (
     OWNAuxEvent,
     OWNHeatingEvent,
     OWNHeatingCommand,
+    OWNAlarmEvent,
+    OWNAlarmCommand,
     OWNCENPlusEvent,
     OWNCENEvent,
     OWNGatewayEvent,
@@ -337,6 +339,32 @@ class MyHOMEGatewayHandler:
                         "pushbutton": int(message.push_button),
                         "event": event,
                     },
+                )
+                LOGGER.info(
+                    "%s %s",
+                    self.log_id,
+                    message.human_readable_log,
+                )
+            elif isinstance(message, OWNAlarmEvent):
+                self.hass.bus.async_fire(
+                    "myhome_alarm_event",
+                    {
+                        "where": str(message.where),
+                        "state": message.state_name,
+                        "state_code": message.state_code,
+                        "is_alarm": message.is_alarm,
+                        "message": str(message),
+                    },
+                )
+                async_dispatcher_send(
+                    self.hass,
+                    f"myhome_update_{self.mac}_5_{message.where}",
+                    message,
+                )
+                async_dispatcher_send(
+                    self.hass,
+                    f"myhome_update_{self.mac}_5_0",
+                    message,
                 )
                 LOGGER.info(
                     "%s %s",

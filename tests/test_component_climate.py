@@ -1,7 +1,7 @@
 """Test the MyHOME climate component."""
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from homeassistant.components.climate.const import HVACMode, HVACAction
+from homeassistant.components.climate.const import HVACMode, HVACAction, ClimateEntityFeature
 from homeassistant.const import UnitOfTemperature
 
 from custom_components.myhome.climate import (
@@ -506,4 +506,88 @@ async def test_climate_handle_events_action_variations_and_runtime_error(hass):
     # Test RuntimeError catch in async_schedule_update_ha_state
     climate_cool.async_schedule_update_ha_state.side_effect = RuntimeError("State update error")
     climate_cool.handle_event(event)  # Should not raise
+
+
+async def test_climate_fan_mode_and_attributes(hass):
+    """Test fancoil fan modes, attributes, and status query on added to hass."""
+    gateway = MagicMock()
+    gateway.mac = "00:03:50:00:11:22"
+    gateway.log_id = "[Test Gateway]"
+    gateway.send = AsyncMock()
+    gateway.send_status_request = AsyncMock()
+
+    climate_fancoil = MyHOMEClimate(
+        hass=hass,
+        name="Fancoil",
+        device_id="device_fan",
+        who="4",
+        where="5",
+        heating=True,
+        cooling=True,
+        fan=True,
+        standalone=False,
+        central=False,
+        manufacturer="BTicino",
+        model="Fancoil Unit",
+        gateway=gateway,
+    )
+    climate_fancoil.hass = hass
+    climate_fancoil.async_schedule_update_ha_state = MagicMock()
+
+    assert climate_fancoil.supported_features & ClimateEntityFeature.FAN_MODE
+    assert climate_fancoil.fan_modes == ["auto", "low", "medium", "high"]
+    assert climate_fancoil.fan_mode == "auto"
+    assert climate_fancoil.extra_state_attributes["local_offset"] == 0
+    assert climate_fancoil.extra_state_attributes["fan_mode"] == "auto"
+
+    # Test setting fan modes: low (1), medium (2), high (3), auto (0)
+    await climate_fancoil.async_set_fan_mode("low")
+    assert climate_fancoil.fan_mode == "low"
+    assert str(gateway.send.call_args[0][0]) == "*#4*#5*#11*1##"
+
+    await climate_fancoil.async_set_fan_mode("medium")
+    assert climate_fancoil.fan_mode == "medium"
+    assert str(gateway.send.call_args[0][0]) == "*#4*#5*#11*2##"
+
+    await climate_fancoil.async_set_fan_mode("high")
+    assert climate_fancoil.fan_mode == "high"
+    assert str(gateway.send.call_args[0][0]) == "*#4*#5*#11*3##"
+
+    await climate_fancoil.async_set_fan_mode("auto")
+    assert climate_fancoil.fan_mode == "auto"
+    assert str(gateway.send.call_args[0][0]) == "*#4*#5*#11*0##"
+
+    # Unknown fan mode
+    gateway.send.reset_mock()
+    await climate_fancoil.async_set_fan_mode("turbo")
+    gateway.send.assert_not_called()
+
+    # Event handling for fan speeds
+    from custom_components.myhome.ownd.message import MESSAGE_TYPE_FAN_SPEED
+    event = MagicMock()
+    event.message_type = MESSAGE_TYPE_FAN_SPEED
+    event.human_readable_log = "Fan speed event"
+
+    event.fan_speed = 1
+    climate_fancoil.handle_event(event)
+    assert climate_fancoil.fan_mode == "low"
+
+    event.fan_speed = 2
+    climate_fancoil.handle_event(event)
+    assert climate_fancoil.fan_mode == "medium"
+
+    event.fan_speed = 3
+    climate_fancoil.handle_event(event)
+    assert climate_fancoil.fan_mode == "high"
+
+    event.fan_speed = 0
+    climate_fancoil.handle_event(event)
+    assert climate_fancoil.fan_mode == "auto"
+
+    # Test async_added_to_hass immediately sends status request
+    climate_fancoil.async_on_remove = MagicMock()
+    await climate_fancoil.async_added_to_hass()
+    gateway.send_status_request.assert_awaited_once()
+    assert str(gateway.send_status_request.call_args[0][0]) == "*#4*5##"
+
 

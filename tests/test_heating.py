@@ -184,3 +184,29 @@ class TestHeatingCommandGeneration:
     def test_command_parse_who4(self):
         cmd = OWNCommand.parse("*#4*1##")
         assert isinstance(cmd, OWNHeatingCommand)
+
+    def test_fan_speed_and_on_properties(self):
+        msg_speed2 = OWNEvent.parse("*#4*1*11*2##")
+        assert isinstance(msg_speed2, OWNHeatingEvent)
+        assert msg_speed2.fan_speed == 2
+        assert msg_speed2.fan_on is True
+
+        msg_speed0 = OWNEvent.parse("*#4*1*11*0##")
+        assert isinstance(msg_speed0, OWNHeatingEvent)
+        assert msg_speed0.fan_speed == 0
+        assert msg_speed0.fan_on is True
+
+        msg_off = OWNEvent.parse("*#4*1*11*4##")
+        assert isinstance(msg_off, OWNHeatingEvent)
+        assert msg_off.fan_speed is None
+        assert msg_off.fan_on is False
+
+    def test_set_fan_speed_variations(self):
+        cmd_central = OWNHeatingCommand.set_fan_speed("#0#1", 2)
+        assert "*#4*#0#1*#11*2##" == str(cmd_central)
+
+        cmd_standalone_zero = OWNHeatingCommand.set_fan_speed("0", 1, standalone=True)
+        assert "*#4*#0*#11*1##" == str(cmd_standalone_zero)
+
+        cmd_standalone_zone = OWNHeatingCommand.set_fan_speed("1", 3, standalone=True)
+        assert "*#4*1*#11*3##" == str(cmd_standalone_zone)

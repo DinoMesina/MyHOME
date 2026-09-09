@@ -1,4 +1,5 @@
 from homeassistant.core import callback
+from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dispatcher_send
 """Support for MyHome heating."""
 
 from homeassistant.components.climate import (
@@ -31,6 +32,7 @@ from .ownd.message import (
     MESSAGE_TYPE_MODE,
     MESSAGE_TYPE_MODE_TARGET,
     MESSAGE_TYPE_ACTION,
+    MESSAGE_TYPE_FAN_SPEED,
 )
 
 from .const import (
@@ -90,6 +92,31 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
 
     async_add_entities(_climate_devices)
 
+    @callback
+    def _handle_climate_message(msg):
+        """Filter and forward climate messages."""
+        if isinstance(msg, OWNHeatingEvent):
+            zone_where = f"#{msg.zone}" if msg.zone == 0 else str(msg.zone)
+            async_dispatcher_send(
+                hass,
+                f"myhome_update_{config_entry.data[CONF_MAC]}_4_{zone_where}",
+                msg,
+            )
+            async_dispatcher_send(
+                hass,
+                f"myhome_update_{config_entry.data[CONF_MAC]}_4_{msg.where}",
+                msg,
+            )
+
+    config_entry.async_on_unload(
+        async_dispatcher_connect(
+            hass,
+            f"myhome_message_{config_entry.data[CONF_MAC]}",
+            _handle_climate_message,
+        )
+    )
+    return True
+
 
 async def async_unload_entry(hass, config_entry):
     if PLATFORM not in hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS]:
@@ -103,6 +130,7 @@ async def async_unload_entry(hass, config_entry):
         del hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS][PLATFORM][
             _climate_device
         ]
+    return True
 
 
 class MyHOMEClimate(MyHOMEEntity, ClimateEntity):
@@ -156,9 +184,12 @@ class MyHOMEClimate(MyHOMEEntity, ClimateEntity):
             if cooling:
                 self._attr_hvac_modes.append(HVACMode.COOL)
 
-        # Fan mode is not yet implemented in the OpenWebNet protocol handler.
-        # Do not advertise FAN_MODE to avoid NotImplementedError in the UI.
+        # Fan mode support (fancoil 3-speed + auto)
         self._fan = fan
+        if self._fan:
+            self._attr_supported_features |= ClimateEntityFeature.FAN_MODE
+            self._attr_fan_modes = ["auto", "low", "medium", "high"]
+            self._attr_fan_mode = "auto"
 
         self._attr_current_temperature = None
         self._attr_current_humidity = None
@@ -168,6 +199,50 @@ class MyHOMEClimate(MyHOMEEntity, ClimateEntity):
 
         self._attr_hvac_mode = None
         self._attr_hvac_action = None
+
+    @property
+    def extra_state_attributes(self):
+        """Return device specific attributes."""
+        attrs = {
+            "local_offset": self._local_offset,
+        }
+        if self._fan:
+            attrs["fan_mode"] = self._attr_fan_mode
+        return attrs
+
+    async def async_added_to_hass(self):
+        """Run when entity about to be added to hass."""
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                f"myhome_update_{self._gateway_handler.mac}_4_{self._where}",
+                self.handle_event,
+            )
+        )
+        await self._gateway_handler.send_status_request(
+            OWNHeatingCommand.status(self._where)
+        )
+
+    async def async_set_fan_mode(self, fan_mode: str):
+        """Set new target fan mode."""
+        fan_mode_map = {
+            "auto": 0,
+            "low": 1,
+            "medium": 2,
+            "high": 3,
+        }
+        speed_code = fan_mode_map.get(str(fan_mode).lower())
+        if speed_code is not None:
+            self._attr_fan_mode = fan_mode
+            await self._gateway_handler.send(
+                OWNHeatingCommand.set_fan_speed(
+                    where=self._where,
+                    speed=speed_code,
+                    standalone=self._standalone,
+                )
+            )
+            if self.hass is not None:
+                self.async_write_ha_state()
 
 
 
@@ -423,6 +498,23 @@ class MyHOMEClimate(MyHOMEEntity, ClimateEntity):
                 self._attr_hvac_action = HVACAction.OFF
             else:
                 self._attr_hvac_action = HVACAction.IDLE
+        elif message.message_type == MESSAGE_TYPE_FAN_SPEED or (
+            hasattr(message, "fan_speed") and message.fan_speed is not None
+        ):
+            LOGGER.info(
+                "%s %s",
+                self._gateway_handler.log_id,
+                message.human_readable_log,
+            )
+            speed = getattr(message, "fan_speed", None)
+            if speed == 0:
+                self._attr_fan_mode = "auto"
+            elif speed == 1:
+                self._attr_fan_mode = "low"
+            elif speed == 2:
+                self._attr_fan_mode = "medium"
+            elif speed == 3:
+                self._attr_fan_mode = "high"
 
         if self.hass is not None or hasattr(self.async_schedule_update_ha_state, "assert_called"):
             try:

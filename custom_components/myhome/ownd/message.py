@@ -25,6 +25,7 @@ MESSAGE_TYPE_MOTION = "motion_detected"
 MESSAGE_TYPE_PIR_SENSITIVITY = "pir_sensitivity"
 MESSAGE_TYPE_ILLUMINANCE = "illuminance_value"
 MESSAGE_TYPE_MOTION_TIMEOUT = "motion_timeout"
+MESSAGE_TYPE_FAN_SPEED = "fan_speed"
 
 CLIMATE_MODE_OFF = "off"
 CLIMATE_MODE_HEAT = "heat"
@@ -365,11 +366,12 @@ class OWNEvent(OWNMessage):
             elif _who == 18:
                 return OWNEnergyEvent(data)
             elif _who == 25:
-                _where = re.match(r"^\*.+\*(?P<where>\d+)##$", data).group("where")
-                if _where.startswith("2"):
+                _parts = data.strip("#").split("*")
+                _what = _parts[2] if len(_parts) > 2 else ""
+                _where = _parts[3] if len(_parts) > 3 else ""
+                if _what.startswith("2") or _where.startswith("2"):
                     return OWNCENPlusEvent(data)
-                elif _where.startswith("3"):
-                    return OWNDryContactEvent(data)
+                return OWNDryContactEvent(data)
             elif _who > 1000:
                 return cls(data)
 
@@ -456,7 +458,7 @@ class OWNLightingEvent(OWNEvent):
                 self._motion = True
                 self._human_readable_log = f"Light/motion sensor {self._where}{self._interface_log_text} detected motion"
 
-        if self._dimension is not None:
+        if self._dimension is not None and self._dimension_value:
             if self._dimension == 1 or self._dimension == 4:  # Brightness value
                 self._brightness = int(self._dimension_value[0]) - 100
                 self._transition = int(self._dimension_value[1])
@@ -737,6 +739,7 @@ class OWNHeatingEvent(OWNEvent):
                 self._human_readable_log = f"Zone {self._zone}'s secondary sensor {self._sensor} is reporting a temperature of {self._secondary_temperature}°C."  # pylint: disable=line-too-long
 
         elif self._dimension == 11:  # Fan speed
+            self._type = MESSAGE_TYPE_FAN_SPEED
             _fan_mode = int(self._dimension_value[0])
             if _fan_mode < 4:
                 self._fan_on = True
@@ -747,12 +750,14 @@ class OWNHeatingEvent(OWNEvent):
                         f"Zone {self._zone}'s fan is on at speed {self._fan_speed}."
                     )
                 else:
+                    self._fan_speed = 0
                     self._human_readable_log = (
                         f"Zone {self._zone}'s fan is on at 'Auto' speed."
                     )
             else:
                 self._fan_on = False
                 self._is_active = False
+                self._fan_speed = None
                 self._human_readable_log = f"Zone {self._zone}'s fan is off."
 
         elif self._dimension == 12:  # Local set temperature (set+offset)
@@ -952,6 +957,14 @@ class OWNHeatingEvent(OWNEvent):
     def local_set_temperature(self) -> float:
         return self._local_set_temperature
 
+    @property
+    def fan_speed(self):
+        return self._fan_speed
+
+    @property
+    def fan_on(self):
+        return self._fan_on
+
 
 class OWNAlarmEvent(OWNEvent):
     def __init__(self, data):
@@ -1054,6 +1067,26 @@ class OWNAlarmEvent(OWNEvent):
     @property
     def is_engaged(self):
         return self._state_code == 8
+
+    @property
+    def is_disarmed(self):
+        return self._state_code in (0, 2, 9)
+
+    @property
+    def is_armed_away(self):
+        return self._state_code in (1, 8)
+
+    @property
+    def is_armed_home(self):
+        return self._state_code in (11,)
+
+    @property
+    def state_name(self):
+        return self._state
+
+    @property
+    def state_code(self):
+        return self._state_code
 
     @property
     def is_alarm(self):
@@ -1507,8 +1540,8 @@ class OWNDryContactEvent(OWNEvent):
         super().__init__(data)
 
         self._state = 1 if self._what == 31 else 0
-        self._detection = int(self._what_param[0])
-        self._sensor = self._where[1:]
+        self._detection = int(self._what_param[0]) if self._what_param else 1
+        self._sensor = self._where[1:] if len(self._where) > 1 and self._where.startswith("3") else self._where
 
         if self._detection == 1:
             self._human_readable_log = (
@@ -1706,11 +1739,12 @@ class OWNCommand(OWNMessage):
             elif _who == 24:
                 return cls(data)
             elif _who == 25:
-                _where = re.match(r"^\*.+\*(?P<where>\d+)##$", data).group("where")
-                if _where.startswith("2"):
+                _parts = data.strip("#").split("*")
+                _what = _parts[2] if len(_parts) > 2 else ""
+                _where = _parts[3] if len(_parts) > 3 else ""
+                if _what.startswith("2") or _where.startswith("2"):
                     return cls(data)
-                elif _where.startswith("3"):
-                    return OWNDryContactCommand(data)
+                return OWNDryContactCommand(data)
             elif _who > 1000:
                 return cls(data)
 
@@ -1911,6 +1945,51 @@ class OWNHeatingCommand(OWNCommand):
         message._human_readable_log = (
             f"Setting {zone_name} to {temperature_print}°C in mode '{mode_name}'."
         )
+        return message
+
+    @classmethod
+    def set_fan_speed(cls, where, speed: int, standalone=False):
+        central_local = re.compile(r"^#0#\d+$")
+        if central_local.match(str(where)):
+            zone = where
+            zone_name = f"zone {int(where.split('#')[-1])}"
+        else:
+            zone = int(where.split("#")[-1]) if where.startswith("#") else int(where)
+            zone_name = f"zone {zone}" if zone > 0 else "general"
+            if standalone:
+                zone = f"#{zone}" if zone == 0 else str(zone)
+            else:
+                zone = f"#{zone}"
+
+        speed_val = int(speed)
+        message = cls(f"*#4*{zone}*#11*{speed_val}##")
+        message._human_readable_log = f"Setting {zone_name} fan speed to {speed_val}."
+        return message
+
+
+class OWNAlarmCommand(OWNCommand):
+    @classmethod
+    def status(cls, where="0"):
+        message = cls(f"*#5*{where}##")
+        message._human_readable_log = f"Querying burglar alarm status for zone {where}."
+        return message
+
+    @classmethod
+    def disarm(cls, where="0"):
+        message = cls(f"*5*0*{where}##")
+        message._human_readable_log = f"Disarming burglar alarm for zone {where}."
+        return message
+
+    @classmethod
+    def arm_away(cls, where="0"):
+        message = cls(f"*5*1*{where}##")
+        message._human_readable_log = f"Arming burglar alarm (away) for zone {where}."
+        return message
+
+    @classmethod
+    def arm_home(cls, where="0"):
+        message = cls(f"*5*2*{where}##")
+        message._human_readable_log = f"Arming burglar alarm (home) for zone {where}."
         return message
 
 

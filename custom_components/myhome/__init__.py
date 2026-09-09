@@ -29,7 +29,7 @@ from .const import (
     LOGGER,
 )
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
-PLATFORMS = ["light", "switch", "cover", "climate", "binary_sensor", "sensor", "media_player", "button"]
+PLATFORMS = ["light", "switch", "cover", "climate", "binary_sensor", "sensor", "media_player", "button", "alarm_control_panel"]
 
 
 async def _async_register_frontend(hass: HomeAssistant) -> None:

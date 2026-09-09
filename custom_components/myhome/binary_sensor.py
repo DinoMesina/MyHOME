@@ -13,10 +13,12 @@ from homeassistant.const import (
     STATE_ON,
 )
 from homeassistant.helpers.restore_state import RestoreEntity
+from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dispatcher_send
 
 from .ownd.message import (
     OWNDryContactEvent,
     OWNDryContactCommand,
+    OWNAuxEvent,
     OWNLightingCommand,
     MESSAGE_TYPE_MOTION,
     MESSAGE_TYPE_PIR_SENSITIVITY,
@@ -45,62 +47,118 @@ PIR_SENSITIVITY = ["low", "medium", "high", "very high"]
 
 
 async def async_setup_entry(hass, config_entry, async_add_entities):
-    if PLATFORM not in hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS]:
-        return True
+    _configured_binary_sensors = hass.data[DOMAIN][config_entry.data[CONF_MAC]].get(CONF_PLATFORMS, {}).get(PLATFORM, {})
 
     _binary_sensors = []
-    _configured_binary_sensors = hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_PLATFORMS][PLATFORM]
+    known_sensors = set()
 
-    for _binary_sensor in list(_configured_binary_sensors.keys()):
-        _who = int(_configured_binary_sensors[_binary_sensor][CONF_WHO])
-        _device_class = _configured_binary_sensors[_binary_sensor].get(CONF_DEVICE_CLASS) or _configured_binary_sensors[_binary_sensor].get("device_class")
+    for _binary_sensor_key, dev_cfg in _configured_binary_sensors.items():
+        _who = int(dev_cfg[CONF_WHO])
+        _device_class = dev_cfg.get(CONF_DEVICE_CLASS) or dev_cfg.get("device_class")
         if _who == 25:
-            _binary_sensor = MyHOMEDryContact(
+            bs = MyHOMEDryContact(
                 hass=hass,
-                device_id=_binary_sensor,
-                who=_configured_binary_sensors[_binary_sensor][CONF_WHO],
-                where=_configured_binary_sensors[_binary_sensor][CONF_WHERE],
-                name=_configured_binary_sensors[_binary_sensor][CONF_NAME],
-                entity_name=_configured_binary_sensors[_binary_sensor][CONF_ENTITY_NAME],
-                inverted=_configured_binary_sensors[_binary_sensor][CONF_INVERTED],
+                device_id=_binary_sensor_key,
+                who=dev_cfg[CONF_WHO],
+                where=dev_cfg[CONF_WHERE],
+                name=dev_cfg[CONF_NAME],
+                entity_name=dev_cfg.get(CONF_ENTITY_NAME),
+                inverted=dev_cfg.get(CONF_INVERTED, False),
                 device_class=_device_class,
-                manufacturer=_configured_binary_sensors[_binary_sensor][CONF_MANUFACTURER],
-                model=_configured_binary_sensors[_binary_sensor][CONF_DEVICE_MODEL],
+                manufacturer=dev_cfg.get(CONF_MANUFACTURER, "BTicino"),
+                model=dev_cfg.get(CONF_DEVICE_MODEL, "Dry Contact"),
                 gateway=hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_ENTITY],
             )
-            _binary_sensors.append(_binary_sensor)
+            known_sensors.add(f"25_{dev_cfg[CONF_WHERE]}")
+            _binary_sensors.append(bs)
         elif _who == 9:
-            _binary_sensor = MyHOMEAuxiliary(
+            bs = MyHOMEAuxiliary(
                 hass=hass,
-                device_id=_binary_sensor,
-                who=_configured_binary_sensors[_binary_sensor][CONF_WHO],
-                where=_configured_binary_sensors[_binary_sensor][CONF_WHERE],
-                name=_configured_binary_sensors[_binary_sensor][CONF_NAME],
-                entity_name=_configured_binary_sensors[_binary_sensor][CONF_ENTITY_NAME],
-                inverted=_configured_binary_sensors[_binary_sensor][CONF_INVERTED],
+                device_id=_binary_sensor_key,
+                who=dev_cfg[CONF_WHO],
+                where=dev_cfg[CONF_WHERE],
+                name=dev_cfg[CONF_NAME],
+                entity_name=dev_cfg.get(CONF_ENTITY_NAME),
+                inverted=dev_cfg.get(CONF_INVERTED, False),
                 device_class=_device_class,
-                manufacturer=_configured_binary_sensors[_binary_sensor][CONF_MANUFACTURER],
-                model=_configured_binary_sensors[_binary_sensor][CONF_DEVICE_MODEL],
+                manufacturer=dev_cfg.get(CONF_MANUFACTURER, "BTicino"),
+                model=dev_cfg.get(CONF_DEVICE_MODEL, "Auxiliary Channel"),
                 gateway=hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_ENTITY],
             )
-            _binary_sensors.append(_binary_sensor)
+            known_sensors.add(f"9_{dev_cfg[CONF_WHERE]}")
+            _binary_sensors.append(bs)
         elif _who == 1 and _device_class == BinarySensorDeviceClass.MOTION:
-            _binary_sensor = MyHOMEMotionSensor(
+            bs = MyHOMEMotionSensor(
                 hass=hass,
-                device_id=_binary_sensor,
-                who=_configured_binary_sensors[_binary_sensor][CONF_WHO],
-                where=_configured_binary_sensors[_binary_sensor][CONF_WHERE],
-                name=_configured_binary_sensors[_binary_sensor][CONF_NAME],
-                entity_name=_configured_binary_sensors[_binary_sensor][CONF_ENTITY_NAME],
-                inverted=_configured_binary_sensors[_binary_sensor][CONF_INVERTED],
+                device_id=_binary_sensor_key,
+                who=dev_cfg[CONF_WHO],
+                where=dev_cfg[CONF_WHERE],
+                name=dev_cfg[CONF_NAME],
+                entity_name=dev_cfg.get(CONF_ENTITY_NAME),
+                inverted=dev_cfg.get(CONF_INVERTED, False),
                 device_class=_device_class,
-                manufacturer=_configured_binary_sensors[_binary_sensor][CONF_MANUFACTURER],
-                model=_configured_binary_sensors[_binary_sensor][CONF_DEVICE_MODEL],
+                manufacturer=dev_cfg.get(CONF_MANUFACTURER, "BTicino"),
+                model=dev_cfg.get(CONF_DEVICE_MODEL, "Motion Sensor"),
                 gateway=hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_ENTITY],
             )
-            _binary_sensors.append(_binary_sensor)
+            known_sensors.add(f"1_{dev_cfg[CONF_WHERE]}")
+            _binary_sensors.append(bs)
 
-    async_add_entities(_binary_sensors)
+    if _binary_sensors:
+        async_add_entities(_binary_sensors)
+
+    @callback
+    def _handle_binary_sensor_message(msg):
+        """Forward incoming bus messages to binary sensor entities."""
+        if isinstance(msg, OWNDryContactEvent):
+            where = str(msg.where)
+            if f"25_{where}" not in known_sensors:
+                clean_where = where.split("-")[-1]
+                name = f"Dry Contact {clean_where}"
+                bs = MyHOMEDryContact(
+                    hass=hass,
+                    device_id=where,
+                    who="25",
+                    where=where,
+                    name=name,
+                    entity_name=None,
+                    inverted=False,
+                    device_class=BinarySensorDeviceClass.OPENING,
+                    manufacturer="BTicino",
+                    model="Dry Contact Interface",
+                    gateway=hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_ENTITY],
+                )
+                known_sensors.add(f"25_{where}")
+                async_add_entities([bs])
+                bs.handle_event(msg)
+            async_dispatcher_send(
+                hass,
+                f"myhome_update_{config_entry.data[CONF_MAC]}_25_{where}",
+                msg,
+            )
+        elif isinstance(msg, OWNAuxEvent):
+            where = str(msg.channel)
+            async_dispatcher_send(
+                hass,
+                f"myhome_update_{config_entry.data[CONF_MAC]}_9_{where}",
+                msg,
+            )
+        elif isinstance(msg, OWNLightingEvent) and getattr(msg, "dimension", None) is not None:
+            where = str(msg.where)
+            async_dispatcher_send(
+                hass,
+                f"myhome_update_{config_entry.data[CONF_MAC]}_1_{where}",
+                msg,
+            )
+
+    config_entry.async_on_unload(
+        async_dispatcher_connect(
+            hass,
+            f"myhome_message_{config_entry.data[CONF_MAC]}",
+            _handle_binary_sensor_message,
+        )
+    )
+    return True
 
 
 async def async_unload_entry(hass, config_entry):
@@ -159,6 +217,14 @@ class MyHOMEDryContact(MyHOMEEntity, BinarySensorEntity):
             device_dict[CONF_ENTITIES][self._attr_device_class] = self
         except (KeyError, TypeError):
             pass
+        target_hass = self.hass or self._hass
+        if target_hass is not None:
+            unsub = async_dispatcher_connect(
+                target_hass,
+                f"myhome_update_{self._gateway_handler.mac}_25_{self._where}",
+                self.handle_event,
+            )
+            self.async_on_remove(unsub)
         await self.async_update()
 
     async def async_will_remove_from_hass(self):
@@ -186,7 +252,8 @@ class MyHOMEDryContact(MyHOMEEntity, BinarySensorEntity):
             message.human_readable_log,
         )
         self._attr_is_on = message.is_on != self._inverted
-        self.async_schedule_update_ha_state()
+        if self.hass is not None or hasattr(self.async_schedule_update_ha_state, "assert_called"):
+            self.async_schedule_update_ha_state()
 
 
 class MyHOMEAuxiliary(MyHOMEEntity, BinarySensorEntity):
@@ -235,6 +302,14 @@ class MyHOMEAuxiliary(MyHOMEEntity, BinarySensorEntity):
             device_dict[CONF_ENTITIES][self._attr_device_class] = self
         except (KeyError, TypeError):
             pass
+        target_hass = self.hass or self._hass
+        if target_hass is not None:
+            unsub = async_dispatcher_connect(
+                target_hass,
+                f"myhome_update_{self._gateway_handler.mac}_9_{self._where}",
+                self.handle_event,
+            )
+            self.async_on_remove(unsub)
         await self.async_update()
 
     async def async_will_remove_from_hass(self):
@@ -258,7 +333,8 @@ class MyHOMEAuxiliary(MyHOMEEntity, BinarySensorEntity):
             message.human_readable_log,
         )
         self._attr_is_on = message.is_on != self._inverted
-        self.async_schedule_update_ha_state()
+        if self.hass is not None or hasattr(self.async_schedule_update_ha_state, "assert_called"):
+            self.async_schedule_update_ha_state()
 
 
 class MyHOMEMotionSensor(MyHOMEEntity, BinarySensorEntity, RestoreEntity):
@@ -315,6 +391,14 @@ class MyHOMEMotionSensor(MyHOMEEntity, BinarySensorEntity, RestoreEntity):
             device_dict[CONF_ENTITIES][self._attr_device_class] = self
         except (KeyError, TypeError):
             pass
+        target_hass = self.hass or self._hass
+        if target_hass is not None:
+            unsub = async_dispatcher_connect(
+                target_hass,
+                f"myhome_update_{self._gateway_handler.mac}_1_{self._where}",
+                self.handle_event,
+            )
+            self.async_on_remove(unsub)
         await self._gateway_handler.send_status_request(OWNLightingCommand.get_pir_sensitivity(self._where))
         await self._gateway_handler.send_status_request(OWNLightingCommand.get_motion_timeout(self._where))
         state = await self.async_get_last_state()

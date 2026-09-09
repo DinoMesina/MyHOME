@@ -41,6 +41,7 @@
         <HVACMode.HEAT: 'heat'>,
         <HVACMode.COOL: 'cool'>,
       ]),
+      'local_offset': 0,
       'max_temp': 40,
       'min_temp': 5,
       'supported_features': <ClimateEntityFeature: 1>,

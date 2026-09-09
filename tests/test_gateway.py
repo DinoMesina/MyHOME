@@ -35,6 +35,7 @@ from custom_components.myhome.ownd.message import (
     OWNCENEvent,
     OWNGatewayEvent,
     OWNGatewayCommand,
+    OWNAlarmEvent,
     OWNMessage,
     OWNCommand,
 )
@@ -354,11 +355,19 @@ async def test_listening_loop_other_events(gateway_handler):
         msg_cen.push_button = "4"
         msg_cen.human_readable_log = "C"
 
+        msg_alarm = MagicMock(spec=OWNAlarmEvent)
+        msg_alarm.where = "0"
+        msg_alarm.state_name = "activation"
+        msg_alarm.state_code = 1
+        msg_alarm.is_alarm = False
+        msg_alarm.human_readable_log = "Alarm Activation"
+
         mock_session.get_next.side_effect = [
             msg_heat,
             msg_heat2,
             msg_cenplus,
             msg_cen,
+            msg_alarm,
             asyncio.CancelledError(),
         ]
         mock_session_class.return_value = mock_session
@@ -372,7 +381,18 @@ async def test_listening_loop_other_events(gateway_handler):
 
         gateway_handler.hass.bus.async_fire.assert_any_call("myhome_cenplus_event", {"object": 1, "pushbutton": 2, "event": CONF_SHORT_PRESS})
         gateway_handler.hass.bus.async_fire.assert_any_call("myhome_cen_event", {"object": 3, "pushbutton": 4, "event": CONF_LONG_PRESS})
+        gateway_handler.hass.bus.async_fire.assert_any_call(
+            "myhome_alarm_event",
+            {
+                "where": "0",
+                "state": "activation",
+                "state_code": 1,
+                "is_alarm": False,
+                "message": str(msg_alarm),
+            },
+        )
         assert gateway_handler.send_status_request.call_count >= 2
+
 
 
 @pytest.mark.asyncio

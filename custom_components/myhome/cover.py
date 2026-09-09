@@ -1,4 +1,6 @@
 """Support for MyHome covers."""
+import asyncio
+import time
 from homeassistant.components.cover import (
     ATTR_POSITION,
     DOMAIN as PLATFORM,
@@ -31,6 +33,8 @@ from .const import (
     CONF_MANUFACTURER,
     CONF_DEVICE_MODEL,
     CONF_ADVANCED_SHUTTER,
+    CONF_TRAVEL_TIME,
+    DEFAULT_TRAVEL_TIME,
     DOMAIN,
     LOGGER,
 )
@@ -71,6 +75,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
             clean_where = where.split('-')[-1]
             cfg = _configured_covers.get(device_id) or _configured_covers.get(where) or _configured_covers.get(clean_where) or {}
             _advanced = cfg.get("advanced_shutter", cfg.get(CONF_ADVANCED_SHUTTER, False))
+            _travel_time = int(cfg.get(CONF_TRAVEL_TIME, DEFAULT_TRAVEL_TIME))
             _name = cfg.get(CONF_NAME, f"Cover {clean_where}")
             _cover = MyHOMECover(
                 hass=hass,
@@ -84,6 +89,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
                 manufacturer=cfg.get(CONF_MANUFACTURER, "BTicino"),
                 model=cfg.get(CONF_DEVICE_MODEL, "Shutter / Cover"),
                 gateway=gateway,
+                travel_time=_travel_time,
             )
             known_covers.add(device_id)
             restored_covers.append(_cover)
@@ -102,6 +108,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
 
         _name = cfg.get(CONF_NAME, f"Cover {clean_where}")
         _advanced = cfg.get("advanced_shutter", cfg.get(CONF_ADVANCED_SHUTTER, False))
+        _travel_time = int(cfg.get(CONF_TRAVEL_TIME, DEFAULT_TRAVEL_TIME))
         _cover = MyHOMECover(
             hass=hass,
             name=_name,
@@ -114,6 +121,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
             manufacturer=cfg.get(CONF_MANUFACTURER, "BTicino"),
             model=cfg.get(CONF_DEVICE_MODEL, "Shutter / Cover"),
             gateway=gateway,
+            travel_time=_travel_time,
         )
         known_covers.add(device_where_id)
         known_covers.add(dev_id)
@@ -155,6 +163,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
             clean_where = where.split('-')[-1]
             cfg = _configured_covers.get(unique_id) or _configured_covers.get(where) or _configured_covers.get(clean_where) or {}
             _advanced = cfg.get("advanced_shutter", cfg.get(CONF_ADVANCED_SHUTTER, False))
+            _travel_time = int(cfg.get(CONF_TRAVEL_TIME, DEFAULT_TRAVEL_TIME))
             _name = cfg.get(CONF_NAME, f"Cover {clean_where}")
             _cover = MyHOMECover(
                 hass=hass,
@@ -168,6 +177,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
                 manufacturer=cfg.get(CONF_MANUFACTURER, "BTicino"),
                 model=cfg.get(CONF_DEVICE_MODEL, "Shutter / Cover"),
                 gateway=hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_ENTITY],
+                travel_time=_travel_time,
             )
             known_covers.add(unique_id)
             async_add_entities([_cover])
@@ -218,6 +228,7 @@ class MyHOMECover(MyHOMEEntity, CoverEntity):
         manufacturer: str,
         model: str,
         gateway: MyHOMEGatewayHandler,
+        travel_time: int = DEFAULT_TRAVEL_TIME,
     ):
         super().__init__(
             hass=hass,
@@ -231,14 +242,18 @@ class MyHOMECover(MyHOMEEntity, CoverEntity):
             gateway=gateway,
         )
 
-
-
         self._interface = interface
         self._full_where = f"{self._where}#4#{self._interface}" if self._interface is not None else self._where
+        self._advanced = advanced
+        self._travel_time = travel_time
 
-        self._attr_supported_features = CoverEntityFeature.OPEN | CoverEntityFeature.CLOSE | CoverEntityFeature.STOP
-        if advanced:
-            self._attr_supported_features |= CoverEntityFeature.SET_POSITION
+        # Both advanced and standard covers support SET_POSITION (standard via travel time estimation)
+        self._attr_supported_features = (
+            CoverEntityFeature.OPEN
+            | CoverEntityFeature.CLOSE
+            | CoverEntityFeature.STOP
+            | CoverEntityFeature.SET_POSITION
+        )
         self._gateway_handler = gateway
 
         self._attr_extra_state_attributes = {
@@ -247,11 +262,54 @@ class MyHOMECover(MyHOMEEntity, CoverEntity):
         }
         if self._interface is not None:
             self._attr_extra_state_attributes["Int"] = self._interface
+        if not self._advanced:
+            self._attr_extra_state_attributes["travel_time"] = self._travel_time
 
-        self._attr_current_cover_position = None
-        self._attr_is_opening = None
-        self._attr_is_closing = None
-        self._attr_is_closed = None
+        self._attr_current_cover_position = 50
+        self._attr_is_opening = False
+        self._attr_is_closing = False
+        self._attr_is_closed = False
+
+        self._move_start_time = None
+        self._start_position = 50
+        self._stop_task = None
+
+    def _cancel_stop_task(self):
+        """Cancel any running scheduled auto-stop task."""
+        if self._stop_task is not None:
+            current = asyncio.current_task()
+            if self._stop_task is not current and not self._stop_task.done():
+                self._stop_task.cancel()
+            self._stop_task = None
+
+    @property
+    def current_cover_position(self):
+        """Return current cover position (interpolated if moving)."""
+        if not self._advanced and self._move_start_time is not None:
+            elapsed = time.monotonic() - self._move_start_time
+            delta = (elapsed / self._travel_time) * 100
+            if self._attr_is_opening:
+                return min(100, int(self._start_position + delta))
+            if self._attr_is_closing:
+                return max(0, int(self._start_position - delta))
+        return self._attr_current_cover_position
+
+    @property
+    def is_opening(self):
+        """Return if the cover is opening."""
+        return self._attr_is_opening
+
+    @property
+    def is_closing(self):
+        """Return if the cover is closing."""
+        return self._attr_is_closing
+
+    @property
+    def is_closed(self):
+        """Return if the cover is closed."""
+        if self.current_cover_position is not None:
+            return self.current_cover_position == 0
+        return self._attr_is_closed
 
     async def async_added_to_hass(self):
         """Run when entity about to be added to hass."""
@@ -263,6 +321,11 @@ class MyHOMECover(MyHOMEEntity, CoverEntity):
             )
         )
 
+    async def async_will_remove_from_hass(self):
+        """Run when entity will be removed from hass."""
+        self._cancel_stop_task()
+        await super().async_will_remove_from_hass()
+
     async def async_update(self):
         """Update the entity.
 
@@ -272,21 +335,82 @@ class MyHOMECover(MyHOMEEntity, CoverEntity):
 
     async def async_open_cover(self, **kwargs):  # pylint: disable=unused-argument
         """Open the cover."""
+        self._cancel_stop_task()
+        if not self._advanced:
+            self._start_position = self.current_cover_position if self.current_cover_position is not None else 0
+            self._move_start_time = time.monotonic()
+            self._attr_is_opening = True
+            self._attr_is_closing = False
+            self._attr_is_closed = False
         await self._gateway_handler.send(OWNAutomationCommand.raise_shutter(self._full_where))
+        if self.hass is not None:
+            self.async_write_ha_state()
 
     async def async_close_cover(self, **kwargs):  # pylint: disable=unused-argument
         """Close cover."""
+        self._cancel_stop_task()
+        if not self._advanced:
+            self._start_position = self.current_cover_position if self.current_cover_position is not None else 100
+            self._move_start_time = time.monotonic()
+            self._attr_is_opening = False
+            self._attr_is_closing = True
         await self._gateway_handler.send(OWNAutomationCommand.lower_shutter(self._full_where))
+        if self.hass is not None:
+            self.async_write_ha_state()
 
     async def async_set_cover_position(self, **kwargs):
         """Move the cover to a specific position."""
-        if ATTR_POSITION in kwargs:
-            position = kwargs[ATTR_POSITION]
-            await self._gateway_handler.send(OWNAutomationCommand.set_shutter_level(self._full_where, position))
+        if ATTR_POSITION not in kwargs:
+            return
+        target_position = kwargs[ATTR_POSITION]
+        if self._advanced:
+            await self._gateway_handler.send(
+                OWNAutomationCommand.set_shutter_level(self._full_where, target_position)
+            )
+            return
+
+        self._cancel_stop_task()
+        curr_pos = self.current_cover_position if self.current_cover_position is not None else 50
+        diff = target_position - curr_pos
+        if diff == 0:
+            return
+
+        travel_fraction = abs(diff) / 100.0
+        run_duration = travel_fraction * self._travel_time
+
+        if diff > 0:
+            await self.async_open_cover()
+        else:
+            await self.async_close_cover()
+
+        async def _auto_stop():
+            try:
+                await asyncio.sleep(run_duration)
+                await self.async_stop_cover()
+            except asyncio.CancelledError:
+                pass
+
+        self._stop_task = asyncio.create_task(_auto_stop())
 
     async def async_stop_cover(self, **kwargs):  # pylint: disable=unused-argument
         """Stop the cover."""
+        self._cancel_stop_task()
+        if not self._advanced:
+            if self._move_start_time is not None:
+                elapsed = time.monotonic() - self._move_start_time
+                delta = (elapsed / self._travel_time) * 100
+                if self._attr_is_opening:
+                    self._attr_current_cover_position = min(100, int(self._start_position + delta))
+                elif self._attr_is_closing:
+                    self._attr_current_cover_position = max(0, int(self._start_position - delta))
+                self._move_start_time = None
+            self._attr_is_opening = False
+            self._attr_is_closing = False
+            if self._attr_current_cover_position is not None:
+                self._attr_is_closed = (self._attr_current_cover_position == 0)
         await self._gateway_handler.send(OWNAutomationCommand.stop_shutter(self._full_where))
+        if self.hass is not None:
+            self.async_write_ha_state()
 
     @callback
     def handle_event(self, message: OWNAutomationEvent):
@@ -296,15 +420,52 @@ class MyHOMECover(MyHOMEEntity, CoverEntity):
             self._gateway_handler.log_id,
             message.human_readable_log,
         )
-        self._attr_is_opening = message.is_opening
-        self._attr_is_closing = message.is_closing
-        if message.is_closed is not None:
-            self._attr_is_closed = message.is_closed
         if message.current_position is not None:
+            self._cancel_stop_task()
             self._attr_current_cover_position = message.current_position
+            self._move_start_time = None
+            self._attr_is_opening = False
+            self._attr_is_closing = False
+            if message.is_closed is not None:
+                self._attr_is_closed = message.is_closed
+            else:
+                self._attr_is_closed = (self._attr_current_cover_position == 0)
+        elif message.is_opening:
+            self._cancel_stop_task()
+            if not self._attr_is_opening:
+                self._start_position = self.current_cover_position if self.current_cover_position is not None else 0
+                self._move_start_time = time.monotonic()
+            self._attr_is_opening = True
+            self._attr_is_closing = False
+            self._attr_is_closed = False
+        elif message.is_closing:
+            self._cancel_stop_task()
+            if not self._attr_is_closing:
+                self._start_position = self.current_cover_position if self.current_cover_position is not None else 100
+                self._move_start_time = time.monotonic()
+            self._attr_is_opening = False
+            self._attr_is_closing = True
+        else:
+            # Stopped (state == 0 or other)
+            self._cancel_stop_task()
+            if self._move_start_time is not None:
+                elapsed = time.monotonic() - self._move_start_time
+                delta = (elapsed / self._travel_time) * 100
+                if self._attr_is_opening:
+                    self._attr_current_cover_position = min(100, int(self._start_position + delta))
+                elif self._attr_is_closing:
+                    self._attr_current_cover_position = max(0, int(self._start_position - delta))
+                self._move_start_time = None
+            self._attr_is_opening = False
+            self._attr_is_closing = False
+            if message.is_closed is not None:
+                self._attr_is_closed = message.is_closed
+            elif self._attr_current_cover_position is not None:
+                self._attr_is_closed = (self._attr_current_cover_position == 0)
 
         if self.hass is not None or hasattr(self.async_schedule_update_ha_state, "assert_called"):
             try:
                 self.async_schedule_update_ha_state()
             except RuntimeError:
                 pass
+

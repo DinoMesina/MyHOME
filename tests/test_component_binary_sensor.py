@@ -13,6 +13,7 @@ from custom_components.myhome.binary_sensor import (
 )
 from custom_components.myhome.ownd.message import (
     OWNDryContactEvent,
+    OWNAuxEvent,
     OWNLightingEvent,
     MESSAGE_TYPE_MOTION,
     MESSAGE_TYPE_PIR_SENSITIVITY,
@@ -343,3 +344,52 @@ async def test_motion_sensor_restore_state_and_timeout_expiration(hass):
     # lines 341-343: _attr_is_on becomes False, _last_updated updated, async_schedule_update_ha_state called
     assert motion._attr_is_on is False
     motion.async_schedule_update_ha_state.assert_called()
+
+
+async def test_binary_sensor_dispatcher_and_discovery(hass):
+    """Test dynamic discovery and forwarding of binary sensor bus events."""
+    from homeassistant.helpers.dispatcher import async_dispatcher_send
+    from custom_components.myhome.ownd.message import OWNEvent
+
+    mock_gateway = MagicMock()
+    mock_gateway.mac = "00:03:50:00:25:25"
+    mock_gateway.send_status_request = AsyncMock()
+
+    hass.data = {
+        DOMAIN: {
+            mock_gateway.mac: {
+                "platforms": {},
+                "entity": mock_gateway,
+            }
+        }
+    }
+    config_entry = MagicMock()
+    config_entry.data = {"mac": mock_gateway.mac}
+
+    added = []
+
+    def fake_add(entities):
+        added.extend(entities)
+
+    assert await async_setup_entry(hass, config_entry, fake_add) is True
+
+    # Discover new dry contact
+    dry_msg = OWNEvent.parse("*25*31#1*99##")
+    async_dispatcher_send(hass, f"myhome_message_{mock_gateway.mac}", dry_msg)
+    assert len(added) == 1
+    assert added[0]._where == "99"
+
+    # Forward Aux event
+    aux_msg = OWNEvent.parse("*9*1*1##")
+    async_dispatcher_send(hass, f"myhome_message_{mock_gateway.mac}", aux_msg)
+
+    # Forward motion lighting event with dimension
+    light_msg = OWNEvent.parse("*#1*12*1##")
+    async_dispatcher_send(hass, f"myhome_message_{mock_gateway.mac}", light_msg)
+
+    # Test async_added_to_hass
+    sensor = added[0]
+    sensor.async_on_remove = MagicMock()
+    await sensor.async_added_to_hass()
+    mock_gateway.send_status_request.assert_awaited()
+

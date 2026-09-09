@@ -29,6 +29,7 @@ from homeassistant.components.sensor import (
     DOMAIN as SENSOR,
 )
 from homeassistant.components.climate import DOMAIN as CLIMATE
+from homeassistant.components.alarm_control_panel import DOMAIN as ALARM_CONTROL_PANEL
 from homeassistant.const import CONF_NAME, CONF_MAC
 
 from .const import (
@@ -47,6 +48,7 @@ from .const import (
     CONF_DEVICE_CLASS,
     CONF_DIMMABLE,
     CONF_ADVANCED_SHUTTER,
+    CONF_TRAVEL_TIME,
     CONF_INVERTED,
     CONF_HEATING_SUPPORT,
     CONF_COOLING_SUPPORT,
@@ -340,6 +342,7 @@ cover_schema = MyHomeDeviceSchema(
             Optional(CONF_ENTITY_NAME): str,
             Optional(CONF_ADVANCED_SHUTTER, default=False): Boolean(),
             Optional("advanced_shutter", default=False): Boolean(),
+            Optional(CONF_TRAVEL_TIME, default=25): Coerce(int),
             Optional(CONF_MANUFACTURER, default="BTicino S.p.A."): str,
             Optional(CONF_DEVICE_MODEL): Coerce(str),
         }
@@ -425,6 +428,19 @@ climate_schema = MyHomeDeviceSchema(
     }
 )
 
+alarm_control_panel_schema = MyHomeDeviceSchema(
+    {
+        Required(str): {
+            Optional(CONF_WHO, default="5"): "5",
+            Required(CONF_WHERE): All(Coerce(str), Any(General(), Area(), Group(), PointToPoint(), SpecialWhere())),
+            Required(CONF_NAME): str,
+            Optional(CONF_ENTITY_NAME): str,
+            Optional(CONF_MANUFACTURER, default="BTicino S.p.A."): str,
+            Optional(CONF_DEVICE_MODEL, default="F4201"): Coerce(str),
+        }
+    }
+)
+
 # The device schemas are Schema subclasses whose overridden __call__ performs
 # post-processing (rekeying to "who-where" and injecting default keys). Nested
 # schema instances are not guaranteed to be invoked through __call__ by the
@@ -440,6 +456,7 @@ gateway_schema = Schema(
         Optional(BINARY_SENSOR): lambda v: binary_sensor_schema(v),
         Optional(SENSOR): lambda v: sensor_schema(v),
         Optional(CLIMATE): lambda v: climate_schema(v),
+        Optional(ALARM_CONTROL_PANEL): lambda v: alarm_control_panel_schema(v),
     }
 )
 

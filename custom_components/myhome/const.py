@@ -46,6 +46,10 @@ CONF_SHORT_PRESS = "pushbutton_short_press"
 CONF_SHORT_RELEASE = "pushbutton_short_release"
 CONF_LONG_PRESS = "pushbutton_long_press"
 CONF_LONG_RELEASE = "pushbutton_long_release"
+CONF_TRAVEL_TIME = "travel_time"
+DEFAULT_TRAVEL_TIME = 25
+WHO_BURGLAR_ALARM = "5"
+PLATFORM_ALARM = "alarm_control_panel"
 
 # ── Decoder pool (Dynamic Proxy for Music Assistant / Spotify) ──────────────
 # Up to 4 decoder slots, one per BTicino physical source input.
