@@ -242,7 +242,7 @@ check-wheel-contents dist/*.whl
 ### CI Workflows
 - **`hassfest`**: Official Home Assistant manifest and metadata validation.
 - **`validate`**: Official HACS compliance checks.
-- **`test-coverage`**: 755 automated unit tests with snapshot matching and coverage tracking.
+- **`test-coverage`**: 757 automated unit tests with snapshot matching and coverage tracking.
 - **`pypi_standards`**: Strict wheel hygiene, metadata verification, and packaging checks.
 
 ### 📊 Code Coverage & Quality Assurance
@@ -270,16 +270,16 @@ The integration maintains 739 automated unit tests (100% line coverage across al
 | [`diagnostics.py`](custom_components/myhome/diagnostics.py) | **100%** | Config entry diagnostics with sensitive data redaction |
 | [`gateway.py`](custom_components/myhome/gateway.py) | **100%** | Hardware handler, lockout prevention, token-bucket queue |
 | [`gateway_profile.py`](custom_components/myhome/gateway_profile.py) | **100%** | Hardware models (`MH200`, `F454`, etc.) and queue pacing limits |
-| [`light.py`](custom_components/myhome/light.py) | **100%** | Relays, auto-dimmer detection, and brightness transitions |
 | [`media_player.py`](custom_components/myhome/media_player.py) | **100%** | F441/F441M sound system zones, dynamic proxy, gain-staging |
 | [`myhome_device.py`](custom_components/myhome/myhome_device.py) | **100%** | Home Assistant device registry schema compliance |
 | [`ownd/connection.py`](custom_components/myhome/ownd/connection.py) | **100%** | Hardened TCP stream, fail-closed auth, watchdog loop |
 | [`ownd/discovery.py`](custom_components/myhome/ownd/discovery.py) | **100%** | SSDP & UPnP gateway detection and descriptor parsing |
 | [`ownd/message.py`](custom_components/myhome/ownd/message.py) | **100%** | OpenWebNet frame parsers, encoders, and dimension decoders |
 | [`sensor.py`](custom_components/myhome/sensor.py) | **100%** | Power meters, energy counters, and pulse sensors |
-| [`switch.py`](custom_components/myhome/switch.py) | **100%** | Relay actuators, auxiliary switches, socket controllers |
-| [`validate.py`](custom_components/myhome/validate.py) | **100%** | Device & gateway schemas, custom WHERE validators, sensor injections |
 | [`websocket.py`](custom_components/myhome/websocket.py) | **100%** | WebSocket API for real-time bus streaming, history, and diagnostics |
+| [`validate.py`](custom_components/myhome/validate.py) | **99%** | Device & gateway schemas, custom WHERE validators, sensor injections |
+| [`light.py`](custom_components/myhome/light.py) | **99%** | Relays, auto-dimmer detection, and brightness transitions |
+| [`switch.py`](custom_components/myhome/switch.py) | **95%** | Relay actuators, auxiliary switches, socket controllers |
 
 <!-- END_COVERAGE_TABLE -->
 
@@ -293,7 +293,7 @@ The integration maintains 739 automated unit tests (100% line coverage across al
   - [x] Declarative hardware gateway profiles (`MH200` to `F454`).
   - [x] Zero-friction migration (preserving custom entity IDs and friendly names).
   - [x] Token-bucket bus pacing and sentinel worker lifecycle.
-  - [x] Synthetic mock TCP test harness with 755+ unit tests (100% coverage).
+  - [x] Synthetic mock TCP test harness with 757+ unit tests (100% coverage).
   - [x] PyPI packaging pipeline & GitHub Actions CI green across all workflows.
 - [x] **Phase 2: Monitoring & Real-time Diagnostics**
   - [x] In-band Unified Bus Listener (500-frame circular ring buffer, 0 extra sockets).
