@@ -45,7 +45,7 @@ SCHEMA_WS_HISTORY = {
     vol.Optional("limit", default=100): vol.All(vol.Coerce(int), vol.Range(min=1, max=500)),
     vol.Optional("who"): vol.Any(cv.string, vol.Coerce(int), None),
     vol.Optional("where"): vol.Any(cv.string, None),
-    vol.Optional("direction"): vol.Any(vol.In(["rx", "tx", "all"]), None),
+    vol.Optional("direction"): vol.Any(vol.In(["rx", "tx", "ack", "nack", "all"]), None),
 }
 
 SCHEMA_WS_STREAM = {
@@ -53,7 +53,7 @@ SCHEMA_WS_STREAM = {
     vol.Optional("mac"): vol.Any(cv.string, None),
     vol.Optional("who"): vol.Any(cv.string, vol.Coerce(int), None),
     vol.Optional("where"): vol.Any(cv.string, None),
-    vol.Optional("direction"): vol.Any(vol.In(["rx", "tx", "all"]), None),
+    vol.Optional("direction"): vol.Any(vol.In(["rx", "tx", "ack", "nack", "all"]), None),
 }
 
 SCHEMA_WS_SEND = {
@@ -247,9 +247,17 @@ def _matches_filter(
     raw_who = getattr(frame, "who", None) if isinstance(frame, BusFrame) else frame.get("who")
     raw_where = getattr(frame, "where", None) if isinstance(frame, BusFrame) else frame.get("where")
     f_dir = (getattr(frame, "direction", "") if isinstance(frame, BusFrame) else frame.get("direction", "")).lower()
+    is_ack = getattr(frame, "is_ack", False) if isinstance(frame, BusFrame) else frame.get("is_ack", False)
+    is_nack = getattr(frame, "is_nack", False) if isinstance(frame, BusFrame) else frame.get("is_nack", False)
 
-    if direction and direction != "all" and f_dir != direction.lower():
-        return False
+    if direction and direction != "all":
+        d_lower = direction.lower()
+        if d_lower in ("rx", "tx") and f_dir != d_lower:
+            return False
+        if d_lower == "ack" and not is_ack:
+            return False
+        if d_lower == "nack" and not is_nack:
+            return False
 
     if who is not None and str(who) != "all":
         if raw_who is None or str(who) != str(raw_who):
