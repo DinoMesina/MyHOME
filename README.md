@@ -80,6 +80,7 @@ We now maintain a comprehensive, community-curated **[GitHub Wiki](https://githu
 | **`switch`** | WHO=1 | Relays, auxiliary switches, socket actuators |
 | **`cover`** | WHO=2 | Motorized shutters, blinds, roll-ups with state tracking |
 | **`climate`** | WHO=4 | Heating, cooling, 4-pipe systems, thermostats, setpoints |
+| **`alarm_control_panel`** | WHO=5 | Central units (3485/3486), partitions, arm away/home, disarm, trigger |
 | **`binary_sensor`**| WHO=25 | Magnetic contacts, door/window sensors, PIR motion |
 | **`sensor`** | WHO=18 | Power meters, energy counters, voltage, pulse monitors |
 | **`button`** | WHO=1 / 25 | Scenario buttons, lock/unlock triggers, bus ping |
@@ -318,7 +319,7 @@ The integration maintains 980 automated unit tests (100% line coverage across al
 | Component / Module | Coverage | Notes |
 |---|:---:|---|
 | [`__init__.py`](custom_components/myhome/__init__.py) | **100%** | Setup lifecycle and zero-friction entity migration |
-| [`alarm_control_panel.py`](custom_components/myhome/alarm_control_panel.py) | **100%** | Core integration component |
+| [`alarm_control_panel.py`](custom_components/myhome/alarm_control_panel.py) | **100%** | Burglar alarm systems, central unit, partition arming & panic triggers |
 | [`binary_sensor.py`](custom_components/myhome/binary_sensor.py) | **100%** | Magnetic contacts, door/window sensors, motion sensors |
 | [`bus_monitor.py`](custom_components/myhome/bus_monitor.py) | **100%** | In-band 500-frame circular ring buffer tap (0 extra sockets) |
 | [`button.py`](custom_components/myhome/button.py) | **100%** | Scenario buttons and bus diagnostic pings |
