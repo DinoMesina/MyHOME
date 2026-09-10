@@ -153,6 +153,18 @@ def test_gateway_sustained_disconnect_marks_unavailable(gateway_handler):
     )
 
 
+def test_gateway_stale_unavailable_callback_is_ignored(gateway_handler):
+    """A stale grace-period callback must not undo a successful reconnect."""
+    gateway_handler._on_event_connection_state_change(True)
+
+    with patch("custom_components.myhome.gateway.async_dispatcher_send") as send:
+        gateway_handler._mark_unavailable(None)
+
+    assert gateway_handler.available is True
+    assert gateway_handler.is_connected is True
+    send.assert_not_called()
+
+
 @pytest.mark.asyncio
 async def test_gateway_test_connection(gateway_handler):
     with patch("custom_components.myhome.gateway.OWNSession") as mock_session_cls:
@@ -1045,7 +1057,6 @@ async def test_gateway_sending_loop_timeout_and_terminate_branches(gateway_handl
     term_task = asyncio.create_task(terminate_during_wait())
     await gateway_handler.sending_loop(1)
     await term_task
-
 
 
 
