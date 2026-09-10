@@ -219,6 +219,15 @@ A modern custom Lovelace element is automatically registered with zero configura
   - Collapsible OpenWebNet bus trace (`<details><summary>OpenWebNet Bus Trace</summary>`)
   - Direct link opening pre-filled GitHub Issue Forms!
 
+> [!TIP]
+> **Troubleshooting: Card not showing up or "Custom element doesn't exist"?**
+> 
+> 1. **Manual Resource Verification**: While the integration automatically registers the card resource, you can verify or manually add it under **Settings ➔ Dashboards ➔ Resources** (click the three dots ⋮ in the top-right corner):
+>    - **URL:** `/myhome_static/myhome-bus-card.js`
+>    - **Resource Type:** `JavaScript Module`
+> 2. **Check for Conflicting HACS Cards**: If custom cards fail to load or the card picker spins indefinitely, inspect your browser console (`F12`). A common cause is conflicting or duplicate custom cards (e.g. having both `scheduler-card` and `lovelace-standalone-schedule-card` installed simultaneously). An uncaught `CustomElementRegistry` collision in an earlier card halts the browser's Lovelace resource-loading pipeline before subsequent cards can initialize. Removing the duplicate card resolves the blockage immediately.
+> 3. **Hard Browser Refresh**: After adding resources or updating components, perform a hard refresh (`Ctrl + F5` or `Ctrl + Shift + R`) to ensure the browser loads the latest JavaScript bundle from the gateway.
+
 ### 📝 Structured GitHub Issue Forms
 
 When reporting issues or requesting new device support on GitHub, interactive forms ensure complete diagnostics:
