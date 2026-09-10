@@ -612,7 +612,7 @@ class MyHomeBusCard extends HTMLElement {
           <div>RX: <span id="stat-rx" class="stat-val">0</span></div>
           <div>TX: <span id="stat-tx" class="stat-val">0</span></div>
           <div>Queue: <span id="stat-queue" class="stat-val">0</span></div>
-          <div style="margin-left: auto; font-size: 0.75rem; opacity: 0.85;">MyHOME <span id="stat-version" class="stat-val">v2.0.0b7</span></div>
+          <div style="margin-left: auto; font-size: 0.75rem; opacity: 0.85;">MyHOME <span id="stat-version" class="stat-val">v2.0.0b8</span></div>
         </div>
 
         <div class="controls">
@@ -723,7 +723,7 @@ class MyHomeBusCard extends HTMLElement {
     if (tx) tx.textContent = this._stats.total_tx;
     if (queue) queue.textContent = (this._gatewayInfo && this._gatewayInfo.queue_depth != null) ? this._gatewayInfo.queue_depth : 0;
     if (ver && this._gatewayInfo) {
-      const intVer = this._gatewayInfo.integration_version || "2.0.0b7";
+      const intVer = this._gatewayInfo.integration_version || "2.0.0b8";
       const owndVer = this._gatewayInfo.ownd_version;
       ver.textContent = owndVer && owndVer !== "unknown" ? `v${intVer} (OWNd ${owndVer})` : `v${intVer}`;
     }
@@ -762,7 +762,7 @@ class MyHomeBusCard extends HTMLElement {
       (this.hass && this.hass.config && this.hass.config.version) ||
       "Unknown";
     const gw = this._gatewayInfo || {};
-    const integrationVersion = gw.integration_version || "2.0.0b7";
+    const integrationVersion = gw.integration_version || "2.0.0b8";
     const owndVersion = gw.ownd_version || "Unknown";
     const userAgent = (typeof navigator !== "undefined" && navigator.userAgent) ? navigator.userAgent : "Unknown";
     const timestamp = new Date().toISOString();
@@ -879,7 +879,7 @@ ${framesText}
       (this._hass && this._hass.config && this._hass.config.version) ||
       (this.hass && this.hass.config && this.hass.config.version) ||
       "";
-    const integrationVersion = (this._gatewayInfo && this._gatewayInfo.integration_version) || "2.0.0b7";
+    const integrationVersion = (this._gatewayInfo && this._gatewayInfo.integration_version) || "2.0.0b8";
     const owndVersion = (this._gatewayInfo && this._gatewayInfo.ownd_version) || "Unknown";
 
     const issueUrl = `https://github.com/OpenWebNet-HA/MyHOME/issues/new?template=bug_report.yml&ha_version=${encodeURIComponent(haVersion)}&integration_version=${encodeURIComponent(integrationVersion)}&ownd_version=${encodeURIComponent(owndVersion)}`;
@@ -1003,24 +1003,52 @@ ${framesText}
   }
 }
 
-if (!customElements.get("myhome-openwebnet-bus-monitor")) {
-  customElements.define("myhome-openwebnet-bus-monitor", MyHomeBusCard);
+window.MyHomeBusCard = MyHomeBusCard;
+
+function registerCardElements() {
+  const ce = (typeof window !== "undefined" && window.customElements) || customElements;
+  if (!ce) return;
+  if (!ce.get("myhome-openwebnet-bus-monitor")) {
+    try {
+      ce.define("myhome-openwebnet-bus-monitor", MyHomeBusCard);
+    } catch (e) {
+      // Ignore if already registered in active scope
+    }
+  }
+  if (!ce.get("myhome-bus-card")) {
+    try {
+      customElements.define("myhome-bus-card", class extends MyHomeBusCard {});
+    } catch (e) {
+      // Ignore if already registered in active scope
+    }
+  }
 }
 
-// Backward-compatible alias for existing dashboards
-if (!customElements.get("myhome-bus-card")) {
-  customElements.define("myhome-bus-card", class extends MyHomeBusCard {});
+// 1. Initial immediate registration
+registerCardElements();
+
+// 2. Active self-healing watchdog for scoped-custom-element-registry replacements
+if (typeof window !== "undefined") {
+  let lastRegistry = window.customElements;
+  const watcher = setInterval(() => {
+    if (
+      window.customElements !== lastRegistry ||
+      (window.customElements && !window.customElements.get("myhome-openwebnet-bus-monitor"))
+    ) {
+      lastRegistry = window.customElements;
+      registerCardElements();
+    }
+  }, 100);
+  setTimeout(() => clearInterval(watcher), 45000);
 }
 
 console.info(
-  "%c MYHOME-BUS-CARD %c v2.0.0b7 ",
+  "%c MYHOME-BUS-CARD %c v2.0.0b8 ",
   "background:#03a9f4;color:#fff;font-weight:bold;padding:2px 4px;border-radius:3px 0 0 3px;",
   "background:#263238;color:#fff;padding:2px 4px;border-radius:0 3px 3px 0;"
 );
 
-window.customCards = window.customCards || [];
-// Prune deprecated alias from UI picker
-window.customCards = window.customCards.filter((c) => c && c.type !== "myhome-bus-card");
+window.customCards = (window.customCards || []).filter((c) => c.type !== "myhome-bus-card");
 
 const cardDefinition = {
   type: "myhome-openwebnet-bus-monitor",
@@ -1028,6 +1056,19 @@ const cardDefinition = {
   description: "Real-time BTicino / Legrand SCS OpenWebNet bus traffic stream, packet inspector, and diagnostic frame sender.",
   preview: true,
 };
+
+// Guarantee registration whenever Lovelace card picker accesses card.type
+Object.defineProperty(cardDefinition, "type", {
+  get() {
+    registerCardElements();
+    return "myhome-openwebnet-bus-monitor";
+  },
+  set(val) {
+    // allow assignment if needed
+  },
+  enumerable: true,
+  configurable: true,
+});
 
 const existingIndex = window.customCards.findIndex(
   (c) => c && c.type === "myhome-openwebnet-bus-monitor"

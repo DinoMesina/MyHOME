@@ -195,7 +195,7 @@ async def async_ensure_ownd_engine(hass: HomeAssistant) -> bool:
 
     # Fast path: requirement satisfied and currently loaded version matches
     current_ver = await hass.async_add_executor_job(get_ownd_version)
-    is_installed = pkg_util.is_installed(required_pkg)
+    is_installed = await hass.async_add_executor_job(pkg_util.is_installed, required_pkg)
     if is_installed and current_ver == REQUIRED_OWND_VERSION:
         return True
 
