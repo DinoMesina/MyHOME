@@ -107,6 +107,17 @@ async def _async_register_lovelace_resource(hass: HomeAssistant, url_path: str) 
         return False
 
 
+def _sync_www_card(card_path: str, www_path: str) -> None:
+    """Synchronize bus monitor card to /config/www/ as an additional fail-safe source."""
+    try:
+        os.makedirs(os.path.dirname(www_path), exist_ok=True)
+        import shutil
+        shutil.copy2(card_path, www_path)
+        LOGGER.debug("Synchronized bus monitor card to %s", www_path)
+    except Exception as err:
+        LOGGER.debug("Could not copy card to www: %s", err)
+
+
 async def _async_register_frontend(hass: HomeAssistant) -> None:
     """Register the Lovelace bus monitor card static resource and script."""
     domain_data = hass.data.setdefault(DOMAIN, {})
@@ -118,16 +129,38 @@ async def _async_register_frontend(hass: HomeAssistant) -> None:
     http = getattr(hass, "http", None)
     if not domain_data.get("_frontend_registered"):
         if http is not None and os.path.isfile(card_path):
-            if hasattr(http, "async_register_static_paths"):
+            frontend_dir = os.path.dirname(card_path)
+            static_path_cls = None
+            try:
+                from homeassistant.components.http import StaticPathConfig as static_path_cls
+            except ImportError:
                 try:
-                    from homeassistant.components.http import StaticPathConfig
+                    from homeassistant.components.http.server import (
+                        StaticPathConfig as static_path_cls,
+                    )
+                except ImportError:
+                    static_path_cls = None
+
+            if static_path_cls is not None and hasattr(http, "async_register_static_paths"):
+                try:
                     await http.async_register_static_paths([
-                        StaticPathConfig(static_url, card_path, False)
+                        static_path_cls("/myhome_static", frontend_dir, False),
+                        static_path_cls(static_url, card_path, False),
                     ])
                 except Exception:
-                    http.register_static_path(static_url, card_path, False)
+                    if hasattr(http, "register_static_path"):
+                        http.register_static_path("/myhome_static", frontend_dir, False)
+                        http.register_static_path(static_url, card_path, False)
             elif hasattr(http, "register_static_path"):
+                http.register_static_path("/myhome_static", frontend_dir, False)
                 http.register_static_path(static_url, card_path, False)
+
+            # Also sync to /config/www/myhome-bus-card.js so /local/ is guaranteed to serve it
+            if hasattr(hass, "config") and hasattr(hass.config, "path"):
+                www_dir = hass.config.path("www")
+                if www_dir:
+                    www_card_path = os.path.join(www_dir, "myhome-bus-card.js")
+                    await hass.async_add_executor_job(_sync_www_card, card_path, www_card_path)
 
             try:
                 from homeassistant.components import frontend

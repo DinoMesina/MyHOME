@@ -446,7 +446,7 @@ async def test_register_frontend_branches(hass: HomeAssistant):
     with patch("homeassistant.components.frontend.add_extra_js_url", side_effect=Exception("Frontend error")):
         await _async_register_frontend(hass)
         assert hass.data[DOMAIN]["_frontend_registered"] is True
-        mock_http.register_static_path.assert_called_once()
+        assert mock_http.register_static_path.call_count >= 1
 
     # 5. async_register_static_paths raises exception and falls back to register_static_path
     hass.data[DOMAIN]["_frontend_registered"] = False
@@ -454,7 +454,7 @@ async def test_register_frontend_branches(hass: HomeAssistant):
     mock_http.register_static_path.reset_mock()
     await _async_register_frontend(hass)
     assert hass.data[DOMAIN]["_frontend_registered"] is True
-    mock_http.register_static_path.assert_called_once()
+    assert mock_http.register_static_path.call_count >= 1
 
     # 6. Lovelace resource auto-registration (lines 69-78)
     hass.data[DOMAIN]["_frontend_registered"] = False
@@ -595,6 +595,22 @@ async def test_register_frontend_branches(hass: HomeAssistant):
     with patch("builtins.open", side_effect=Exception("Read error")):
         assert _get_card_url(card_path) == "/myhome_static/myhome-bus-card.js"
 
+    # 17. Test _sync_www_card helper directly
+    import tempfile
+
+    from custom_components.myhome import _sync_www_card
+    with tempfile.TemporaryDirectory() as tmpdir:
+        src = os.path.join(tmpdir, "src.js")
+        dst = os.path.join(tmpdir, "sub", "dst.js")
+        with open(src, "w") as f:
+            f.write("test")
+        _sync_www_card(src, dst)
+        assert os.path.isfile(dst)
+        with open(dst, "r") as f:
+            assert f.read() == "test"
+        # Exception branch
+        with patch("shutil.copy2", side_effect=Exception("Copy error")):
+            _sync_www_card(src, dst)
 
 
 async def test_setup_entry_myhome_yaml_loading(hass: HomeAssistant):

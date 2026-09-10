@@ -612,7 +612,7 @@ class MyHomeBusCard extends HTMLElement {
           <div>RX: <span id="stat-rx" class="stat-val">0</span></div>
           <div>TX: <span id="stat-tx" class="stat-val">0</span></div>
           <div>Queue: <span id="stat-queue" class="stat-val">0</span></div>
-          <div style="margin-left: auto; font-size: 0.75rem; opacity: 0.85;">MyHOME <span id="stat-version" class="stat-val">v2.0.0b6</span></div>
+          <div style="margin-left: auto; font-size: 0.75rem; opacity: 0.85;">MyHOME <span id="stat-version" class="stat-val">v2.0.0b7</span></div>
         </div>
 
         <div class="controls">
@@ -647,23 +647,24 @@ class MyHomeBusCard extends HTMLElement {
 
   _bindEvents() {
     const root = this.shadowRoot;
-    root.getElementById("btn-report").addEventListener("click", () => this._handleReportIssue());
-    root.getElementById("btn-pause").addEventListener("click", () => this._togglePause());
-    root.getElementById("btn-clear").addEventListener("click", () => this._clearBuffer());
-    root.getElementById("filter-who").addEventListener("change", (e) => {
+    if (!root) return;
+    root.getElementById("btn-report")?.addEventListener("click", () => this._handleReportIssue());
+    root.getElementById("btn-pause")?.addEventListener("click", () => this._togglePause());
+    root.getElementById("btn-clear")?.addEventListener("click", () => this._clearBuffer());
+    root.getElementById("filter-who")?.addEventListener("change", (e) => {
       this._filterWho = e.target.value;
       this._updateFrameList();
     });
-    root.getElementById("filter-where").addEventListener("input", (e) => {
+    root.getElementById("filter-where")?.addEventListener("input", (e) => {
       this._filterWhere = e.target.value;
       this._updateFrameList();
     });
-    root.getElementById("filter-dir").addEventListener("change", (e) => {
+    root.getElementById("filter-dir")?.addEventListener("change", (e) => {
       this._filterDir = e.target.value;
       this._updateFrameList();
     });
-    root.getElementById("btn-send").addEventListener("click", () => this._sendCustomFrame());
-    root.getElementById("send-frame").addEventListener("keydown", (e) => {
+    root.getElementById("btn-send")?.addEventListener("click", () => this._sendCustomFrame());
+    root.getElementById("send-frame")?.addEventListener("keydown", (e) => {
       if (e.key === "Enter") this._sendCustomFrame();
     });
   }
@@ -722,7 +723,7 @@ class MyHomeBusCard extends HTMLElement {
     if (tx) tx.textContent = this._stats.total_tx;
     if (queue) queue.textContent = (this._gatewayInfo && this._gatewayInfo.queue_depth != null) ? this._gatewayInfo.queue_depth : 0;
     if (ver && this._gatewayInfo) {
-      const intVer = this._gatewayInfo.integration_version || "2.0.0b6";
+      const intVer = this._gatewayInfo.integration_version || "2.0.0b7";
       const owndVer = this._gatewayInfo.ownd_version;
       ver.textContent = owndVer && owndVer !== "unknown" ? `v${intVer} (OWNd ${owndVer})` : `v${intVer}`;
     }
@@ -761,7 +762,7 @@ class MyHomeBusCard extends HTMLElement {
       (this.hass && this.hass.config && this.hass.config.version) ||
       "Unknown";
     const gw = this._gatewayInfo || {};
-    const integrationVersion = gw.integration_version || "2.0.0b6";
+    const integrationVersion = gw.integration_version || "2.0.0b7";
     const owndVersion = gw.ownd_version || "Unknown";
     const userAgent = (typeof navigator !== "undefined" && navigator.userAgent) ? navigator.userAgent : "Unknown";
     const timestamp = new Date().toISOString();
@@ -878,7 +879,7 @@ ${framesText}
       (this._hass && this._hass.config && this._hass.config.version) ||
       (this.hass && this.hass.config && this.hass.config.version) ||
       "";
-    const integrationVersion = (this._gatewayInfo && this._gatewayInfo.integration_version) || "2.0.0b6";
+    const integrationVersion = (this._gatewayInfo && this._gatewayInfo.integration_version) || "2.0.0b7";
     const owndVersion = (this._gatewayInfo && this._gatewayInfo.ownd_version) || "Unknown";
 
     const issueUrl = `https://github.com/OpenWebNet-HA/MyHOME/issues/new?template=bug_report.yml&ha_version=${encodeURIComponent(haVersion)}&integration_version=${encodeURIComponent(integrationVersion)}&ownd_version=${encodeURIComponent(owndVersion)}`;
@@ -1012,18 +1013,28 @@ if (!customElements.get("myhome-bus-card")) {
 }
 
 console.info(
-  "%c MYHOME-BUS-CARD %c v2.0.0b6 ",
+  "%c MYHOME-BUS-CARD %c v2.0.0b7 ",
   "background:#03a9f4;color:#fff;font-weight:bold;padding:2px 4px;border-radius:3px 0 0 3px;",
   "background:#263238;color:#fff;padding:2px 4px;border-radius:0 3px 3px 0;"
 );
 
-window.customCards = (window.customCards || []).filter((c) => c.type !== "myhome-bus-card");
-if (!window.customCards.some((c) => c.type === "myhome-openwebnet-bus-monitor")) {
-  window.customCards.push({
-    type: "myhome-openwebnet-bus-monitor",
-    name: "MyHOME OpenWebNet Bus Monitor",
-    description: "Real-time BTicino / Legrand SCS OpenWebNet bus traffic stream, packet inspector, and diagnostic frame sender.",
-    preview: false,
-  });
+window.customCards = window.customCards || [];
+// Prune deprecated alias from UI picker
+window.customCards = window.customCards.filter((c) => c && c.type !== "myhome-bus-card");
+
+const cardDefinition = {
+  type: "myhome-openwebnet-bus-monitor",
+  name: "MyHOME OpenWebNet Bus Monitor",
+  description: "Real-time BTicino / Legrand SCS OpenWebNet bus traffic stream, packet inspector, and diagnostic frame sender.",
+  preview: true,
+};
+
+const existingIndex = window.customCards.findIndex(
+  (c) => c && c.type === "myhome-openwebnet-bus-monitor"
+);
+if (existingIndex >= 0) {
+  window.customCards[existingIndex] = cardDefinition;
+} else {
+  window.customCards.push(cardDefinition);
 }
 
