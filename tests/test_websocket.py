@@ -7,7 +7,7 @@ from homeassistant.core import HomeAssistant
 from OWNd.message import OWNEvent
 
 from custom_components.myhome.bus_monitor import BusFrame, BusMonitor
-from custom_components.myhome.const import CONF_ENTITY, DOMAIN
+from custom_components.myhome.const import CONF_ENTITY, DOMAIN, INTEGRATION_VERSION
 from custom_components.myhome.websocket import (
     _extract_gateway_info,
     _get_gateway_and_monitor,
@@ -582,7 +582,7 @@ def test_extract_gateway_info_edge_cases():
     assert rs_info["serial_port"] == "/dev/ttyUSB0"
     assert rs_info["host"] == ""
     assert rs_info["port"] is None
-    assert rs_info["integration_version"] == "2.0.0b4"
+    assert rs_info["integration_version"] == INTEGRATION_VERSION
     assert "ownd_version" in rs_info
 
     # 9. String port on raw_gw (e.g. COM3)

@@ -24,7 +24,7 @@ except ImportError:
             for req in reqs:
                 subprocess.check_call([sys.executable, "-m", "pip", "install", req])
     else:
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "OWNd==2.0.0b4"])
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "OWNd==2.0.0b5"])
     importlib.invalidate_caches()
 
 # Ensure repository custom_components directory is discoverable even when

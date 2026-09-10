@@ -6,7 +6,7 @@ from homeassistant.const import CONF_MAC, CONF_PASSWORD
 from homeassistant.core import HomeAssistant
 
 from custom_components.myhome.bus_monitor import BusMonitor
-from custom_components.myhome.const import CONF_ENTITIES, CONF_ENTITY, DOMAIN
+from custom_components.myhome.const import CONF_ENTITIES, CONF_ENTITY, DOMAIN, INTEGRATION_VERSION
 from custom_components.myhome.diagnostics import async_get_config_entry_diagnostics
 
 
@@ -34,7 +34,7 @@ async def test_diagnostics_without_gateway_handler(hass: HomeAssistant):
     diag = await async_get_config_entry_diagnostics(hass, mock_entry)
 
     # Verify versions
-    assert diag["integration_version"] == "2.0.0b4"
+    assert diag["integration_version"] == INTEGRATION_VERSION
     assert "ownd_version" in diag
 
     # Verify redactions
@@ -111,7 +111,7 @@ async def test_diagnostics_with_full_gateway_and_bus_monitor(hass: HomeAssistant
     diag = await async_get_config_entry_diagnostics(hass, mock_entry)
 
     # Verify versions
-    assert diag["integration_version"] == "2.0.0b4"
+    assert diag["integration_version"] == INTEGRATION_VERSION
     assert "ownd_version" in diag
 
     # Verify gateway details

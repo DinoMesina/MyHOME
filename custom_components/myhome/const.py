@@ -6,7 +6,7 @@ DOMAIN = "myhome"
 
 ATTR_GATEWAY = "gateway"
 ATTR_MESSAGE = "message"
-INTEGRATION_VERSION = "2.0.0b4"
+INTEGRATION_VERSION = "2.0.0b5"
 
 
 def get_ownd_version() -> str:
