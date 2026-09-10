@@ -3,9 +3,15 @@
 </p>
 
 # MyHOME (Modernized Fork)
-**Version: v1.3.2**
+**Version: v1.4.0**
 
 ## 🌟 Changelog
+* **v1.4.0**: **Native Shutter Percentage Control & "Unknown" State Elimination!**
+  - **Virtual Time-Based Positioning (`SET_POSITION`)**: Full native support for cover percentage control (0% to 100%) on standard BTicino shutter actuators (`F411/2`, `F411/4`, `3476`, etc.). Home Assistant now displays an interactive percentage slider and preset buttons (0%, 25%, 50%, 75%, 100%) for all shutters.
+  - **Permanently Eliminated "Unknown" ("Sconosciuto") State**: Fixed a fundamental issue where standard BTicino stop frames (`*2*0*WHERE##`) caused Home Assistant to revert cover entities to "Unknown". Covers now accurately retain and reflect their state (`open`, `closed`, `opening`, `closing`) at all times.
+  - **State Restoration Across Reboots (`RestoreEntity`)**: Cover entities now remember their exact position and open/closed state across Home Assistant restarts and integration reloads.
+  - **Configurable Travel Time**: Added per-device optional configuration (`travel_time`, `open_time`, `close_time`, defaulting to 25.0 seconds).
+  - **Bidirectional Physical Wall Switch Sync**: When opening, closing, or stopping shutters from physical in-wall pushbuttons, Home Assistant tracks elapsed travel time and updates the position percentage and state in real time.
 * **v1.3.2**: **MHS1 Gateway Stability, OWNSignaling Fix & YAML Import Preservation!**
   - **`OWNSignaling` Crash Loop Fixed**: Fixed `AttributeError: 'OWNSignaling' object has no attribute '_who'` which caused a continuous 1-second crash/reconnect loop whenever protocol signaling frames (ACK, NACK, Nonce, handshake) arrived from gateways (particularly MyHomeServer1).
   - **MHS1 & Embedded Gateway Scan Reliability**: Increased response deadline to 200ms and inter-command spacing to 30ms to accommodate slower embedded gateways like MHS1 on physical 9600-baud SCS buses. Added automatic socket reconnection and recovery during active bus scans.
@@ -15,15 +21,16 @@
   - **Entity Validation & 60s Throttling**: Diagnostic status queries now strictly verify that the target device exists in Home Assistant and rate-limit queries to a maximum of once every 60 seconds per device.
   - **Zero Retries for Status Queries**: Failed status requests are dropped immediately instead of blocking the gateway sender queue.
   - **Sound Diffusion Improvements (WHO 22/16)**: Integrated full support for F441 audio matrices, H4562 wall controls with bidirectional sync, 3-frame source switching, FM Tuner metadata tracking (frequencies & presets), and gateway freeze prevention (contributed by @bboykaos).
+
+<details>
+<summary><b>Previous versions changelog (Click to expand)</b></summary>
+
 * **v1.3.0**: **Gateway Diagnostics & Sleek "MyHOME Monitor" Lovelace Card!**
   - **Zero-Overhead Gateway Diagnostics**: Added native diagnostic entities for BTicino gateways:
     - `binary_sensor.<gateway>_connectivity` (tracks active OpenWebNet connection status, IP, port, hardware model, firmware version, session uptime, and reconnection counter).
     - `sensor.<gateway>_configured_devices` (reports total configured devices with attributes breakdown: lights, covers, climate zones, switches, sensors, and scenarios).
     - **100% Passive & Safe**: Zero bus polling, zero pinging, and zero frame flooding — completely safe for legacy and resource-constrained gateways (AM4890, F454, MH200N).
   - **Dedicated "MyHOME Monitor" Custom Lovelace Card**: Built-in, ultra-responsive Lovelace card (`custom:myhome-monitor-card`) featuring gateway status badge, hardware metrics, and interactive device counters grid with dark/light mode support. Automatically registered with Home Assistant frontend.
-
-<details>
-<summary><b>Previous versions changelog (Click to expand)</b></summary>
 
 * **v1.2.0**: **Official BTicino MyHOME SCS Brand Assets & Clean Alpha Packaging!**
   - **Brand & Logo Overhaul**: Added official high-resolution brand assets (`icon.png`, `icon@2x.png`, `logo.png`) featuring authentic BTicino typography, signature orange 'b', and SCS bus emblem.

@@ -11,6 +11,7 @@ from voluptuous import (
     All,
     In,
     Invalid,
+    Range,
 )
 from homeassistant.helpers.device_registry import format_mac as ha_format_mac
 from homeassistant.components.light import DOMAIN as LIGHT
@@ -53,6 +54,10 @@ from .const import (
     CONF_COOLING_SUPPORT,
     CONF_STANDALONE,
     CONF_CENTRAL,
+    CONF_TRAVEL_TIME,
+    CONF_OPEN_TIME,
+    CONF_CLOSE_TIME,
+    DEFAULT_TRAVEL_TIME,
 )
 
 
@@ -337,6 +342,9 @@ cover_schema = MyHomeDeviceSchema(
             Required(CONF_NAME): str,
             Optional(CONF_ENTITY_NAME): str,
             Optional(CONF_ADVANCED_SHUTTER, default=False): Boolean(),
+            Optional(CONF_TRAVEL_TIME, default=DEFAULT_TRAVEL_TIME): All(Coerce(float), Range(min=1.0, max=300.0)),
+            Optional(CONF_OPEN_TIME): All(Coerce(float), Range(min=1.0, max=300.0)),
+            Optional(CONF_CLOSE_TIME): All(Coerce(float), Range(min=1.0, max=300.0)),
             Optional(CONF_MANUFACTURER, default="BTicino S.p.A."): str,
             Optional(CONF_DEVICE_MODEL): Coerce(str),
         }
