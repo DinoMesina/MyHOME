@@ -104,7 +104,7 @@ If you have the **Terminal & SSH** add-on enabled in Home Assistant, open **Term
 
 ```bash
 cd /config/custom_components
-wget https://github.com/OpenWebNet-HA/MyHOME/releases/download/2.0.0b4/myhome.zip -O myhome_beta.zip
+wget -O myhome_beta.zip $(curl -s https://api.github.com/repos/OpenWebNet-HA/MyHOME/releases | grep -m1 -o 'https://[^"]*myhome\.zip')
 rm -rf myhome
 unzip -q myhome_beta.zip -d myhome
 rm myhome_beta.zip
@@ -113,7 +113,7 @@ ha core restart
 
 *(For **Home Assistant Container / Docker**, run on your Docker host:)*
 ```bash
-docker exec -it homeassistant bash -c "cd /config/custom_components && wget https://github.com/OpenWebNet-HA/MyHOME/releases/download/2.0.0b4/myhome.zip -O myhome_beta.zip && rm -rf myhome && unzip -q myhome_beta.zip -d myhome && rm myhome_beta.zip"
+docker exec -it homeassistant bash -c 'cd /config/custom_components && wget -O myhome_beta.zip $(curl -s https://api.github.com/repos/OpenWebNet-HA/MyHOME/releases | grep -m1 -o "https://[^\"]*myhome\.zip") && rm -rf myhome && unzip -q myhome_beta.zip -d myhome && rm myhome_beta.zip'
 docker restart homeassistant
 ```
 
@@ -125,7 +125,7 @@ docker restart homeassistant
 ### Method 2: Manual Installation (Archive / Samba)
 
 1. Download the release package:  
-   👉 **[Download myhome.zip (v2.0.0b4)](https://github.com/OpenWebNet-HA/MyHOME/releases/download/2.0.0b4/myhome.zip)**
+   👉 **[Download myhome.zip (GitHub Releases)](https://github.com/OpenWebNet-HA/MyHOME/releases)** (or direct [v2.0.0b4 download](https://github.com/OpenWebNet-HA/MyHOME/releases/download/2.0.0b4/myhome.zip))
 2. Open your Home Assistant configuration directory (via **Samba Share**, **Studio Code Server**, or **File Editor** add-on).
 3. Extract `myhome.zip` directly into `/config/custom_components/myhome/` (overwriting the existing files).
 4. Restart Home Assistant (**Settings → System → Restart**).
