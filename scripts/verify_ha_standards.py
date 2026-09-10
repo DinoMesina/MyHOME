@@ -322,8 +322,11 @@ def check_manifest_requirements_rule(checker: StandardsChecker):
             f"Version mismatch: manifest.json ({manifest_version}) != const.py ({const_version})",
         )
 
+    ownd_match = re.search(r'REQUIRED_OWND_VERSION\s*=\s*["\']([^"\']+)["\']', const_content)
+    required_ownd_version = ownd_match.group(1) if ownd_match else manifest_version
+
     requirements = manifest.get("requirements", [])
-    expected_req = f"OWNd=={manifest_version}"
+    expected_req = f"OWNd=={required_ownd_version}"
     if expected_req not in requirements:
         checker.log_error(
             "RULE_MANIFEST",

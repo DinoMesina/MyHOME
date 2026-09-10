@@ -1097,10 +1097,10 @@ def test_get_ownd_version():
 async def test_async_ensure_ownd_engine_fast_path(hass: HomeAssistant):
     """Test async_ensure_ownd_engine fast-path when version matches."""
     from custom_components.myhome import async_ensure_ownd_engine
-    from custom_components.myhome.const import INTEGRATION_VERSION
+    from custom_components.myhome.const import REQUIRED_OWND_VERSION
 
     with patch("homeassistant.util.package.is_installed", return_value=True), \
-         patch("custom_components.myhome.get_ownd_version", return_value=INTEGRATION_VERSION):
+         patch("custom_components.myhome.get_ownd_version", return_value=REQUIRED_OWND_VERSION):
         result = await async_ensure_ownd_engine(hass)
         assert result is True
 
@@ -1108,7 +1108,7 @@ async def test_async_ensure_ownd_engine_fast_path(hass: HomeAssistant):
 async def test_async_ensure_ownd_engine_auto_install_success(hass: HomeAssistant):
     """Test async_ensure_ownd_engine self-heals by installing missing requirement."""
     from custom_components.myhome import async_ensure_ownd_engine
-    from custom_components.myhome.const import INTEGRATION_VERSION
+    from custom_components.myhome.const import REQUIRED_OWND_VERSION
 
     installed_status = [False, True]
     def mock_is_installed(req):
@@ -1118,10 +1118,10 @@ async def test_async_ensure_ownd_engine_auto_install_success(hass: HomeAssistant
          patch("homeassistant.requirements.async_process_requirements", new_callable=AsyncMock) as mock_proc, \
          patch("importlib.reload") as mock_reload, \
          patch("importlib.invalidate_caches"), \
-         patch("custom_components.myhome.get_ownd_version", side_effect=["2.0.0b2", INTEGRATION_VERSION]):
+         patch("custom_components.myhome.get_ownd_version", side_effect=["2.0.0b2", REQUIRED_OWND_VERSION]):
         result = await async_ensure_ownd_engine(hass)
         assert result is True
-        mock_proc.assert_awaited_once_with(hass, "myhome", [f"OWNd=={INTEGRATION_VERSION}"])
+        mock_proc.assert_awaited_once_with(hass, "myhome", [f"OWNd=={REQUIRED_OWND_VERSION}"])
         assert mock_reload.called
 
 
@@ -1149,7 +1149,7 @@ async def test_async_ensure_ownd_engine_install_failed(hass: HomeAssistant):
 async def test_async_ensure_ownd_engine_reload_error(hass: HomeAssistant):
     """Test async_ensure_ownd_engine logs and survives reload failures."""
     from custom_components.myhome import async_ensure_ownd_engine
-    from custom_components.myhome.const import INTEGRATION_VERSION
+    from custom_components.myhome.const import REQUIRED_OWND_VERSION
 
     installed_status = [False, True]
     def mock_is_installed(req):
@@ -1159,7 +1159,7 @@ async def test_async_ensure_ownd_engine_reload_error(hass: HomeAssistant):
          patch("homeassistant.requirements.async_process_requirements", new_callable=AsyncMock), \
          patch("importlib.reload", side_effect=RuntimeError("Module reload failure")), \
          patch("importlib.invalidate_caches"), \
-         patch("custom_components.myhome.get_ownd_version", side_effect=["2.0.0b2", INTEGRATION_VERSION]):
+         patch("custom_components.myhome.get_ownd_version", side_effect=["2.0.0b2", REQUIRED_OWND_VERSION]):
         result = await async_ensure_ownd_engine(hass)
         assert result is True
 

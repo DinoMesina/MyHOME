@@ -48,7 +48,9 @@ def check_versions(target_tag=None):
         sys.exit(1)
 
     requirements = manifest.get("requirements", [])
-    expected_ownd_req = f"OWNd=={manifest_version}"
+    ownd_match = re.search(r'REQUIRED_OWND_VERSION\s*=\s*["\']([^"\']+)["\']', const_content)
+    required_ownd_version = ownd_match.group(1) if ownd_match else manifest_version
+    expected_ownd_req = f"OWNd=={required_ownd_version}"
     print(f"[CHECK] manifest requirements: {requirements}")
     if expected_ownd_req not in requirements:
         print(
@@ -68,7 +70,7 @@ def check_versions(target_tag=None):
             )
             sys.exit(1)
 
-    return manifest_version
+    return manifest_version, required_ownd_version
 
 
 def check_pypi_release(version):
@@ -149,8 +151,8 @@ if __name__ == "__main__":
     # Use tag argument or check GITHUB_REF_NAME env var
     target_tag = args.tag or os.getenv("GITHUB_REF_NAME")
 
-    ver = check_versions(target_tag=target_tag)
-    check_pypi_release(ver)
+    ver, ownd_ver = check_versions(target_tag=target_tag)
+    check_pypi_release(ownd_ver)
 
     if args.verify_only:
         print(f"[VERIFY] Release rules passed successfully for v{ver}.")

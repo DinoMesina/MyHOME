@@ -28,6 +28,7 @@ from .const import (
     DOMAIN,
     INTEGRATION_VERSION,
     LOGGER,
+    REQUIRED_OWND_VERSION,
     get_ownd_version,
 )
 from .gateway import MyHOMEGatewayHandler
@@ -156,13 +157,13 @@ async def _async_register_frontend(hass: HomeAssistant) -> None:
 
 async def async_ensure_ownd_engine(hass: HomeAssistant) -> bool:
     """Ensure that the exact matching OWNd engine requirement is installed and loaded."""
-    required_pkg = f"OWNd=={INTEGRATION_VERSION}"
+    required_pkg = f"OWNd=={REQUIRED_OWND_VERSION}"
     from homeassistant.util import package as pkg_util
 
     # Fast path: requirement satisfied and currently loaded version matches
     current_ver = await hass.async_add_executor_job(get_ownd_version)
     is_installed = pkg_util.is_installed(required_pkg)
-    if is_installed and current_ver == INTEGRATION_VERSION:
+    if is_installed and current_ver == REQUIRED_OWND_VERSION:
         return True
 
     LOGGER.warning(
@@ -188,7 +189,7 @@ async def async_ensure_ownd_engine(hass: HomeAssistant) -> bool:
                     hass,
                     title="MyHOME Engine Mismatch",
                     message=(
-                        f"MyHOME integration v{INTEGRATION_VERSION} requires OWNd v{INTEGRATION_VERSION}, "
+                        f"MyHOME integration v{INTEGRATION_VERSION} requires OWNd v{REQUIRED_OWND_VERSION}, "
                         f"but detected {current_ver}.\n\n"
                         f"Automatic package upgrade failed ({err}). Please check network connectivity or run:\n"
                         f"```bash\npip install '{required_pkg}'\n```"
@@ -245,7 +246,7 @@ async def async_setup(hass, config):
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     if not await async_ensure_ownd_engine(hass):
         raise ConfigEntryNotReady(
-            f"Required OWNd engine version {INTEGRATION_VERSION} is not available (found: {get_ownd_version()})"
+            f"Required OWNd engine version {REQUIRED_OWND_VERSION} is not available (found: {get_ownd_version()})"
         )
 
     from .websocket import async_setup_websocket_api

@@ -131,7 +131,7 @@ docker restart homeassistant
 ### Method 2: Manual Installation (Archive / Samba)
 
 1. Download the release package:  
-   👉 **[Download myhome.zip (GitHub Releases)](https://github.com/OpenWebNet-HA/MyHOME/releases)** (or direct [v2.0.0b5 download](https://github.com/OpenWebNet-HA/MyHOME/releases/download/2.0.0b5/myhome.zip))
+   👉 **[Download myhome.zip (GitHub Releases)](https://github.com/OpenWebNet-HA/MyHOME/releases)** (or direct [v2.0.0b6 download](https://github.com/OpenWebNet-HA/MyHOME/releases/download/2.0.0b6/myhome.zip))
 2. Open your Home Assistant configuration directory (via **Samba Share**, **Studio Code Server**, or **File Editor** add-on).
 3. Extract `myhome.zip` directly into `/config/custom_components/myhome/` (overwriting the existing files).
 4. Restart Home Assistant (**Settings → System → Restart**).
