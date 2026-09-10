@@ -106,6 +106,43 @@ async def test_gateway_test_connection(gateway_handler):
         assert res == {"Success": True}
         mock_session.test_connection.assert_called_once()
 
+@pytest.mark.asyncio
+async def test_gateway_test_connection_alphanumeric_password(gateway_handler):
+    """Verify Issue #260: F454 gateway with alphanumeric password passes test_connection."""
+    gateway_handler.gateway.password = "F454_Alphanumeric_Password"
+    nonce_a = "1234567890123456789012345678901234567890"
+
+    mock_reader = AsyncMock()
+    mock_writer = MagicMock()
+    mock_writer.drain = AsyncMock()
+    mock_writer.close = MagicMock()
+    mock_writer.wait_closed = AsyncMock()
+
+    call_count = 0
+    async def mock_readuntil(sep=b"##"):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            return b"*#*1##"
+        elif call_count == 2:
+            return b"*98*1##"  # F454 SHA-1 challenge
+        elif call_count == 3:
+            return f"*#{nonce_a}##".encode()
+        else:
+            last_call = mock_writer.write.call_args[0][0].decode()
+            parts = last_call.strip("*#").split("*")
+            rb = parts[0]
+            from OWNd.connection import OWNSession
+            dummy = OWNSession(gateway=gateway_handler.gateway)
+            server_hmac = dummy._decode_hmac_response("sha1", gateway_handler.gateway.password, nonce_a, rb)
+            return f"*#{server_hmac}##".encode()
+
+    mock_reader.readuntil = mock_readuntil
+
+    with patch("asyncio.open_connection", new=AsyncMock(return_value=(mock_reader, mock_writer))):
+        res = await gateway_handler.test()
+        assert res == {"Success": True, "Message": None}
+
 
 @pytest.mark.asyncio
 async def test_gateway_send_and_send_status_request(gateway_handler):
