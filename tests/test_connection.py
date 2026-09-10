@@ -984,3 +984,57 @@ class TestOWNEventAndCommandSessionRemainingCoverage:
         res = await command_session.send("*1*1*12##")
         assert res is None
         assert command_session._stream_writer is None
+
+    def test_own_session_is_connected_and_state_notifications(self):
+        session = OWNSession(gateway=MagicMock(), logger=MagicMock())
+        state_changes = []
+        session._on_state_change = lambda c: state_changes.append(c)
+
+        # 1. is_connected without writer
+        session._stream_writer = None
+        assert session.is_connected is False
+
+        # 2. is_connected with active writer
+        mock_writer = MagicMock()
+        mock_writer.is_closing.return_value = False
+        session._stream_writer = mock_writer
+        assert session.is_connected is True
+
+        # 3. is_connected with closing writer
+        mock_writer.is_closing.return_value = True
+        assert session.is_connected is False
+
+        # 4. _notify_state_change success
+        session._notify_state_change(True)
+        session._notify_state_change(False)
+        assert state_changes == [True, False]
+
+        # 5. _notify_state_change with callback exception
+        def failing_cb(val):
+            raise RuntimeError("Boom")
+
+        session._on_state_change = failing_cb
+        session._notify_state_change(True)  # Should not raise
+
+    @pytest.mark.asyncio
+    async def test_event_session_is_connected_and_connect_failure(self, event_session):
+        state_changes = []
+        event_session._on_state_change = lambda c: state_changes.append(c)
+
+        # 1. is_connected when inactive
+        assert event_session.is_connected is False
+
+        # 2. is_connected when active and writer active
+        event_session._is_active = True
+        mock_writer = MagicMock()
+        mock_writer.is_closing.return_value = False
+        event_session._stream_writer = mock_writer
+        assert event_session.is_connected is True
+
+        # 3. connect returning failure notifies state change False
+        with patch.object(OWNSession, "connect", new_callable=AsyncMock) as mock_super_connect:
+            mock_super_connect.return_value = {"Success": False, "Message": "auth_failed"}
+            res = await event_session.connect()
+            assert res == {"Success": False, "Message": "auth_failed"}
+            assert False in state_changes
+

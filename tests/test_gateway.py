@@ -580,6 +580,7 @@ async def test_sending_loop(gateway_handler):
         mock_cmd_session.send = AsyncMock()
         mock_cmd_session.close = AsyncMock()
         mock_cmd_class.return_value = mock_cmd_session
+        gateway_handler._event_session_ready.set()
 
         gateway_handler.sending_workers = [MagicMock()]
 
@@ -608,6 +609,7 @@ async def test_sending_loop_auth_failure_lockout_protection(gateway_handler):
         mock_cmd_session = MagicMock()
         mock_cmd_session.connect = AsyncMock(return_value={"Success": False, "Message": "negotiation_refused"})
         mock_cmd_class.return_value = mock_cmd_session
+        gateway_handler._event_session_ready.set()
 
         await gateway_handler.sending_loop(0)
         mock_cmd_session.connect.assert_called_once()
@@ -619,6 +621,7 @@ async def test_sending_loop_collected_responses_and_pacing(gateway_handler):
         mock_cmd_session = MagicMock()
         mock_cmd_session.connect = AsyncMock(return_value={"Success": True})
         mock_cmd_session.close = AsyncMock()
+        gateway_handler._event_session_ready.set()
 
         resp_msg = MagicMock(spec=OWNMessage)
         resp_raw = "*#1*0##"
@@ -746,5 +749,49 @@ async def test_gateway_cenplus_event_and_auto_registration(gateway_handler: MyHO
                     model="CEN+ Scenario Control",
                     via_device=(DOMAIN, gateway_handler.mac),
                 )
+
+
+@pytest.mark.asyncio
+async def test_sending_loop_waits_for_event_session(gateway_handler):
+    command_connect_started = asyncio.Event()
+
+    with patch("custom_components.myhome.gateway.OWNCommandSession") as mock_cmd_class:
+        mock_cmd_session = MagicMock()
+
+        async def connect():
+            command_connect_started.set()
+            return {"Success": True}
+
+        mock_cmd_session.connect = connect
+        mock_cmd_session.close = AsyncMock()
+        mock_cmd_class.return_value = mock_cmd_session
+
+        worker = asyncio.create_task(gateway_handler.sending_loop(0))
+        await asyncio.sleep(0)
+
+        assert not command_connect_started.is_set()
+
+        gateway_handler._event_session_ready.set()
+        await asyncio.wait_for(command_connect_started.wait(), timeout=1)
+        await gateway_handler.send_buffer.put(None)
+        await asyncio.wait_for(worker, timeout=1)
+
+        mock_cmd_session.close.assert_called_once()
+
+
+def test_event_connection_state_controls_command_readiness(gateway_handler):
+    assert gateway_handler.is_connected is False
+    assert gateway_handler._event_session_ready.is_set() is False
+
+    gateway_handler._on_event_connection_state_change(True)
+
+    assert gateway_handler.is_connected is True
+    assert gateway_handler._event_session_ready.is_set() is True
+
+    gateway_handler._on_event_connection_state_change(False)
+
+    assert gateway_handler.is_connected is False
+    assert gateway_handler._event_session_ready.is_set() is False
+
 
 

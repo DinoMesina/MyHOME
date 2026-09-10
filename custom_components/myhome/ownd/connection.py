@@ -184,6 +184,7 @@ class OWNSession:
         gateway: OWNGateway = None,
         connection_type: str = "test",
         logger: logging.Logger = None,
+        on_state_change: Optional[Any] = None,
     ):
         """Initialize the class
         Arguments:
@@ -196,9 +197,27 @@ class OWNSession:
         self._gateway = gateway
         self._type = connection_type.lower()
         self._logger = logger or logging.getLogger(__name__)
+        self._on_state_change = on_state_change
 
         self._stream_reader: Optional[asyncio.StreamReader] = None
         self._stream_writer: Optional[asyncio.StreamWriter] = None
+
+    @property
+    def is_connected(self) -> bool:
+        """Check if the underlying socket writer is connected."""
+        return self._stream_writer is not None and not self._stream_writer.is_closing()
+
+    def _notify_state_change(self, connected: bool) -> None:
+        """Notify state change listener if registered."""
+        if self._on_state_change is not None:
+            try:
+                self._on_state_change(connected)
+            except Exception as ex:
+                self._logger.debug(
+                    "%s on_state_change callback error: %s",
+                    self._gateway.log_id if self._gateway else "Gateway",
+                    ex,
+                )
 
     @property
     def gateway(self) -> OWNGateway:
@@ -683,10 +702,25 @@ class OWNEventSession(OWNSession):
     we maintain a 90-second keepalive task sending *#*1## to keep the socket alive.
     """
 
-    def __init__(self, gateway: OWNGateway = None, logger: logging.Logger = None):
-        super().__init__(gateway=gateway, connection_type="event", logger=logger)
+    def __init__(
+        self,
+        gateway: OWNGateway = None,
+        logger: logging.Logger = None,
+        on_state_change: Optional[Any] = None,
+    ):
+        super().__init__(
+            gateway=gateway,
+            connection_type="event",
+            logger=logger,
+            on_state_change=on_state_change,
+        )
         self._keepalive_task: Optional[asyncio.Task] = None
         self._is_active: bool = False
+
+    @property
+    def is_connected(self) -> bool:
+        """Check if the event session is actively connected."""
+        return self._is_active and super().is_connected
 
     @classmethod
     async def connect_to_gateway(cls, gateway: OWNGateway):
@@ -698,7 +732,10 @@ class OWNEventSession(OWNSession):
         res = await super().connect()
         if res and res.get("Success", False):
             self._is_active = True
+            self._notify_state_change(True)
             self._keepalive_task = asyncio.create_task(self._keepalive_loop())
+        else:
+            self._notify_state_change(False)
         return res
 
     def _cancel_keepalive(self):
@@ -736,6 +773,7 @@ class OWNEventSession(OWNSession):
     async def close(self) -> None:
         self._is_active = False
         self._cancel_keepalive()
+        self._notify_state_change(False)
         await super().close()
 
     async def get_next(self):

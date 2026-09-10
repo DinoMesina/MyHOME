@@ -475,6 +475,7 @@ class TestQueueMechanics:
             cmd2 = OWNCommand.parse("*1*0*21##")
             await handler.send(cmd1)
             await handler.send(cmd2)
+            handler._event_session_ready.set()
 
             worker_task = asyncio.create_task(handler.sending_loop(0))
             await asyncio.sleep(0.08)
@@ -526,6 +527,7 @@ class TestQueueMechanics:
             # Queue 6 commands
             for i in range(6):
                 await handler.send(OWNCommand.parse(f"*1*1*{10 + i}##"))
+            handler._event_session_ready.set()
 
             # Spin up 3 workers
             t0 = asyncio.create_task(handler.sending_loop(0))
@@ -567,6 +569,7 @@ class TestQueueMechanics:
             mock_session.connect = AsyncMock(return_value=True)
             mock_session.close = AsyncMock()
             mock_session_cls.return_value = mock_session
+            handler._event_session_ready.set()
 
             worker = asyncio.create_task(handler.sending_loop(0))
             handler.sending_workers = [worker]

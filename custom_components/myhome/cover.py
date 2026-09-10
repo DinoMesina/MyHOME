@@ -78,7 +78,9 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
 
             clean_where = where.split('-')[-1]
             cfg = _configured_covers.get(device_id) or _configured_covers.get(where) or _configured_covers.get(clean_where) or {}
-            _advanced = cfg.get("advanced_shutter", cfg.get(CONF_ADVANCED_SHUTTER, False))
+            _advanced = cfg.get(
+                CONF_ADVANCED_SHUTTER, cfg.get("advanced_shutter", False)
+            )
             _travel_time = int(cfg.get(CONF_TRAVEL_TIME, DEFAULT_TRAVEL_TIME))
             _name = cfg.get(CONF_NAME, f"Cover {clean_where}")
             _cover = MyHOMECover(
@@ -111,7 +113,9 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
         seen_configured_where.add(clean_where)
 
         _name = cfg.get(CONF_NAME, f"Cover {clean_where}")
-        _advanced = cfg.get("advanced_shutter", cfg.get(CONF_ADVANCED_SHUTTER, False))
+        _advanced = cfg.get(
+            CONF_ADVANCED_SHUTTER, cfg.get("advanced_shutter", False)
+        )
         _travel_time = int(cfg.get(CONF_TRAVEL_TIME, DEFAULT_TRAVEL_TIME))
         _cover = MyHOMECover(
             hass=hass,
@@ -175,7 +179,9 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
             # We found a new cover!
             clean_where = where.split('-')[-1]
             cfg = _configured_covers.get(unique_id) or _configured_covers.get(where) or _configured_covers.get(clean_where) or {}
-            _advanced = cfg.get("advanced_shutter", cfg.get(CONF_ADVANCED_SHUTTER, False))
+            _advanced = cfg.get(
+                CONF_ADVANCED_SHUTTER, cfg.get("advanced_shutter", False)
+            )
             _travel_time = int(cfg.get(CONF_TRAVEL_TIME, DEFAULT_TRAVEL_TIME))
             _name = cfg.get(CONF_NAME, f"Cover {clean_where}")
             _cover = MyHOMECover(

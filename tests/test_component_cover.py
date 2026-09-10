@@ -691,4 +691,39 @@ async def test_cover_gateway_general_message_updates_all_active_entities(hass: H
     assert cover2.current_cover_position == 70
 
 
+@pytest.mark.asyncio
+async def test_cover_advanced_shutter_key_precedence(hass, mock_gateway):
+    """Test that CONF_ADVANCED_SHUTTER ('advanced') takes precedence over legacy 'advanced_shutter'."""
+    mac = mock_gateway.mac
+    hass.data = {
+        DOMAIN: {
+            mac: {
+                "entity": mock_gateway,
+                CONF_PLATFORMS: {
+                    PLATFORM: {
+                        "35": {
+                            CONF_WHERE: "35",
+                            CONF_NAME: "Cover 35",
+                            CONF_ADVANCED_SHUTTER: True,
+                            "advanced_shutter": False,
+                        },
+                    }
+                },
+            }
+        }
+    }
+    config_entry = MagicMock()
+    config_entry.data = {"mac": mac}
+    config_entry.entry_id = "test_entry"
+
+    added = []
+    with patch("homeassistant.helpers.entity_registry.async_entries_for_config_entry", return_value=[]), \
+         patch("homeassistant.helpers.entity_registry.async_get", return_value=MagicMock()):
+        await async_setup_entry(hass, config_entry, added.extend)
+
+    assert len(added) == 1
+    assert added[0]._advanced is True
+
+
+
 

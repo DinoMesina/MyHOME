@@ -54,9 +54,12 @@ def verify_ownd_coverage(xml_path: str = COVERAGE_XML) -> int:
                 rel_path = os.path.relpath(full_path, REPO_ROOT).replace("\\", "/")
                 disk_files.append(rel_path)
 
-    if not disk_files:
-        print(f"[ERROR] No Python files found in '{OWND_DIR}'.")
-        return 1
+    if not os.path.exists(OWND_DIR) or not disk_files:
+        print(
+            f"[INFO] No vendored ownd directory found at '{OWND_DIR}' "
+            "(running with external OWNd package). Skipping vendored coverage check."
+        )
+        return 0
 
     print(f"[CHECK] Verifying strict 100% test coverage for {len(disk_files)} module(s) in ownd...")
     errors = []

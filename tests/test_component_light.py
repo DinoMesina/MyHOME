@@ -943,3 +943,57 @@ async def test_light_suppresses_sensor_discovery_and_purges_registry(hass):
         await hass.async_block_till_done()
         assert len(added) == 1
 
+
+@pytest.mark.asyncio
+async def test_light_async_added_to_hass_requests_initial_state(hass):
+    """Test that async_added_to_hass requests initial state via async_update."""
+    mock_gateway = MagicMock()
+    mock_gateway.mac = "00:11:22:33:44:55"
+    mock_gateway.send_status_request = AsyncMock()
+
+    light = MyHOMELight(
+        hass=hass,
+        name="Test Light",
+        entity_name="Test Light",
+        icon="mdi:lightbulb",
+        icon_on="mdi:lightbulb-on",
+        device_id="11",
+        who="1",
+        where="11",
+        interface=None,
+        dimmable=False,
+        manufacturer="BTicino",
+        model="Light",
+        gateway=mock_gateway,
+    )
+    light.hass = hass
+
+    with patch.object(light, "async_on_remove") as mock_on_remove:
+        await light.async_added_to_hass()
+        mock_on_remove.assert_called_once()
+        mock_gateway.send_status_request.assert_called_once()
+
+    # Verify dimmable light requests brightness status
+    dimmer = MyHOMELight(
+        hass=hass,
+        name="Test Dimmer",
+        entity_name="Test Dimmer",
+        icon="mdi:lightbulb",
+        icon_on="mdi:lightbulb-on",
+        device_id="12",
+        who="1",
+        where="12",
+        interface=None,
+        dimmable=True,
+        manufacturer="BTicino",
+        model="Dimmer",
+        gateway=mock_gateway,
+    )
+    dimmer.hass = hass
+    mock_gateway.send_status_request.reset_mock()
+
+    with patch.object(dimmer, "async_on_remove"):
+        await dimmer.async_added_to_hass()
+        mock_gateway.send_status_request.assert_called_once()
+
+

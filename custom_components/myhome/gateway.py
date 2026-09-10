@@ -27,6 +27,7 @@ from homeassistant.components.sensor import (
     DOMAIN as SENSOR,
 )
 from homeassistant.components.climate import DOMAIN as CLIMATE
+from homeassistant.core import callback
 
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers import device_registry as dr
@@ -80,6 +81,9 @@ from .button import (
 )
 
 
+EVENT_READY_TIMEOUT = 120
+
+
 class MyHOMEGatewayHandler:
     """Manages a single MyHOME Gateway."""
 
@@ -106,6 +110,8 @@ class MyHOMEGatewayHandler:
         self._terminate_listener = False
         self._terminate_sender = False
         self.is_connected = False
+        self._event_session_ready = asyncio.Event()
+        self._sender_stop = asyncio.Event()
         self.listening_worker: asyncio.tasks.Task = None
         self.sending_workers: List[asyncio.tasks.Task] = []
         queue_max_size = (
@@ -115,7 +121,7 @@ class MyHOMEGatewayHandler:
         )
         self.send_buffer = asyncio.Queue(maxsize=queue_max_size)
         self.bus_monitor = BusMonitor()
-        self.device_registry_id: Optional[str] = None
+        self.device_registry_id: str | None = None
         self._cen_devices: set[tuple[int, int]] = set()
 
     def _ensure_cen_device(self, who: int, object_id: int) -> None:
@@ -189,23 +195,52 @@ class MyHOMEGatewayHandler:
     async def test(self) -> Dict:
         return await OWNSession(gateway=self.gateway, logger=LOGGER).test_connection()
 
+    @callback
+    def _on_event_connection_state_change(self, connected: bool) -> None:
+        """Gate command sessions on the real event-session state."""
+        self.is_connected = connected
+        if connected:
+            self._event_session_ready.set()
+        else:
+            self._event_session_ready.clear()
+
     async def listening_loop(self):
         self._terminate_listener = False
+        self._event_session_ready.clear()
 
         LOGGER.debug("%s Creating listening worker.", self.log_id)
 
-        _event_session = OWNEventSession(gateway=self.gateway, logger=LOGGER)
+        _event_session = OWNEventSession(
+            gateway=self.gateway,
+            logger=LOGGER,
+            on_state_change=self._on_event_connection_state_change,
+        )
         res = await _event_session.connect()
-        if isinstance(res, dict) and not res.get("Success", True):
+        if (
+            isinstance(res, dict)
+            and res.get("Success", False)
+            and getattr(_event_session, "is_connected", True)
+        ):
+            self._on_event_connection_state_change(True)
+            LOGGER.debug(
+                "%s Event session ready, command sessions can now start.",
+                self.log_id,
+            )
+        elif isinstance(res, dict) and not res.get("Success", True):
             if res.get("Message") in ("password_error", "password_required", "negotiation_refused", "connection_refused"):
                 LOGGER.error(
                     "%s Event session authentication or connection refused (%s). Terminating event listener to prevent gateway lockout.",
                     self.log_id,
                     res.get("Message"),
                 )
-                self.is_connected = False
+                self._on_event_connection_state_change(False)
                 return
-        self.is_connected = True
+        else:
+            LOGGER.warning(
+                "%s Initial event session was not established; reconnecting "
+                "without allowing command sessions to start.",
+                self.log_id,
+            )
 
         # Active Discovery (WHO=1 general status request *#1*0## is invalid in OpenWebNet and omitted)
         await self.send_status_request(OWNCommand.parse("*#2*0##")) # Automation / Covers
@@ -439,7 +474,7 @@ class MyHOMEGatewayHandler:
                 )
 
         await _event_session.close()
-        self.is_connected = False
+        self._on_event_connection_state_change(False)
 
         LOGGER.debug("%s Destroying listening worker.", self.log_id)
 
@@ -448,6 +483,43 @@ class MyHOMEGatewayHandler:
 
         LOGGER.debug(
             "%s Creating sending worker %s",
+            self.log_id,
+            worker_id,
+        )
+
+        LOGGER.debug(
+            "%s Worker %s waiting for event session to be ready...",
+            self.log_id,
+            worker_id,
+        )
+        while not self._terminate_sender:
+            ready_waiter = asyncio.create_task(self._event_session_ready.wait())
+            stop_waiter = asyncio.create_task(self._sender_stop.wait())
+            done, pending = await asyncio.wait(
+                {ready_waiter, stop_waiter},
+                return_when=asyncio.FIRST_COMPLETED,
+                timeout=EVENT_READY_TIMEOUT,
+            )
+            for waiter in pending:
+                waiter.cancel()
+            if pending:
+                await asyncio.gather(*pending, return_exceptions=True)
+
+            if not done:
+                LOGGER.warning(
+                    "%s Worker %s: event session was not ready after %ss; "
+                    "continuing to wait without consuming queued commands.",
+                    self.log_id,
+                    worker_id,
+                    EVENT_READY_TIMEOUT,
+                )
+                continue
+            if stop_waiter in done or self._terminate_sender:
+                return
+            break
+
+        LOGGER.debug(
+            "%s Worker %s: event session is ready, proceeding with command session.",
             self.log_id,
             worker_id,
         )
@@ -508,6 +580,8 @@ class MyHOMEGatewayHandler:
         LOGGER.info("%s Closing event listener", self.log_id)
         self._terminate_sender = True
         self._terminate_listener = True
+        self._event_session_ready.clear()
+        self._sender_stop.set()
 
         # Unblock any sending workers waiting on send_buffer
         for _ in range(max(1, len(self.sending_workers))):

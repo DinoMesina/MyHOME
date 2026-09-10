@@ -488,6 +488,7 @@ class MyHOMELight(MyHOMEEntity, LightEntity):
                 self.handle_event,
             )
         )
+        await self.async_update()
 
     async def async_update(self):
         """Update the entity.
