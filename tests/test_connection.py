@@ -1038,3 +1038,42 @@ class TestOWNEventAndCommandSessionRemainingCoverage:
             assert res == {"Success": False, "Message": "auth_failed"}
             assert False in state_changes
 
+    @pytest.mark.asyncio
+    async def test_command_session_idle_timeout_reconnection(self, command_session):
+        """Verify command session reconnects fresh when idle exceeds IDLE_TIMEOUT."""
+        command_session._stream_writer = MagicMock()
+        command_session._stream_writer.drain = AsyncMock()
+        command_session._stream_reader = AsyncMock()
+        command_session._stream_reader.readuntil.return_value = b"*#*1##"
+
+        # Simulate connection was used 100 seconds ago (well past 15s IDLE_TIMEOUT)
+        loop = asyncio.get_running_loop()
+        command_session._last_activity = loop.time() - 100.0
+
+        async def fake_connect():
+            command_session._stream_writer = MagicMock()
+            command_session._stream_writer.drain = AsyncMock()
+            command_session._stream_reader = AsyncMock()
+            command_session._stream_reader.readuntil.return_value = b"*#*1##"
+            return {"Success": True}
+
+        with patch.object(command_session, "connect", side_effect=fake_connect) as mock_connect:
+            res = await command_session.send("*2*1*14##")
+            assert res is True
+            mock_connect.assert_called_once()
+            assert command_session._last_activity is not None
+            assert loop.time() - command_session._last_activity < 1.0
+
+
+    @pytest.mark.asyncio
+    async def test_command_session_connect_and_close_activity_lifecycle(self, command_session):
+        """Verify connect sets _last_activity and close resets it to None."""
+        with patch.object(OWNSession, "connect", new_callable=AsyncMock) as mock_super_connect:
+            mock_super_connect.return_value = {"Success": True}
+            await command_session.connect()
+            assert command_session._last_activity is not None
+
+        await command_session.close()
+        assert command_session._last_activity is None
+
+

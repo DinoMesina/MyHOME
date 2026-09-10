@@ -82,6 +82,7 @@ from .button import (
 
 
 EVENT_READY_TIMEOUT = 120
+COMMAND_SESSION_IDLE_TIMEOUT = 15.0
 
 
 class MyHOMEGatewayHandler:
@@ -492,20 +493,11 @@ class MyHOMEGatewayHandler:
             self.log_id,
             worker_id,
         )
-        while not self._terminate_sender:
-            ready_waiter = asyncio.create_task(self._event_session_ready.wait())
-            stop_waiter = asyncio.create_task(self._sender_stop.wait())
-            done, pending = await asyncio.wait(
-                {ready_waiter, stop_waiter},
-                return_when=asyncio.FIRST_COMPLETED,
-                timeout=EVENT_READY_TIMEOUT,
-            )
-            for waiter in pending:
-                waiter.cancel()
-            if pending:
-                await asyncio.gather(*pending, return_exceptions=True)
-
-            if not done:
+        while not self._terminate_sender and not self._event_session_ready.is_set():
+            try:
+                async with asyncio.timeout(EVENT_READY_TIMEOUT):
+                    await self._event_session_ready.wait()
+            except TimeoutError:
                 LOGGER.warning(
                     "%s Worker %s: event session was not ready after %ss; "
                     "continuing to wait without consuming queued commands.",
@@ -513,10 +505,9 @@ class MyHOMEGatewayHandler:
                     worker_id,
                     EVENT_READY_TIMEOUT,
                 )
-                continue
-            if stop_waiter in done or self._terminate_sender:
-                return
-            break
+
+        if self._terminate_sender:
+            return
 
         LOGGER.debug(
             "%s Worker %s: event session is ready, proceeding with command session.",
@@ -537,10 +528,25 @@ class MyHOMEGatewayHandler:
                 return
 
         while not self._terminate_sender:
-            task = await self.send_buffer.get()
-            if task is None or self._terminate_sender:
+            try:
+                task = await asyncio.wait_for(
+                    self.send_buffer.get(),
+                    timeout=COMMAND_SESSION_IDLE_TIMEOUT,
+                )
+            except TimeoutError:
+                if _command_session and _command_session.is_connected:
+                    LOGGER.debug(
+                        "%s Command session idle for %ss; closing socket to release gateway resource.",
+                        self.log_id,
+                        COMMAND_SESSION_IDLE_TIMEOUT,
+                    )
+                    await _command_session.close()
+                continue
+
+            if task is None:
                 self.send_buffer.task_done()
                 break
+
 
             LOGGER.debug(
                 "%s Message `%s` was successfully unqueued by worker %s.",
@@ -580,8 +586,9 @@ class MyHOMEGatewayHandler:
         LOGGER.info("%s Closing event listener", self.log_id)
         self._terminate_sender = True
         self._terminate_listener = True
-        self._event_session_ready.clear()
+        self._event_session_ready.set()
         self._sender_stop.set()
+
 
         # Unblock any sending workers waiting on send_buffer
         for _ in range(max(1, len(self.sending_workers))):

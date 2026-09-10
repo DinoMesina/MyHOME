@@ -827,9 +827,20 @@ class OWNEventSession(OWNSession):
 
 class OWNCommandSession(OWNSession):
     RESPONSE_TIMEOUT = 30.0
+    IDLE_TIMEOUT = 15.0
 
     def __init__(self, gateway: OWNGateway = None, logger: logging.Logger = None):
         super().__init__(gateway=gateway, connection_type="command", logger=logger)
+        self._last_activity: Optional[float] = None
+
+    async def connect(self):
+        res = await super().connect()
+        if res and res.get("Success", False):
+            try:
+                self._last_activity = asyncio.get_running_loop().time()
+            except RuntimeError:
+                self._last_activity = None
+        return res
 
     @classmethod
     async def send_to_gateway(cls, message: str, gateway: OWNGateway):
@@ -862,6 +873,7 @@ class OWNCommandSession(OWNSession):
 
     async def close(self) -> None:
         """Discard a command stream so unread replies cannot reach another request."""
+        self._last_activity = None
         try:
             await super().close()
         finally:
@@ -904,7 +916,23 @@ class OWNCommandSession(OWNSession):
         try:
             async with asyncio.timeout(self.RESPONSE_TIMEOUT):
                 for attempt in range(2):
-                    if self._stream_writer is None or self._stream_reader is None:
+                    loop = asyncio.get_running_loop()
+                    is_idle_stale = (
+                        self._last_activity is not None
+                        and (loop.time() - self._last_activity > self.IDLE_TIMEOUT)
+                    )
+                    if (
+                        self._stream_writer is None
+                        or self._stream_reader is None
+                        or is_idle_stale
+                    ):
+                        if is_idle_stale:
+                            self._logger.debug(
+                                "%s Command session idle for >%ss; reconnecting fresh.",
+                                self._gateway.log_id,
+                                self.IDLE_TIMEOUT,
+                            )
+                        await self.close()
                         result = await self.connect()
                         if not result or not result.get("Success", False):
                             await self.close()
@@ -932,6 +960,7 @@ class OWNCommandSession(OWNSession):
                         return None
 
                     if accepted:
+                        self._last_activity = loop.time()
                         self._logger.debug(
                             "%s Message %s acknowledged with %s response(s).",
                             self._gateway.log_id, message, len(collected),

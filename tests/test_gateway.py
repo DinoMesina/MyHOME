@@ -794,4 +794,29 @@ def test_event_connection_state_controls_command_readiness(gateway_handler):
     assert gateway_handler._event_session_ready.is_set() is False
 
 
+async def test_sending_loop_idle_timeout_closes_session(gateway_handler, monkeypatch):
+    """Verify idle timeout in sending_loop closes command session to free gateway sockets."""
+    import custom_components.myhome.gateway as gw_module
+    monkeypatch.setattr(gw_module, "COMMAND_SESSION_IDLE_TIMEOUT", 0.01)
+
+    with patch("custom_components.myhome.gateway.OWNCommandSession") as mock_cmd_class:
+        mock_cmd_session = MagicMock()
+        mock_cmd_session.connect = AsyncMock(return_value={"Success": True})
+        mock_cmd_session.close = AsyncMock()
+        mock_cmd_session.is_connected = True
+        mock_cmd_class.return_value = mock_cmd_session
+
+        gateway_handler._event_session_ready.set()
+        worker = asyncio.create_task(gateway_handler.sending_loop(0))
+
+        # Allow idle timeout to trigger
+        await asyncio.sleep(0.05)
+        mock_cmd_session.close.assert_called()
+
+        # Stop worker
+        await gateway_handler.send_buffer.put(None)
+        await asyncio.wait_for(worker, timeout=1)
+
+
+
 
