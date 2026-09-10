@@ -64,27 +64,32 @@ We now maintain a comprehensive, community-curated **[GitHub Wiki](https://githu
 | Gateway Model | Protocol Support | Max Command Workers | Inter-Frame Delay | UPnP Discovery | Notes |
 |---|---|---|---|---|---|
 | **F454** | OpenWebNet / HMAC | 4 workers | 20 ms | ✅ Port 49153 | Full high-speed multi-session support |
-| **F455** | OpenWebNet / HMAC | 4 workers | 20 ms | ✅ Port 49153 | Dual-bus capable |
+| **F455** | OpenWebNet / HMAC | 4 workers | 20 ms | ✅ Port 49153 | Dual-bus capable gateway |
+| **F461** | OpenWebNet / HMAC | 4 workers | 20 ms | ✅ Port 49153 | Compact DIN Ethernet Web Server |
 | **MH202** | OpenWebNet / HMAC | 3 workers | 30 ms | ✅ Port 49153 | Modern scenario programmer gateway |
+| **MH201** | OpenWebNet | 2 workers | 60 ms | ✅ Port 49153 | Second-generation scenario programmer |
 | **MyHomeServer1** | OpenWebNet / HMAC | 4 workers | 20 ms | ✅ SSDP | Cloud/local hybrid gateway |
 | **MH200N** | OpenWebNet | 2 workers | 80 ms | ❌ Manual | Second-generation scenario programmer |
 | **MH200** *(Legacy)* | OpenWebNet | 1 worker | 150 ms | ❌ Manual | Strict single-session pacing; watchdog hardened |
 | **AM4890** | OpenWebNet | 2 workers | 100 ms | ❌ Manual | Compact residential gateway |
+| **F452 / F453AV** | OpenWebNet | 2 workers | 50 ms | ✅ Port 49153 | Audio/video & web server gateway |
+| **HL4684** | OpenWebNet | 2 workers | 80 ms | ✅ SSDP | 10" Touch screen display IP gateway |
 | **Legrand 3578** | OpenWebNet (Serial) | 2 workers | 50 ms | ❌ Manual (Serial) | USB / Serial gateway & OpenZigBee interface |
 
-### Supported Entity Domains
+### Supported Entity Domains & Automations
 
 | Domain | WHO | Capabilities |
 |---|---|---|
-| **`light`** | WHO=1 | On/Off, Dimmers with brightness control & transitions |
+| **`light`** | WHO=1 | On/Off, Dimmers with brightness control & transitions (stepped & native) |
 | **`switch`** | WHO=1 | Relays, auxiliary switches, socket actuators |
-| **`cover`** | WHO=2 | Motorized shutters, blinds, roll-ups with state tracking |
-| **`climate`** | WHO=4 | Heating, cooling, 4-pipe systems, thermostats, setpoints |
-| **`alarm_control_panel`** | WHO=5 | Central units (3485/3486), partitions, arm away/home, disarm, trigger |
-| **`binary_sensor`**| WHO=25 | Magnetic contacts, door/window sensors, PIR motion |
-| **`sensor`** | WHO=18 | Power meters, energy counters, voltage, pulse monitors |
-| **`button`** | WHO=1 / 25 | Scenario buttons, lock/unlock triggers, bus ping |
-| **`media_player`** | WHO=16 | F441/F441M audio zones, source tracking, volume, mute |
+| **`cover`** | WHO=2 | Motorized shutters, blinds, roll-ups with state tracking & virtual travel-time positioning |
+| **`climate`** | WHO=4 | Heating, cooling, 4-pipe systems, thermostats, setpoints, fancoil 3-speed modes, offset tracking |
+| **`alarm_control_panel`** | WHO=5 | Central units (3485/3486), partitions, arm away/home, disarm, panic trigger, zone 0 sync |
+| **`binary_sensor`**| WHO=1 / 9 / 25 | Magnetic contacts, door/window sensors, PIR motion, AUX channels (1–9) |
+| **`sensor`** | WHO=1 / 4 / 18 | Power meters, energy counters, temperature probes (3475), illuminance / lux sensors |
+| **`button`** | WHO=13 / 14 | Hardware actuator lock/unlock for lights & shutters (WHO=14), gateway time sync ping (WHO=13) |
+| **`media_player`** | WHO=16 | F441/F441M audio zones, source tracking, volume normalization, software mute, streaming proxy |
+| **`device_trigger`** *(Automations)* | WHO=15 / 25 | Stateless CEN & CEN+ scenario pushbuttons with 8 trigger types (short/long press, release, rotary dials) |
 
 ---
 
@@ -196,10 +201,75 @@ If you ever need to revert to the legacy codebase (`0.9.4`):
 
 ### Options Flow (Fine-Tuning)
 
-Go to **Settings → Devices & Services → MyHOME → Configure** to customize:
-- **Scan Interval**: Frequency of background state sync sweeps.
-- **Command Queue Delay**: Override inter-frame delay if your gateway experiences packet loss.
-- **Audio Decoders Pool**: Map network media players to physical matrix source inputs (see below).
+Go to **Settings → Devices & Services → MyHOME → Configure** to fine-tune your installation:
+- **Gateway Address & Password**: Update the gateway IP address or OpenWebNet password without recreating the integration.
+- **Command Worker Count**: Adjust concurrent command sessions (1 to 10 workers, default 1).
+- **Generate Bus Events (`myhome_message_event`)**: Enable firing raw OpenWebNet messages directly to the Home Assistant event bus for custom monitoring and blueprint automations.
+- **Light Transition Mode**: Select how brightness transitions are handled:
+  - `software_stepped` *(Default & Recommended)*: Smooth 0.3s stepped fades interpolated in software, compatible with all MyHOME dimmers.
+  - `native`: Passes through the OpenWebNet hardware speed parameter directly (for supported hardware dimmers).
+- **Audio Decoders Pool**: Map network media players (Music Assistant, Spotify Connect, WiiM, Squeezelite) to physical matrix inputs 1–4 with per-source analog pre-gain offsets (0–50%).
+
+---
+
+### 📄 YAML Configuration & Zero-Friction Migration (`myhome.yaml`)
+
+While the integration features **Dynamic Bus Auto-Discovery** that discovers devices automatically from bus events, existing configurations from older versions are 100% supported:
+
+1. **Automatic Search Order**: The integration automatically locates your configuration file in:
+   1. `/config/myhome.yaml` *(Standard HA config directory)*
+   2. `/config/myhome/myhome.yaml`
+   3. Custom component directory fallback
+2. **Single & Multi-Gateway Syntax**:
+   - Single gateway installations do not require a root MAC header; platforms are mapped automatically to your gateway.
+   - Multi-gateway installations group platforms under their respective MAC addresses (`00:03:50:xx:xx:xx`).
+
+```yaml
+f454:
+  mac: '00:03:50:xx:xx:xx'
+  light:
+    living_light:
+      where: '11'
+      name: Living Room Light
+      dimmable: True
+  cover:
+    kitchen_shutter:
+      where: '21'
+      name: Kitchen Shutter
+      travel_time: 22
+  alarm_control_panel:
+    central_alarm:
+      where: '0'
+      name: Central Alarm
+```
+
+---
+
+### ⚡ Custom Services
+
+The integration registers three specialized services under the `myhome` domain:
+
+| Service | Fields | Description |
+|---|---|---|
+| **`myhome.send_message`** | `gateway` *(optional)*<br>`message` *(required)* | Send an arbitrary, validated OpenWebNet frame (e.g. `*1*0*0##`) directly to the SCS bus. Useful for scripts, custom diagnostic probes, and testing. |
+| **`myhome.sync_time`** | `gateway` *(optional)* | Synchronizes the gateway's internal real-time clock with Home Assistant's local time using standard OpenWebNet date/time frames (WHO=13). |
+| **`myhome.start_sending_instant_power`** | `entity_id` *(required)*<br>`duration` *(required)* | Requests high-frequency instant active power telemetry (W) from energy management counters (WHO=18) for `duration` seconds. |
+
+---
+
+### 🔔 Event Bus Automation Triggers
+
+The integration fires native events to the Home Assistant event bus for automation triggers:
+
+* **`myhome_cen_event` & `myhome_cenplus_event`**: Pushbutton events from physical CEN (`WHO=15`) and CEN+ (`WHO=25`) scenario controllers. Event payload includes:
+  - `object`: Scenario button unit number
+  - `pushbutton`: Pushbutton index (0–31)
+  - `event`: Trigger action (`pushbutton_short_press`, `pushbutton_short_release`, `pushbutton_long_press`, `pushbutton_long_release`, or rotary dial `rotary_cw_slow`, `rotary_cw_fast`, `rotary_ccw_slow`, `rotary_ccw_fast`)
+* **`myhome_alarm_event`**: State transitions emitted by burglar alarm systems (WHO=5), including partition `where`, `state`, `state_code`, and `is_alarm` flag.
+* **Broadcast Subsystem Events**: Global and area broadcast commands are mirrored as:
+  - `myhome_general_light_event`, `myhome_area_light_event`, `myhome_group_light_event`
+  - `myhome_general_automation_event`, `myhome_area_automation_event`, `myhome_group_automation_event`
+* **`myhome_message_event`**: When `Generate Bus Events` is enabled in Options Flow, every valid OpenWebNet message received from the gateway is broadcast to the event bus with `gateway` and raw frame `message`.
 
 ---
 
@@ -279,6 +349,14 @@ A modern custom Lovelace element is automatically registered with zero configura
 When reporting issues or requesting new device support on GitHub, interactive forms ensure complete diagnostics:
 - **Bug Report**: Gateway profile dropdown, connection type, HA version, diagnostics JSON attachment, and pre-formatted bus trace.
 - **Device Support Request**: Structured form for adding new BTicino/Legrand modular components with WHO codes and frame samples.
+
+### 🔍 Native Home Assistant Diagnostics
+
+In addition to the real-time bus monitor card, the integration implements Home Assistant's native diagnostic provider (`diagnostics.py`).
+To download a sanitized diagnostic bundle:
+1. Navigate to **Settings → Devices & Services → MyHOME**.
+2. Click the **three dots (`⋮`)** next to your gateway and select **Download diagnostics**.
+3. All sensitive credentials, IP addresses, and tokens are automatically redacted via `CONF_PASSWORD` and `CONF_HOST` anonymizers before being saved to JSON.
 
 ---
 
