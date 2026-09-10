@@ -1137,6 +1137,32 @@ async def test_async_ensure_ownd_engine_install_failed(hass: HomeAssistant):
         assert result is False
         mock_notify.assert_called_once()
 
+    # And when notification creation itself raises
+    with patch("homeassistant.util.package.is_installed", return_value=False), \
+         patch("homeassistant.requirements.async_process_requirements", side_effect=RuntimeError("Pip network timeout")), \
+         patch("custom_components.myhome.get_ownd_version", return_value="2.0.0b2"), \
+         patch("homeassistant.components.persistent_notification.async_create", side_effect=RuntimeError("Notification error")):
+        result = await async_ensure_ownd_engine(hass)
+        assert result is False
+
+
+async def test_async_ensure_ownd_engine_reload_error(hass: HomeAssistant):
+    """Test async_ensure_ownd_engine logs and survives reload failures."""
+    from custom_components.myhome import async_ensure_ownd_engine
+    from custom_components.myhome.const import INTEGRATION_VERSION
+
+    installed_status = [False, True]
+    def mock_is_installed(req):
+        return installed_status.pop(0) if installed_status else True
+
+    with patch("homeassistant.util.package.is_installed", side_effect=mock_is_installed), \
+         patch("homeassistant.requirements.async_process_requirements", new_callable=AsyncMock), \
+         patch("importlib.reload", side_effect=RuntimeError("Module reload failure")), \
+         patch("importlib.invalidate_caches"), \
+         patch("custom_components.myhome.get_ownd_version", side_effect=["2.0.0b2", INTEGRATION_VERSION]):
+        result = await async_ensure_ownd_engine(hass)
+        assert result is True
+
 
 async def test_async_setup_entry_engine_mismatch_raises_not_ready(hass: HomeAssistant):
     """Test async_setup_entry raises ConfigEntryNotReady when engine cannot be synchronized."""

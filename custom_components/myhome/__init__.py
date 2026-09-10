@@ -193,7 +193,7 @@ async def async_ensure_ownd_engine(hass: HomeAssistant) -> bool:
                     ),
                     notification_id="myhome_ownd_version_mismatch",
                 )
-            except Exception:
+            except Exception:  # pragma: no cover
                 pass
             return False
 
@@ -206,7 +206,7 @@ async def async_ensure_ownd_engine(hass: HomeAssistant) -> bool:
         if mod_name == "OWNd" or mod_name.startswith("OWNd."):
             try:
                 importlib.reload(sys.modules[mod_name])
-            except Exception as reload_err:
+            except Exception as reload_err:  # pragma: no cover
                 LOGGER.debug("Could not reload module %s: %s", mod_name, reload_err)
 
     new_ver = get_ownd_version()
