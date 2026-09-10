@@ -635,7 +635,7 @@ class MyHomeBusCard extends HTMLElement {
       (this.hass && this.hass.config && this.hass.config.version) ||
       "Unknown";
     const gw = this._gatewayInfo || {};
-    const integrationVersion = gw.integration_version || "1.0.0-beta";
+    const integrationVersion = gw.integration_version || "2.0.0b1";
     const userAgent = (typeof navigator !== "undefined" && navigator.userAgent) ? navigator.userAgent : "Unknown";
     const timestamp = new Date().toISOString();
 
@@ -750,7 +750,7 @@ ${framesText}
       (this._hass && this._hass.config && this._hass.config.version) ||
       (this.hass && this.hass.config && this.hass.config.version) ||
       "";
-    const integrationVersion = (this._gatewayInfo && this._gatewayInfo.integration_version) || "1.0.0-beta";
+    const integrationVersion = (this._gatewayInfo && this._gatewayInfo.integration_version) || "2.0.0b1";
 
     const issueUrl = `https://github.com/OpenWebNet-HA/MyHOME/issues/new?template=bug_report.yml&ha_version=${encodeURIComponent(haVersion)}&integration_version=${encodeURIComponent(integrationVersion)}`;
 
