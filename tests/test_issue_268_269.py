@@ -691,3 +691,198 @@ async def test_issue_268_climate_yaml_indexing_in_init(hass: HomeAssistant):
         assert climate_data["1"]["name"] == "Soggiorno"
         assert climate_data["4-1"]["name"] == "Soggiorno"
         assert climate_data["zone_1"]["name"] == "Soggiorno"
+
+
+@pytest.mark.asyncio
+async def test_issue_269_migration_button_who_fallback_platforms(hass: HomeAssistant):
+    """Verify that when button device has no who, migration falls back to cover or light platforms."""
+    entity_reg = er.async_get(hass)
+    mac = "00:03:50:81:17:80"
+
+    config_entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            "host": "192.168.1.59",
+            "port": 20000,
+            "password": "pass",
+            "mac": mac,
+        },
+        unique_id=mac,
+    )
+    config_entry.add_to_hass(hass)
+
+    # Pre-seed gateway platform data with cover 22
+    hass.data.setdefault(DOMAIN, {})[mac] = {
+        CONF_PLATFORMS: {
+            "cover": {"22": {"where": "22"}}
+        }
+    }
+
+    # Case A: where=22 matches cover in gw_platforms -> resolves who="2"
+    btn_cover = entity_reg.async_get_or_create(
+        domain="button",
+        platform=DOMAIN,
+        unique_id=f"{mac}-22-disable",
+        suggested_object_id="cover_btn",
+        config_entry=config_entry,
+    )
+    # Case B: where=23 does not match cover -> falls back to who="1"
+    btn_light = entity_reg.async_get_or_create(
+        domain="button",
+        platform=DOMAIN,
+        unique_id=f"{mac}-23-disable",
+        suggested_object_id="light_btn",
+        config_entry=config_entry,
+    )
+
+    with patch(
+        "custom_components.myhome.gateway.OWNSession.test_connection",
+        return_value={"Success": True, "Message": None},
+    ), patch(
+        "custom_components.myhome.gateway.MyHOMEGatewayHandler.listening_loop"
+    ), patch(
+        "custom_components.myhome.gateway.MyHOMEGatewayHandler.sending_loop"
+    ):
+        await hass.config_entries.async_setup(config_entry.entry_id)
+        await hass.async_block_till_done()
+
+    cover_migrated = entity_reg.async_get(btn_cover.entity_id)
+    assert cover_migrated.unique_id == f"{mac}-2-22-disable"
+
+    light_migrated = entity_reg.async_get(btn_light.entity_id)
+    assert light_migrated.unique_id == f"{mac}-1-23-disable"
+
+
+@pytest.mark.asyncio
+async def test_issue_269_migration_unformatted_mac_non_button(hass: HomeAssistant):
+    """Verify migration normalizes unformatted MAC for non-button entities (light/cover)."""
+    entity_reg = er.async_get(hass)
+    raw_mac = "000350811781"
+    formatted_mac = "00:03:50:81:17:81"
+
+    config_entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            "host": "192.168.1.60",
+            "port": 20000,
+            "password": "pass",
+            "mac": formatted_mac,
+        },
+        unique_id=formatted_mac,
+    )
+    config_entry.add_to_hass(hass)
+
+    # Light with unformatted MAC and already containing who (e.g. 000350811781-1-21)
+    light_entry = entity_reg.async_get_or_create(
+        domain="light",
+        platform=DOMAIN,
+        unique_id=f"{raw_mac}-1-21",
+        suggested_object_id="office_light_raw_mac",
+        config_entry=config_entry,
+    )
+
+    with patch(
+        "custom_components.myhome.gateway.OWNSession.test_connection",
+        return_value={"Success": True, "Message": None},
+    ), patch(
+        "custom_components.myhome.gateway.MyHOMEGatewayHandler.listening_loop"
+    ), patch(
+        "custom_components.myhome.gateway.MyHOMEGatewayHandler.sending_loop"
+    ):
+        await hass.config_entries.async_setup(config_entry.entry_id)
+        await hass.async_block_till_done()
+
+    migrated = entity_reg.async_get(light_entry.entity_id)
+    assert migrated.unique_id == f"{formatted_mac}-1-21"
+
+
+@pytest.mark.asyncio
+async def test_issue_269_migration_error_handling(hass: HomeAssistant):
+    """Verify error handling during button pruning and entity unique_id updates."""
+    entity_reg = er.async_get(hass)
+    mac = "00:03:50:81:17:82"
+    raw_mac = "000350811782"
+
+    config_entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            "host": "192.168.1.61",
+            "port": 20000,
+            "password": "pass",
+            "mac": mac,
+        },
+        unique_id=mac,
+    )
+    config_entry.add_to_hass(hass)
+
+    # 1. Duplicate button where prune fails (exception in async_remove)
+    entity_reg.async_get_or_create(
+        domain="button",
+        platform=DOMAIN,
+        unique_id=f"{mac}-1-10-disable",
+        suggested_object_id="canonical_btn",
+        config_entry=config_entry,
+    )
+    entity_reg.async_get_or_create(
+        domain="button",
+        platform=DOMAIN,
+        unique_id=f"{mac}-10-disable",
+        suggested_object_id="dup_btn",
+        config_entry=config_entry,
+    )
+
+    # 2. Standalone button where async_update_entity raises ValueError
+    entity_reg.async_get_or_create(
+        domain="button",
+        platform=DOMAIN,
+        unique_id=f"{mac}-11-disable",
+        suggested_object_id="fail_update_btn",
+        config_entry=config_entry,
+    )
+
+    # 3. Button with raw MAC where async_update_entity raises ValueError
+    entity_reg.async_get_or_create(
+        domain="button",
+        platform=DOMAIN,
+        unique_id=f"{raw_mac}-1-12-disable",
+        suggested_object_id="fail_raw_btn",
+        config_entry=config_entry,
+    )
+
+    # 4. Light with raw MAC where async_update_entity raises ValueError
+    entity_reg.async_get_or_create(
+        domain="light",
+        platform=DOMAIN,
+        unique_id=f"{raw_mac}-1-13",
+        suggested_object_id="fail_raw_light",
+        config_entry=config_entry,
+    )
+
+    orig_remove = entity_reg.async_remove
+    orig_update = entity_reg.async_update_entity
+
+    def mock_remove(entity_id):
+        if "dup_btn" in entity_id:
+            raise RuntimeError("prune failure")
+        return orig_remove(entity_id)
+
+    def mock_update(entity_id, **kwargs):
+        if any(tag in entity_id for tag in ("fail_update_btn", "fail_raw_btn", "fail_raw_light")):
+            raise ValueError("update error")
+        return orig_update(entity_id, **kwargs)
+
+    with patch(
+        "custom_components.myhome.gateway.OWNSession.test_connection",
+        return_value={"Success": True, "Message": None},
+    ), patch(
+        "custom_components.myhome.gateway.MyHOMEGatewayHandler.listening_loop"
+    ), patch(
+        "custom_components.myhome.gateway.MyHOMEGatewayHandler.sending_loop"
+    ), patch.object(
+        entity_reg, "async_remove", side_effect=mock_remove
+    ), patch.object(
+        entity_reg, "async_update_entity", side_effect=mock_update
+    ):
+        await hass.config_entries.async_setup(config_entry.entry_id)
+        await hass.async_block_till_done()
+
