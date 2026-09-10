@@ -850,6 +850,7 @@ async def test_binary_sensor_duplicate_exceptions_and_padded_where(hass):
     entry_motion3 = MagicMock(domain="binary_sensor", entity_id="binary_sensor.motion3", unique_id=f"{mac}-1-021-motion", original_device_class=BinarySensorDeviceClass.MOTION)
     entry_dry1 = MagicMock(domain="binary_sensor", entity_id="binary_sensor.dry1", unique_id=f"{mac}-25-021-opening", original_device_class=BinarySensorDeviceClass.OPENING)
     entry_dry2 = MagicMock(domain="binary_sensor", entity_id="binary_sensor.dry2", unique_id=f"{mac}-25-021-opening", original_device_class=BinarySensorDeviceClass.OPENING)
+    entry_dry3 = MagicMock(domain="binary_sensor", entity_id="binary_sensor.dry3", unique_id=f"{mac}-25-021-opening", original_device_class=BinarySensorDeviceClass.OPENING)
     entry_dup_aux1 = MagicMock(domain="binary_sensor", entity_id="binary_sensor.dup_aux1", unique_id=f"{mac}-9-1", original_device_class=None)
     entry_dup_aux2 = MagicMock(domain="binary_sensor", entity_id="binary_sensor.dup_aux2", unique_id=f"{mac}-9-1", original_device_class=None)
     entry_dup_aux3 = MagicMock(domain="binary_sensor", entity_id="binary_sensor.dup_aux3", unique_id=f"{mac}-9-1", original_device_class=None)
@@ -857,12 +858,12 @@ async def test_binary_sensor_duplicate_exceptions_and_padded_where(hass):
     def mock_remove(eid):
         if eid in ("binary_sensor.motion2", "binary_sensor.dry2", "binary_sensor.dup_aux3"):
             raise RuntimeError("Failed to remove")
-        return  # Succeeds for motion3 and aux2
+        return  # Succeeds for motion3, dry3, and aux2
 
     mock_er = MagicMock()
     mock_er.async_remove.side_effect = mock_remove
 
-    with patch("custom_components.myhome.binary_sensor.er.async_entries_for_config_entry", return_value=[entry_other_domain, entry_motion1, entry_motion2, entry_motion3, entry_dry1, entry_dry2, entry_dup_aux1, entry_dup_aux2, entry_dup_aux3]), \
+    with patch("custom_components.myhome.binary_sensor.er.async_entries_for_config_entry", return_value=[entry_other_domain, entry_motion1, entry_motion2, entry_motion3, entry_dry1, entry_dry2, entry_dry3, entry_dup_aux1, entry_dup_aux2, entry_dup_aux3]), \
          patch("custom_components.myhome.binary_sensor.er.async_get", return_value=mock_er):
         added = []
         assert await async_setup_entry(hass, config_entry, lambda e: added.extend(e)) is True
@@ -892,8 +893,18 @@ async def test_binary_sensor_duplicate_exceptions_and_padded_where(hass):
         motion_padded.hass = hass
         motion_padded.async_write_ha_state = MagicMock()
         motion_padded.async_on_remove = MagicMock()
-        motion_padded.async_get_last_state = AsyncMock(return_value=None)
+        # Exercise async_get_last_state exception handler (lines 667-668)
+        motion_padded.async_get_last_state = AsyncMock(side_effect=RuntimeError("Storage failure"))
         await motion_padded.async_added_to_hass()
+
+        # Exercise motion handle_event async_write_ha_state fallback to schedule_update and its exception
+        motion_padded.async_write_ha_state = MagicMock(side_effect=RuntimeError("Write error"))
+        motion_padded.async_schedule_update_ha_state = MagicMock(side_effect=RuntimeError("Schedule error"))
+        motion_event = MagicMock()
+        motion_event.message_type = MESSAGE_TYPE_MOTION
+        motion_event.motion = True
+        motion_padded.handle_event(motion_event)
+        assert motion_padded.is_on is True
 
         dry_padded = MyHOMEDryContact(
             hass=hass,
