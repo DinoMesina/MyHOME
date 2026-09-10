@@ -115,8 +115,8 @@ cd /config/custom_components
 wget https://github.com/OpenWebNet-HA/MyHOME/archive/refs/heads/v2-phase1-architecture.zip -O temp_myhome.zip
 unzip -q temp_myhome.zip
 rm -rf myhome
-mv MyHOME-v2-phase1-architecture/custom_components/myhome ./
-rm -rf MyHOME-v2-phase1-architecture temp_myhome.zip
+mv MyHOME-2-phase1-architecture/custom_components/myhome ./
+rm -rf MyHOME-2-phase1-architecture temp_myhome.zip
 ```
 Then restart Home Assistant (**Developer Tools → YAML → Restart**).
 
