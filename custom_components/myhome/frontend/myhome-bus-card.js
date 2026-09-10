@@ -1017,20 +1017,12 @@ console.info(
   "background:#263238;color:#fff;padding:2px 4px;border-radius:0 3px 3px 0;"
 );
 
-window.customCards = window.customCards || [];
+window.customCards = (window.customCards || []).filter((c) => c.type !== "myhome-bus-card");
 if (!window.customCards.some((c) => c.type === "myhome-openwebnet-bus-monitor")) {
   window.customCards.push({
     type: "myhome-openwebnet-bus-monitor",
     name: "MyHOME OpenWebNet Bus Monitor",
     description: "Real-time BTicino / Legrand SCS OpenWebNet bus traffic stream, packet inspector, and diagnostic frame sender.",
-    preview: false,
-  });
-}
-if (!window.customCards.some((c) => c.type === "myhome-bus-card")) {
-  window.customCards.push({
-    type: "myhome-bus-card",
-    name: "MyHOME Bus Card (Alias)",
-    description: "Real-time BTicino / Legrand SCS OpenWebNet bus monitor (alias for myhome-openwebnet-bus-monitor).",
     preview: false,
   });
 }

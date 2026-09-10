@@ -77,7 +77,7 @@ async def _async_register_lovelace_resource(hass: HomeAssistant, url_path: str) 
                     "res_type": "module",
                     "url": url_path,
                 })
-                LOGGER.debug("Auto-registered Lovelace bus monitor resource: %s", url_path)
+                LOGGER.info("Auto-registered Lovelace bus monitor resource: %s", url_path)
             elif existing_match.get("url") != url_path:
                 if hasattr(resources, "async_update_item") and "id" in existing_match:
                     await resources.async_update_item(
@@ -112,7 +112,7 @@ async def _async_register_frontend(hass: HomeAssistant) -> None:
 
     card_path = os.path.join(os.path.dirname(__file__), "frontend", "myhome-bus-card.js")
     static_url = "/myhome_static/myhome-bus-card.js"
-    versioned_url = _get_card_url(card_path, static_url)
+    versioned_url = await hass.async_add_executor_job(_get_card_url, card_path, static_url)
 
     http = getattr(hass, "http", None)
     if not domain_data.get("_frontend_registered"):
@@ -160,7 +160,7 @@ async def async_ensure_ownd_engine(hass: HomeAssistant) -> bool:
     from homeassistant.util import package as pkg_util
 
     # Fast path: requirement satisfied and currently loaded version matches
-    current_ver = get_ownd_version()
+    current_ver = await hass.async_add_executor_job(get_ownd_version)
     is_installed = pkg_util.is_installed(required_pkg)
     if is_installed and current_ver == INTEGRATION_VERSION:
         return True
@@ -177,6 +177,8 @@ async def async_ensure_ownd_engine(hass: HomeAssistant) -> bool:
         try:
             from homeassistant.requirements import async_process_requirements
             await async_process_requirements(hass, DOMAIN, [required_pkg])
+            if hasattr(get_ownd_version, "cache_clear"):
+                get_ownd_version.cache_clear()
             LOGGER.info("Successfully installed matching requirement %s", required_pkg)
         except Exception as err:
             LOGGER.error("Automatic installation of %s failed: %s", required_pkg, err)
@@ -201,6 +203,8 @@ async def async_ensure_ownd_engine(hass: HomeAssistant) -> bool:
     import importlib
     import sys
 
+    if hasattr(get_ownd_version, "cache_clear"):
+        get_ownd_version.cache_clear()
     importlib.invalidate_caches()
     for mod_name in list(sys.modules.keys()):
         if mod_name == "OWNd" or mod_name.startswith("OWNd."):
@@ -209,7 +213,7 @@ async def async_ensure_ownd_engine(hass: HomeAssistant) -> bool:
             except Exception as reload_err:  # pragma: no cover
                 LOGGER.debug("Could not reload module %s: %s", mod_name, reload_err)
 
-    new_ver = get_ownd_version()
+    new_ver = await hass.async_add_executor_job(get_ownd_version)
     LOGGER.info("Self-healing complete: OWNd engine synchronized to v%s", new_ver)
     return True
 
@@ -223,7 +227,7 @@ async def async_setup(hass, config):
     LOGGER.info(
         "Initializing MyHOME integration v%s (OWNd v%s)",
         INTEGRATION_VERSION,
-        get_ownd_version(),
+        await hass.async_add_executor_job(get_ownd_version),
     )
 
     from .websocket import async_setup_websocket_api
