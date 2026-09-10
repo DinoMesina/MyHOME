@@ -452,7 +452,17 @@ async def test_register_frontend_branches(hass: HomeAssistant):
     hass.data[DOMAIN]["_frontend_registered"] = False
     mock_http.async_register_static_paths = AsyncMock(side_effect=Exception("Async static paths failed"))
     mock_http.register_static_path.reset_mock()
-    await _async_register_frontend(hass)
+    with patch("homeassistant.components.http.StaticPathConfig", create=True):
+        await _async_register_frontend(hass)
+    assert hass.data[DOMAIN]["_frontend_registered"] is True
+    assert mock_http.register_static_path.call_count >= 1
+
+    # 5b. When static_path_cls is None, falls back to register_static_path even if async_register_static_paths exists
+    hass.data[DOMAIN]["_frontend_registered"] = False
+    mock_http.async_register_static_paths = AsyncMock()
+    mock_http.register_static_path.reset_mock()
+    with patch("homeassistant.components.http.StaticPathConfig", None, create=True):
+        await _async_register_frontend(hass)
     assert hass.data[DOMAIN]["_frontend_registered"] is True
     assert mock_http.register_static_path.call_count >= 1
 

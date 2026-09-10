@@ -130,16 +130,9 @@ async def _async_register_frontend(hass: HomeAssistant) -> None:
     if not domain_data.get("_frontend_registered"):
         if http is not None and os.path.isfile(card_path):
             frontend_dir = os.path.dirname(card_path)
-            static_path_cls = None
-            try:
-                from homeassistant.components.http import StaticPathConfig as static_path_cls
-            except ImportError:
-                try:
-                    from homeassistant.components.http.server import (
-                        StaticPathConfig as static_path_cls,
-                    )
-                except ImportError:
-                    static_path_cls = None
+            import homeassistant.components.http as ha_http
+
+            static_path_cls = getattr(ha_http, "StaticPathConfig", None)
 
             if static_path_cls is not None and hasattr(http, "async_register_static_paths"):
                 try:
