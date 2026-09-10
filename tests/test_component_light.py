@@ -943,6 +943,18 @@ async def test_light_suppresses_sensor_discovery_and_purges_registry(hass):
         await hass.async_block_till_done()
         assert len(added) == 1
 
+        # 7. Zero-padded 3-digit sensor frame (*1*34*021##) where norm_where != where
+        sens_021 = OWNEvent.parse("*1*34*021##")
+        async_dispatcher_send(hass, "myhome_message_mac_sensor", sens_021)
+        await hass.async_block_till_done()
+        assert len(added) == 1
+
+        # Subsequent light on message for 021 must be routed without creating light
+        light_on_021 = OWNEvent.parse("*1*1*021##")
+        async_dispatcher_send(hass, "myhome_message_mac_sensor", light_on_021)
+        await hass.async_block_till_done()
+        assert len(added) == 1
+
 
 @pytest.mark.asyncio
 async def test_light_async_added_to_hass_requests_initial_state(hass):

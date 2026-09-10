@@ -1,4 +1,5 @@
 """Test the MyHOME binary sensor component."""
+import pytest
 from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -803,6 +804,115 @@ async def test_motion_sensor_0015_and_switch_15_coexistence(hass):
         async_dispatcher_send(hass, f"myhome_update_{mac}_1_15", msg_switch_on)
         await hass.async_block_till_done()
         assert sw.is_on is True
+
+
+@pytest.mark.asyncio
+async def test_binary_sensor_duplicate_exceptions_and_padded_where(hass):
+    """Test duplicate registry entry removal exceptions and zero-padded WHERE listeners."""
+    mac = "00:11:22:33:44:77"
+    mock_gateway = MagicMock()
+    mock_gateway.mac = mac
+    mock_gateway.send_status_request = AsyncMock()
+
+    hass.data = {
+        DOMAIN: {
+            mac: {
+                "platforms": {
+                    "binary_sensor": {
+                        "motion_021": {
+                            "who": "1",
+                            "where": "021",
+                            "name": "Motion 021",
+                        },
+                        "dry_021": {
+                            "who": "25",
+                            "where": "021",
+                            "name": "Dry 021",
+                        },
+                        "aux_1": {
+                            "who": "9",
+                            "where": "1",
+                            "name": "Aux 1",
+                        },
+                    }
+                },
+                "entity": mock_gateway,
+            }
+        }
+    }
+    config_entry = MagicMock()
+    config_entry.data = {"mac": mac}
+    config_entry.entry_id = "test_bs_dups"
+
+    entry_other_domain = MagicMock(domain="sensor", entity_id="sensor.other", unique_id="other")
+    entry_motion1 = MagicMock(domain="binary_sensor", entity_id="binary_sensor.motion1", unique_id=f"{mac}-1-021-motion", original_device_class=BinarySensorDeviceClass.MOTION)
+    entry_motion2 = MagicMock(domain="binary_sensor", entity_id="binary_sensor.motion2", unique_id=f"{mac}-1-021-motion", original_device_class=BinarySensorDeviceClass.MOTION)
+    entry_motion3 = MagicMock(domain="binary_sensor", entity_id="binary_sensor.motion3", unique_id=f"{mac}-1-021-motion", original_device_class=BinarySensorDeviceClass.MOTION)
+    entry_dry1 = MagicMock(domain="binary_sensor", entity_id="binary_sensor.dry1", unique_id=f"{mac}-25-021-opening", original_device_class=BinarySensorDeviceClass.OPENING)
+    entry_dry2 = MagicMock(domain="binary_sensor", entity_id="binary_sensor.dry2", unique_id=f"{mac}-25-021-opening", original_device_class=BinarySensorDeviceClass.OPENING)
+    entry_dup_aux1 = MagicMock(domain="binary_sensor", entity_id="binary_sensor.dup_aux1", unique_id=f"{mac}-9-1", original_device_class=None)
+    entry_dup_aux2 = MagicMock(domain="binary_sensor", entity_id="binary_sensor.dup_aux2", unique_id=f"{mac}-9-1", original_device_class=None)
+    entry_dup_aux3 = MagicMock(domain="binary_sensor", entity_id="binary_sensor.dup_aux3", unique_id=f"{mac}-9-1", original_device_class=None)
+
+    def mock_remove(eid):
+        if eid in ("binary_sensor.motion2", "binary_sensor.dry2", "binary_sensor.dup_aux3"):
+            raise RuntimeError("Failed to remove")
+        return  # Succeeds for motion3 and aux2
+
+    mock_er = MagicMock()
+    mock_er.async_remove.side_effect = mock_remove
+
+    with patch("custom_components.myhome.binary_sensor.er.async_entries_for_config_entry", return_value=[entry_other_domain, entry_motion1, entry_motion2, entry_motion3, entry_dry1, entry_dry2, entry_dup_aux1, entry_dup_aux2, entry_dup_aux3]), \
+         patch("custom_components.myhome.binary_sensor.er.async_get", return_value=mock_er):
+        added = []
+        assert await async_setup_entry(hass, config_entry, lambda e: added.extend(e)) is True
+
+        for entity in added:
+            entity.hass = hass
+            entity.async_write_ha_state = MagicMock()
+            entity.async_on_remove = MagicMock()
+            entity.async_get_last_state = AsyncMock(return_value=None)
+            await entity.async_added_to_hass()
+
+        # Direct verification of norm_where != self._where listener registration
+        motion_padded = MyHOMEMotionSensor(
+            hass=hass,
+            device_id="021",
+            who="1",
+            where="021",
+            name="Motion Padded",
+            entity_name="Motion Padded",
+            inverted=False,
+            device_class=BinarySensorDeviceClass.MOTION,
+            manufacturer="BTicino",
+            model="Motion Sensor",
+            gateway=mock_gateway,
+        )
+        motion_padded._where = "021"
+        motion_padded.hass = hass
+        motion_padded.async_write_ha_state = MagicMock()
+        motion_padded.async_on_remove = MagicMock()
+        motion_padded.async_get_last_state = AsyncMock(return_value=None)
+        await motion_padded.async_added_to_hass()
+
+        dry_padded = MyHOMEDryContact(
+            hass=hass,
+            device_id="021",
+            who="25",
+            where="021",
+            name="Dry Padded",
+            entity_name="Dry Padded",
+            inverted=False,
+            device_class=BinarySensorDeviceClass.OPENING,
+            manufacturer="BTicino",
+            model="Dry Contact",
+            gateway=mock_gateway,
+        )
+        dry_padded._where = "021"
+        dry_padded.hass = hass
+        dry_padded.async_write_ha_state = MagicMock()
+        dry_padded.async_on_remove = MagicMock()
+        await dry_padded.async_added_to_hass()
 
 
 

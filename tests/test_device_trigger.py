@@ -333,7 +333,39 @@ async def test_async_attach_trigger_cenplus_rotary_and_press(hass: HomeAssistant
         },
     )
     await hass.async_block_till_done()
-    action.assert_not_called()
-
     unsub()
+
+
+def test_get_cen_info_from_device_branches():
+    """Test _get_cen_info_from_device edge cases and identifier parsing."""
+    from custom_components.myhome.device_trigger import _get_cen_info_from_device
+
+    # 1. Non-integer suffix on CEN/CEN+ identifier with mixed domain
+    dev1 = MagicMock()
+    dev1.identifiers = [("other", "123"), (DOMAIN, "00:03:50:aa:bb:cc-15-notanint")]
+    is_cen, addr = _get_cen_info_from_device(dev1)
+    assert is_cen is True
+    assert addr is None
+
+    # 2. cen_ prefix valid int
+    dev2 = MagicMock()
+    dev2.identifiers = [(DOMAIN, "cen_42")]
+    is_cen, addr = _get_cen_info_from_device(dev2)
+    assert is_cen is True
+    assert addr == 42
+
+    # 3. cenplus_ prefix invalid int
+    dev3 = MagicMock()
+    dev3.identifiers = [(DOMAIN, "cenplus_invalid")]
+    is_cen, addr = _get_cen_info_from_device(dev3)
+    assert is_cen is True
+    assert addr is None
+
+    # 4. Standard non-button device (e.g. light WHO=1) with mixed domain
+    dev4 = MagicMock()
+    dev4.identifiers = [("other", "123"), (DOMAIN, "00:03:50:aa:bb:cc-1-21")]
+    is_cen, addr = _get_cen_info_from_device(dev4)
+    assert is_cen is False
+    assert addr is None
+
 

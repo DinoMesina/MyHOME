@@ -131,6 +131,12 @@ class TestNormalizationSafety:
         """Zero-padded integer IDs (e.g. CEN+ object 21 '0021') are normalized to match integer IDs."""
         assert normalize_where("0021") == "21"
         assert normalize_where("0021#4#1") == "21#4#1"
+        assert normalize_where(None) == ""
+        assert normalize_where("") == ""
+        assert normalize_where("   ") == ""
+        assert normalize_where("abc") == "abc"
+        assert normalize_where("abc#4#1") == "abc#4#1"
+        assert is_apl_address("abc") is False
 
 
 class TestCommandGenerationFeasibility:

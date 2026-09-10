@@ -818,5 +818,128 @@ async def test_sending_loop_idle_timeout_closes_session(gateway_handler, monkeyp
         await asyncio.wait_for(worker, timeout=1)
 
 
+async def test_issue_254_mh201_idle_disconnect_and_reconnection_e2e(gateway_handler, monkeypatch):
+    """Verify Issue #254: MH201 idle disconnect releases socket and reconnects for subsequent commands."""
+    import custom_components.myhome.gateway as gw_module
+    from custom_components.myhome.ownd.message import OWNCommand
+
+    # Set idle timeout short for testing
+    monkeypatch.setattr(gw_module, "COMMAND_SESSION_IDLE_TIMEOUT", 0.04)
+
+    with patch("custom_components.myhome.gateway.OWNCommandSession") as mock_cmd_class:
+        mock_cmd_session = MagicMock()
+        mock_cmd_session.connect = AsyncMock(return_value={"Success": True})
+        mock_cmd_session.close = AsyncMock()
+        mock_cmd_session.send = AsyncMock(return_value=True)
+        mock_cmd_session.is_connected = True
+        mock_cmd_class.return_value = mock_cmd_session
+
+        gateway_handler._event_session_ready.set()
+        worker = asyncio.create_task(gateway_handler.sending_loop(0))
+
+        # 1. User sends cover command *2*1*14##
+        cmd1 = OWNCommand.parse("*2*1*14##")
+        await gateway_handler.send(cmd1)
+        await asyncio.sleep(0.08)
+        mock_cmd_session.send.assert_called_with(message=cmd1, is_status_request=False)
+
+        # 2. Simulate 49-minute idle period: idle timeout fires and releases socket
+        await asyncio.sleep(0.12)
+        assert mock_cmd_session.close.call_count >= 1
+
+        # 3. User sends another cover command after idle: *2*1*14##
+        mock_cmd_session.send.reset_mock()
+        cmd2 = OWNCommand.parse("*2*1*14##")
+        await gateway_handler.send(cmd2)
+        await asyncio.sleep(0.08)
+        mock_cmd_session.send.assert_called_with(message=cmd2, is_status_request=False)
+
+        # Clean shutdown
+        await gateway_handler.send_buffer.put(None)
+        await asyncio.wait_for(worker, timeout=1)
+
+
+async def test_gateway_properties_and_cen_branches(gateway_handler):
+    """Test gateway manufacturer/firmware tuple/list handling and CEN device edge cases."""
+    gateway_handler.gateway = MagicMock()
+    # Manufacturer as tuple/list
+    gateway_handler.gateway.manufacturer = ["BTicino", "Legrand"]
+    assert gateway_handler.manufacturer == "BTicino"
+
+    # Firmware as tuple/list
+    gateway_handler.gateway.firmware = [1, 0, 5]
+    assert gateway_handler.firmware == "1.0.5"
+
+    # CEN device when config_entry has no entry_id
+    gateway_handler.config_entry = MagicMock(spec=[])
+    gateway_handler._cen_devices.clear()
+    gateway_handler._ensure_cen_device(25, 1)
+    assert (25, 1) in gateway_handler._cen_devices
+
+
+async def test_gateway_listening_loop_unhandled_event_status(gateway_handler):
+    """Test listening_loop when event session returns an unexpected failure dict or None."""
+    with patch("custom_components.myhome.gateway.OWNEventSession") as mock_event_class:
+        mock_event_session = MagicMock()
+        mock_event_session.connect = AsyncMock(return_value=None)
+        mock_event_session.is_connected = False
+        mock_event_session.get_next = AsyncMock(return_value=None)
+        mock_event_session.close = AsyncMock()
+        mock_event_class.return_value = mock_event_session
+
+        async def stop_listener(*args, **kwargs):
+            gateway_handler._terminate_listener = True
+
+        with patch.object(gateway_handler, "send_status_request", side_effect=stop_listener) as mock_status:
+            await gateway_handler.listening_loop()
+            assert gateway_handler.is_connected is False
+            assert mock_status.call_count >= 1
+
+
+async def test_gateway_sending_loop_timeout_and_terminate_branches(gateway_handler, monkeypatch):
+    """Test sending_loop timeout while waiting for event session and terminate while waiting."""
+    import custom_components.myhome.gateway as gw_module
+    monkeypatch.setattr(gw_module, "EVENT_READY_TIMEOUT", 0.01)
+    monkeypatch.setattr(gw_module, "COMMAND_SESSION_IDLE_TIMEOUT", 0.02)
+
+    gateway_handler._event_session_ready.clear()
+    gateway_handler._terminate_sender = False
+
+    # 1. Trigger timeout in wait loop once, then set event ready
+    async def wake_up_event():
+        await asyncio.sleep(0.02)
+        gateway_handler._event_session_ready.set()
+
+    wake_task = asyncio.create_task(wake_up_event())
+
+    with patch("custom_components.myhome.gateway.OWNCommandSession") as mock_cmd_class:
+        mock_cmd = MagicMock()
+        mock_cmd.connect = AsyncMock(return_value={"Success": True})
+        mock_cmd.close = AsyncMock()
+        mock_cmd.is_connected = True
+        mock_cmd_class.return_value = mock_cmd
+
+        worker = asyncio.create_task(gateway_handler.sending_loop(0))
+        await asyncio.sleep(0.05)
+
+        # Stop worker
+        await gateway_handler.send_buffer.put(None)
+        await asyncio.wait_for(worker, timeout=1)
+        await wake_task
+
+    # 2. Terminate sender while event session not ready
+    gateway_handler._event_session_ready.clear()
+
+    async def terminate_during_wait():
+        await asyncio.sleep(0.02)
+        gateway_handler._terminate_sender = True
+        gateway_handler._event_session_ready.set()
+
+    term_task = asyncio.create_task(terminate_during_wait())
+    await gateway_handler.sending_loop(1)
+    await term_task
+
+
+
 
 

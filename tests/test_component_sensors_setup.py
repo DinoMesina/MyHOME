@@ -445,3 +445,63 @@ async def test_illuminance_sensor_zero_padded_where_and_deduplication(hass: Home
         assert sensor._attr_native_value == 33338
         sensor.async_write_ha_state.assert_called()
 
+
+@pytest.mark.asyncio
+async def test_async_setup_entry_illuminance_deduplication_exception_and_padded_where():
+    """Test deduplication exception handling and padded WHERE listener registration in sensor.py."""
+    mac = "00:11:22:33:44:66"
+    hass = MagicMock(spec=HomeAssistant)
+    mock_gateway = MagicMock()
+    mock_gateway.mac = mac
+    mock_gateway.send_status_request = AsyncMock()
+    hass.data = {
+        DOMAIN: {
+            mac: {
+                CONF_PLATFORMS: {
+                    "sensor": {
+                        "sensor_021": {
+                            CONF_DEVICE_CLASS: SensorDeviceClass.ILLUMINANCE,
+                            CONF_ENTITIES: {SensorDeviceClass.ILLUMINANCE: {}},
+                            CONF_WHO: "1",
+                            CONF_WHERE: "021",
+                            CONF_NAME: "Illuminance 021",
+                            CONF_MANUFACTURER: "BTicino",
+                            CONF_DEVICE_MODEL: "Light Sensor",
+                        }
+                    }
+                },
+                CONF_ENTITY: mock_gateway,
+            }
+        }
+    }
+    config_entry = MagicMock()
+    config_entry.data = {CONF_MAC: mac}
+    config_entry.entry_id = "test_ill_021"
+
+    entry_dup = MagicMock()
+    entry_dup.domain = "sensor"
+    entry_dup.entity_id = "sensor.illuminance_021_legacy"
+    entry_dup.unique_id = f"{mac}-1-021-illuminance"
+    entry_dup.original_device_class = SensorDeviceClass.ILLUMINANCE
+
+    mock_er = MagicMock()
+    mock_er.async_remove.side_effect = RuntimeError("Removal failed")
+
+    with patch(
+        "custom_components.myhome.sensor.er.async_entries_for_config_entry",
+        return_value=[entry_dup],
+    ), patch(
+        "custom_components.myhome.sensor.er.async_get",
+        return_value=mock_er,
+    ):
+        added = []
+        assert await async_setup_entry(hass, config_entry, lambda e: added.extend(e)) is True
+        assert len(added) == 1
+        sensor = added[0]
+        assert sensor._where == "021"
+
+        sensor.hass = hass
+        sensor.async_write_ha_state = MagicMock()
+        sensor.async_on_remove = MagicMock()
+        await sensor.async_added_to_hass()
+

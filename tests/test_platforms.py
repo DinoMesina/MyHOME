@@ -123,6 +123,27 @@ class TestMyHOMEEntity:
             entity.async_update.assert_awaited_once()
             await entity.async_will_remove_from_hass()
 
+    async def test_entity_via_device_id_annotation(self, mock_hass, mock_gateway):
+        from homeassistant.helpers.device_registry import DeviceInfo
+        with patch.dict(DeviceInfo.__annotations__, {"via_device_id": str}):
+            with patch("custom_components.myhome.myhome_device.Entity.__init__", return_value=None):
+                from custom_components.myhome.myhome_device import MyHOMEEntity
+                mock_gateway.device_registry_id = "mock_reg_id"
+                entity = MyHOMEEntity(
+                    hass=mock_hass,
+                    name="Test Device",
+                    platform="light",
+                    device_id="21",
+                    who="1",
+                    where="21",
+                    manufacturer="BTicino",
+                    model="F411/4",
+                    gateway=mock_gateway,
+                )
+                mock_gateway.unique_id = "mock_gw_unique"
+                assert entity._attr_device_info.get("via_device_id") == "mock_reg_id"
+                assert entity.via_device_id == "mock_gw_unique"
+
 
 # ── MediaPlayer Entity ─────────────────────────────────────────────────────
 

@@ -925,6 +925,98 @@ async def test_async_register_lovelace_resource_dict_storage_collection(hass: Ho
     })
 
 
+async def test_setup_entry_mfg_fw_fallbacks_and_pruning_branches(hass: HomeAssistant):
+    """Test setup_entry manufacturer/firmware fallbacks and device pruning edge cases."""
+    with patch(
+        "custom_components.myhome.gateway.OWNSession.test_connection",
+        return_value={"Success": True, "Message": None}
+    ), patch(
+        "custom_components.myhome.gateway.MyHOMEGatewayHandler.listening_loop"
+    ), patch(
+        "custom_components.myhome.gateway.MyHOMEGatewayHandler.sending_loop"
+    ):
+        config_entry = MockConfigEntry(
+            domain=DOMAIN,
+            data={
+                "host": "192.168.0.35",
+                "port": 20000,
+                "password": "pass",
+                "mac": "00:03:50:00:88:99",
+                "friendly_name": "MyHOME Gateway",
+                "manufacturer": "",
+                "name": "F454",
+                "firmware": None,
+            },
+            unique_id="00:03:50:00:88:99",
+        )
+        config_entry.add_to_hass(hass)
+
+        dev_reg = dr.async_get(hass)
+        # Pre-create devices to test pruning branches:
+        # 1. Device matching gateway_unique_id
+        dev_reg.async_get_or_create(
+            config_entry_id=config_entry.entry_id,
+            identifiers={(DOMAIN, "00:03:50:00:88:99")},
+            name="GW Unique Device",
+        )
+        # 2. Device matching gateway_id
+        dev_reg.async_get_or_create(
+            config_entry_id=config_entry.entry_id,
+            identifiers={(DOMAIN, "myhome_gw_id")},
+            name="GW ID Device",
+        )
+
+        mock_dev1 = MagicMock(id="dev_other_1", identifiers={(DOMAIN, "00:03:50:00:88:99")})
+        mock_dev2 = MagicMock(id="dev_other_2", identifiers={(DOMAIN, "myhome_gw_id")})
+
+        with patch("custom_components.myhome.gateway.MyHOMEGatewayHandler.manufacturer", new=["Legrand"]), \
+             patch("custom_components.myhome.gateway.MyHOMEGatewayHandler.firmware", new=[]), \
+             patch("custom_components.myhome.gateway.MyHOMEGatewayHandler.id", new="myhome_gw_id", create=True), \
+             patch("homeassistant.helpers.device_registry.async_entries_for_config_entry", return_value=[mock_dev1, mock_dev2]):
+            assert await hass.config_entries.async_setup(config_entry.entry_id)
+            await hass.async_block_till_done()
+
+        await hass.config_entries.async_unload(config_entry.entry_id)
+        await hass.async_block_till_done()
+
+
+async def test_setup_entry_pruning_exception_handled(hass: HomeAssistant):
+    """Test that exceptions during empty device pruning are caught and logged."""
+    with patch(
+        "custom_components.myhome.gateway.OWNSession.test_connection",
+        return_value={"Success": True, "Message": None}
+    ), patch(
+        "custom_components.myhome.gateway.MyHOMEGatewayHandler.listening_loop"
+    ), patch(
+        "custom_components.myhome.gateway.MyHOMEGatewayHandler.sending_loop"
+    ), patch(
+        "custom_components.myhome.gateway.MyHOMEGatewayHandler.manufacturer",
+        new="",
+    ), patch(
+        "homeassistant.helpers.device_registry.async_entries_for_config_entry",
+        side_effect=RuntimeError("Pruning failed")
+    ):
+        config_entry = MockConfigEntry(
+            domain=DOMAIN,
+            data={
+                "host": "192.168.0.35",
+                "port": 20000,
+                "password": "pass",
+                "mac": "00:03:50:00:88:AA",
+                "friendly_name": "MyHOME Gateway",
+                "name": "F454",
+            },
+            unique_id="00:03:50:00:88:AA",
+        )
+        config_entry.add_to_hass(hass)
+
+        assert await hass.config_entries.async_setup(config_entry.entry_id)
+        await hass.async_block_till_done()
+
+        await hass.config_entries.async_unload(config_entry.entry_id)
+        await hass.async_block_till_done()
+
+
 
 
 
