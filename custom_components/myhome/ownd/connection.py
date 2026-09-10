@@ -836,10 +836,7 @@ class OWNCommandSession(OWNSession):
     async def connect(self):
         res = await super().connect()
         if res and res.get("Success", False):
-            try:
-                self._last_activity = asyncio.get_running_loop().time()
-            except RuntimeError:
-                self._last_activity = None
+            self._last_activity = asyncio.get_running_loop().time()
         return res
 
     @classmethod
