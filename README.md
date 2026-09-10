@@ -319,7 +319,7 @@ The integration maintains 980 automated unit tests (100% line coverage across al
 | Component / Module | Coverage | Notes |
 |---|:---:|---|
 | [`__init__.py`](custom_components/myhome/__init__.py) | **100%** | Setup lifecycle and zero-friction entity migration |
-| [`alarm_control_panel.py`](custom_components/myhome/alarm_control_panel.py) | **100%** | Burglar alarm systems, central unit, partition arming & panic triggers |
+| [`alarm_control_panel.py`](custom_components/myhome/alarm_control_panel.py) | **100%** | Core integration component |
 | [`binary_sensor.py`](custom_components/myhome/binary_sensor.py) | **100%** | Magnetic contacts, door/window sensors, motion sensors |
 | [`bus_monitor.py`](custom_components/myhome/bus_monitor.py) | **100%** | In-band 500-frame circular ring buffer tap (0 extra sockets) |
 | [`button.py`](custom_components/myhome/button.py) | **100%** | Scenario buttons and bus diagnostic pings |
