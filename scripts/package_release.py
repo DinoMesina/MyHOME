@@ -5,10 +5,12 @@ Creates a HACS-compliant `myhome.zip` release asset containing the contents of
 `custom_components/myhome/` at the root of the archive.
 """
 
+import argparse
 import json
 import os
 import re
 import sys
+import urllib.request
 import zipfile
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -27,8 +29,8 @@ EXCLUDE_PATTERNS = [
 ]
 
 
-def check_versions():
-    """Verify version consistency across manifest.json and const.py."""
+def check_versions(target_tag=None):
+    """Verify version consistency across manifest.json, const.py, and requirements."""
     with open(MANIFEST_PATH, "r", encoding="utf-8") as f:
         manifest = json.load(f)
     manifest_version = manifest.get("version")
@@ -42,10 +44,51 @@ def check_versions():
     print(f"[CHECK] const.py version:       {const_version}")
 
     if manifest_version != const_version:
-        print(f"[ERROR] Version mismatch: {manifest_version} != {const_version}", file=sys.stderr)
+        print(f"[ERROR] Version mismatch: manifest.json ({manifest_version}) != const.py ({const_version})", file=sys.stderr)
         sys.exit(1)
 
+    requirements = manifest.get("requirements", [])
+    expected_ownd_req = f"OWNd=={manifest_version}"
+    print(f"[CHECK] manifest requirements: {requirements}")
+    if expected_ownd_req not in requirements:
+        print(
+            f"[ERROR] Deployment Rule Violation: manifest.json 'requirements' must contain '{expected_ownd_req}'! "
+            f"Found: {requirements}. Without this, Home Assistant will NOT fetch the updated engine from PyPI!",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    if target_tag:
+        clean_tag = target_tag.lstrip("v")
+        print(f"[CHECK] Target Git tag:        {target_tag} (normalized: {clean_tag})")
+        if clean_tag != manifest_version:
+            print(
+                f"[ERROR] Deployment Rule Violation: Git tag ({target_tag}) does not match manifest.json version ({manifest_version})!",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
     return manifest_version
+
+
+def check_pypi_release(version):
+    """Verify that the required OWNd engine version is published on PyPI."""
+    url = "https://pypi.org/pypi/OWNd/json"
+    req = urllib.request.Request(url, headers={"User-Agent": "MyHOME-ReleaseValidator/1.0"})
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode())
+            releases = data.get("releases", {})
+            if version not in releases:
+                print(
+                    f"[ERROR] PyPI Verification Failed: OWNd=={version} is NOT published on PyPI! "
+                    f"Latest PyPI releases: {list(releases.keys())[-5:]}",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
+            print(f"[CHECK] Verified OWNd=={version} is live on PyPI.")
+    except Exception as err:
+        print(f"[WARN] Could not verify PyPI (network or timeout): {err}")
 
 
 def should_exclude(rel_path):
@@ -98,6 +141,20 @@ def verify_zip():
 
 
 if __name__ == "__main__":
-    ver = check_versions()
+    parser = argparse.ArgumentParser(description="Package or verify MyHOME release.")
+    parser.add_argument("--verify-only", action="store_true", help="Verify release rules without building zip.")
+    parser.add_argument("--tag", type=str, default=None, help="Target git release tag to validate against.")
+    args = parser.parse_args()
+
+    # Use tag argument or check GITHUB_REF_NAME env var
+    target_tag = args.tag or os.getenv("GITHUB_REF_NAME")
+
+    ver = check_versions(target_tag=target_tag)
+    check_pypi_release(ver)
+
+    if args.verify_only:
+        print(f"[VERIFY] Release rules passed successfully for v{ver}.")
+        sys.exit(0)
+
     build_zip(ver)
     verify_zip()

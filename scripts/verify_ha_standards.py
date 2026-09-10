@@ -15,6 +15,7 @@ architectural standards across custom_components/myhome/:
 import ast
 import json
 import os
+import re
 import sys
 from pathlib import Path
 from typing import List
@@ -287,6 +288,53 @@ def check_ruff_standards(checker: StandardsChecker):
         checker.log_ok("Ruff static analysis checks passed with 0 violations.")
 
 
+def check_manifest_requirements_rule(checker: StandardsChecker):
+    """Rule 6: Enforce manifest.json version matches const.py and requirements pins OWNd exactly."""
+    manifest_file = CUSTOM_COMPONENTS_DIR / "manifest.json"
+    const_file = CUSTOM_COMPONENTS_DIR / "const.py"
+
+    if not manifest_file.exists():
+        checker.log_error("RULE_MANIFEST", manifest_file, 1, "manifest.json not found")
+        return
+    if not const_file.exists():
+        checker.log_error("RULE_MANIFEST", const_file, 1, "const.py not found")
+        return
+
+    try:
+        with open(manifest_file, "r", encoding="utf-8") as f:
+            manifest = json.load(f)
+    except Exception as e:
+        checker.log_error("RULE_MANIFEST", manifest_file, 1, f"Failed to parse manifest.json: {e}")
+        return
+
+    with open(const_file, "r", encoding="utf-8") as f:
+        const_content = f.read()
+
+    match = re.search(r'INTEGRATION_VERSION\s*=\s*["\']([^"\']+)["\']', const_content)
+    const_version = match.group(1) if match else None
+    manifest_version = manifest.get("version")
+
+    if manifest_version != const_version:
+        checker.log_error(
+            "RULE_MANIFEST",
+            manifest_file,
+            1,
+            f"Version mismatch: manifest.json ({manifest_version}) != const.py ({const_version})",
+        )
+
+    requirements = manifest.get("requirements", [])
+    expected_req = f"OWNd=={manifest_version}"
+    if expected_req not in requirements:
+        checker.log_error(
+            "RULE_MANIFEST",
+            manifest_file,
+            1,
+            f"manifest.json requirements must contain '{expected_req}' to guarantee Home Assistant dependency updates. Found: {requirements}",
+        )
+    else:
+        checker.log_ok(f"manifest.json requirements synchronization verified ({expected_req}).")
+
+
 def main():
     print("=" * 70)
     print("Running Home Assistant Architectural Standards Validator")
@@ -298,6 +346,7 @@ def main():
     check_deprecated_constants(checker)
     check_no_blocking_calls(checker)
     check_ruff_standards(checker)
+    check_manifest_requirements_rule(checker)
 
     print("=" * 70)
     if checker.errors:

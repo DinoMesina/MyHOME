@@ -1094,6 +1094,60 @@ def test_get_ownd_version():
         assert get_ownd_version() == "unknown"
 
 
+async def test_async_ensure_ownd_engine_fast_path(hass: HomeAssistant):
+    """Test async_ensure_ownd_engine fast-path when version matches."""
+    from custom_components.myhome import async_ensure_ownd_engine
+    from custom_components.myhome.const import INTEGRATION_VERSION
+
+    with patch("homeassistant.util.package.is_installed", return_value=True), \
+         patch("custom_components.myhome.get_ownd_version", return_value=INTEGRATION_VERSION):
+        result = await async_ensure_ownd_engine(hass)
+        assert result is True
+
+
+async def test_async_ensure_ownd_engine_auto_install_success(hass: HomeAssistant):
+    """Test async_ensure_ownd_engine self-heals by installing missing requirement."""
+    from custom_components.myhome import async_ensure_ownd_engine
+    from custom_components.myhome.const import INTEGRATION_VERSION
+
+    installed_status = [False, True]
+    def mock_is_installed(req):
+        return installed_status.pop(0) if installed_status else True
+
+    with patch("homeassistant.util.package.is_installed", side_effect=mock_is_installed), \
+         patch("homeassistant.requirements.async_process_requirements", new_callable=AsyncMock) as mock_proc, \
+         patch("custom_components.myhome.get_ownd_version", side_effect=["2.0.0b2", INTEGRATION_VERSION]):
+        result = await async_ensure_ownd_engine(hass)
+        assert result is True
+        mock_proc.assert_awaited_once_with(hass, "myhome", [f"OWNd=={INTEGRATION_VERSION}"])
+
+
+async def test_async_ensure_ownd_engine_install_failed(hass: HomeAssistant):
+    """Test async_ensure_ownd_engine handles install failure and creates notification."""
+    from custom_components.myhome import async_ensure_ownd_engine
+
+    with patch("homeassistant.util.package.is_installed", return_value=False), \
+         patch("homeassistant.requirements.async_process_requirements", side_effect=RuntimeError("Pip network timeout")), \
+         patch("custom_components.myhome.get_ownd_version", return_value="2.0.0b2"), \
+         patch("homeassistant.components.persistent_notification.async_create") as mock_notify:
+        result = await async_ensure_ownd_engine(hass)
+        assert result is False
+        mock_notify.assert_called_once()
+
+
+async def test_async_setup_entry_engine_mismatch_raises_not_ready(hass: HomeAssistant):
+    """Test async_setup_entry raises ConfigEntryNotReady when engine cannot be synchronized."""
+    from homeassistant.exceptions import ConfigEntryNotReady
+
+    from custom_components.myhome import async_setup_entry
+
+    entry = MockConfigEntry(domain=DOMAIN, data={"mac": "00:03:50:00:12:99", "host": "1.2.3.4", "port": 20000})
+    with patch("custom_components.myhome.async_ensure_ownd_engine", return_value=False):
+        with pytest.raises(ConfigEntryNotReady):
+            await async_setup_entry(hass, entry)
+
+
+
 
 
 

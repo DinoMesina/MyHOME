@@ -4,6 +4,7 @@ from scripts.verify_ha_standards import (
     StandardsChecker,
     check_deprecated_constants,
     check_discovery_flows,
+    check_manifest_requirements_rule,
     check_no_blocking_calls,
     check_ruff_standards,
     check_translation_coverage,
@@ -43,4 +44,11 @@ def test_ruff_static_analysis_standards():
     checker = StandardsChecker()
     check_ruff_standards(checker)
     assert not checker.errors, f"Ruff static analysis violations found: {checker.errors}"
+
+
+def test_manifest_requirements_consistency():
+    """Verify manifest.json version matches const.py and pins exact matching OWNd."""
+    checker = StandardsChecker()
+    check_manifest_requirements_rule(checker)
+    assert not checker.errors, f"Manifest requirements violations found: {checker.errors}"
 

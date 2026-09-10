@@ -10,7 +10,6 @@ from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
-from OWNd.message import OWNCommand, OWNGatewayCommand
 
 from .const import (
     ATTR_GATEWAY,
@@ -155,9 +154,71 @@ async def _async_register_frontend(hass: HomeAssistant) -> None:
             domain_data["_lovelace_listener_registered"] = True
 
 
+async def async_ensure_ownd_engine(hass: HomeAssistant) -> bool:
+    """Ensure that the exact matching OWNd engine requirement is installed and loaded."""
+    required_pkg = f"OWNd=={INTEGRATION_VERSION}"
+    from homeassistant.util import package as pkg_util
+
+    # Fast path: requirement satisfied and currently loaded version matches
+    current_ver = get_ownd_version()
+    is_installed = pkg_util.is_installed(required_pkg)
+    if is_installed and current_ver == INTEGRATION_VERSION:
+        return True
+
+    LOGGER.warning(
+        "OWNd engine mismatch detected (installed: %s, required: %s). "
+        "Attempting automatic self-healing installation via Home Assistant package manager...",
+        current_ver,
+        required_pkg,
+    )
+
+    # 1. Install missing/outdated distribution from PyPI via Home Assistant's native processor
+    if not is_installed:
+        try:
+            from homeassistant.requirements import async_process_requirements
+            await async_process_requirements(hass, DOMAIN, [required_pkg])
+            LOGGER.info("Successfully installed matching requirement %s", required_pkg)
+        except Exception as err:
+            LOGGER.error("Automatic installation of %s failed: %s", required_pkg, err)
+            try:
+                from homeassistant.components import persistent_notification
+                persistent_notification.async_create(
+                    hass,
+                    title="MyHOME Engine Mismatch",
+                    message=(
+                        f"MyHOME integration v{INTEGRATION_VERSION} requires OWNd v{INTEGRATION_VERSION}, "
+                        f"but detected {current_ver}.\n\n"
+                        f"Automatic package upgrade failed ({err}). Please check network connectivity or run:\n"
+                        f"```bash\npip install '{required_pkg}'\n```"
+                    ),
+                    notification_id="myhome_ownd_version_mismatch",
+                )
+            except Exception:
+                pass
+            return False
+
+    # 2. Invalidate importlib caches and reload loaded in-memory OWNd modules
+    import importlib
+    import sys
+
+    importlib.invalidate_caches()
+    for mod_name in list(sys.modules.keys()):
+        if mod_name == "OWNd" or mod_name.startswith("OWNd."):
+            try:
+                importlib.reload(sys.modules[mod_name])
+            except Exception as reload_err:
+                LOGGER.debug("Could not reload module %s: %s", mod_name, reload_err)
+
+    new_ver = get_ownd_version()
+    LOGGER.info("Self-healing complete: OWNd engine synchronized to v%s", new_ver)
+    return True
+
+
 async def async_setup(hass, config):
     """Set up the MyHOME component."""
     hass.data.setdefault(DOMAIN, {})
+
+    await async_ensure_ownd_engine(hass)
 
     LOGGER.info(
         "Initializing MyHOME integration v%s (OWNd v%s)",
@@ -178,6 +239,11 @@ async def async_setup(hass, config):
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
+    if not await async_ensure_ownd_engine(hass):
+        raise ConfigEntryNotReady(
+            f"Required OWNd engine version {INTEGRATION_VERSION} is not available (found: {get_ownd_version()})"
+        )
+
     from .websocket import async_setup_websocket_api
     async_setup_websocket_api(hass)
     await _async_register_frontend(hass)
@@ -608,6 +674,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
                 gateway = mac
         timezone = hass.config.as_dict()["time_zone"]
         if gateway in hass.data[DOMAIN]:
+            from OWNd.message import OWNGatewayCommand
             await hass.data[DOMAIN][gateway][CONF_ENTITY].send(
                 OWNGatewayCommand.set_datetime_to_now(timezone)
             )
@@ -643,6 +710,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
         LOGGER.debug("Handling message `%s` to be sent to `%s`", message, gateway)
         if gateway in hass.data[DOMAIN]:
             if message is not None:
+                from OWNd.message import OWNCommand
                 own_message = OWNCommand.parse(message)
                 if own_message is not None:
                     if own_message.is_valid:
