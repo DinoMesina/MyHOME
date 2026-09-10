@@ -285,13 +285,13 @@ The integration maintains 894 automated unit tests (99% line coverage across all
 | [`diagnostics.py`](custom_components/myhome/diagnostics.py) | **100%** | Config entry diagnostics with sensitive data redaction |
 | [`gateway_profile.py`](custom_components/myhome/gateway_profile.py) | **100%** | Hardware models (`MH200`, `F454`, etc.) and queue pacing limits |
 | [`media_player.py`](custom_components/myhome/media_player.py) | **100%** | F441/F441M sound system zones, dynamic proxy, gain-staging |
+| [`ownd/connection.py`](custom_components/myhome/ownd/connection.py) | **100%** | Hardened TCP stream, fail-closed auth, watchdog loop |
 | [`ownd/discovery.py`](custom_components/myhome/ownd/discovery.py) | **100%** | SSDP & UPnP gateway detection and descriptor parsing |
 | [`ownd/message.py`](custom_components/myhome/ownd/message.py) | **100%** | OpenWebNet frame parsers, encoders, and dimension decoders |
 | [`switch.py`](custom_components/myhome/switch.py) | **100%** | Relay actuators, auxiliary switches, socket controllers |
 | [`validate.py`](custom_components/myhome/validate.py) | **100%** | Device & gateway schemas, custom WHERE validators, sensor injections |
 | [`websocket.py`](custom_components/myhome/websocket.py) | **100%** | WebSocket API for real-time bus streaming, history, and diagnostics |
 | [`light.py`](custom_components/myhome/light.py) | **100%** | Relays, auto-dimmer detection, and brightness transitions |
-| [`ownd/connection.py`](custom_components/myhome/ownd/connection.py) | **100%** | Hardened TCP stream, fail-closed auth, watchdog loop |
 | [`sensor.py`](custom_components/myhome/sensor.py) | **99%** | Power meters, energy counters, and pulse sensors |
 | [`const.py`](custom_components/myhome/const.py) | **98%** | Protocol commands, dimensions, and integration constants |
 | [`gateway.py`](custom_components/myhome/gateway.py) | **98%** | Hardware handler, lockout prevention, adaptive queue pacing |
