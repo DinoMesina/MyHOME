@@ -14,6 +14,10 @@ from homeassistant.const import (
 )
 from homeassistant.core import HomeAssistant, State, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dispatcher_send
+from OWNd.message import (
+    OWNAutomationEvent,
+    OWNEvent,
+)
 
 from custom_components.myhome.const import (
     CONF_ADVANCED_SHUTTER,
@@ -27,10 +31,6 @@ from custom_components.myhome.cover import (
     MyHOMECover,
     async_setup_entry,
     async_unload_entry,
-)
-from custom_components.myhome.ownd.message import (
-    OWNAutomationEvent,
-    OWNEvent,
 )
 
 

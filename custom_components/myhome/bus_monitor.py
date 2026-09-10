@@ -11,7 +11,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Callable, Optional
 
-from .ownd.message import OWNMessage, OWNSignaling
+from OWNd.message import OWNMessage, OWNSignaling
 
 _LOGGER = logging.getLogger(__name__)
 

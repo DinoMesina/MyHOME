@@ -3,13 +3,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 from homeassistant.components.climate.const import ClimateEntityFeature, HVACAction, HVACMode
 from homeassistant.const import UnitOfTemperature
-
-from custom_components.myhome.climate import (
-    MyHOMEClimate,
-    async_setup_entry,
-    async_unload_entry,
-)
-from custom_components.myhome.ownd.message import (
+from OWNd.message import (
     CLIMATE_MODE_AUTO,
     CLIMATE_MODE_COOL,
     CLIMATE_MODE_HEAT,
@@ -23,6 +17,12 @@ from custom_components.myhome.ownd.message import (
     MESSAGE_TYPE_MODE_TARGET,
     MESSAGE_TYPE_TARGET_TEMPERATURE,
     OWNHeatingEvent,
+)
+
+from custom_components.myhome.climate import (
+    MyHOMEClimate,
+    async_setup_entry,
+    async_unload_entry,
 )
 
 
@@ -564,7 +564,7 @@ async def test_climate_fan_mode_and_attributes(hass):
     gateway.send.assert_not_called()
 
     # Event handling for fan speeds
-    from custom_components.myhome.ownd.message import MESSAGE_TYPE_FAN_SPEED
+    from OWNd.message import MESSAGE_TYPE_FAN_SPEED
     event = MagicMock()
     event.message_type = MESSAGE_TYPE_FAN_SPEED
     event.human_readable_log = "Fan speed event"

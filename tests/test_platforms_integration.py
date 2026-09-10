@@ -6,10 +6,10 @@ from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_send
+from OWNd.message import OWNEvent
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.myhome.const import DOMAIN
-from custom_components.myhome.ownd.message import OWNEvent
 
 # List of platforms we want to ensure get loaded
 PLATFORMS = ["light", "climate", "cover", "sensor", "binary_sensor", "switch", "media_player"]

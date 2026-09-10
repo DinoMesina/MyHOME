@@ -19,6 +19,16 @@ from homeassistant.core import callback
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dispatcher_send
 from homeassistant.helpers.restore_state import RestoreEntity
+from OWNd.message import (
+    MESSAGE_TYPE_MOTION,
+    MESSAGE_TYPE_MOTION_TIMEOUT,
+    MESSAGE_TYPE_PIR_SENSITIVITY,
+    OWNAuxEvent,
+    OWNDryContactCommand,
+    OWNDryContactEvent,
+    OWNLightingCommand,
+    OWNLightingEvent,
+)
 
 from .const import (
     CONF_DEVICE_CLASS,
@@ -36,16 +46,6 @@ from .const import (
 )
 from .gateway import MyHOMEGatewayHandler
 from .myhome_device import MyHOMEEntity
-from .ownd.message import (
-    MESSAGE_TYPE_MOTION,
-    MESSAGE_TYPE_MOTION_TIMEOUT,
-    MESSAGE_TYPE_PIR_SENSITIVITY,
-    OWNAuxEvent,
-    OWNDryContactCommand,
-    OWNDryContactEvent,
-    OWNLightingCommand,
-    OWNLightingEvent,
-)
 
 SCAN_INTERVAL = timedelta(seconds=30)
 PIR_SENSITIVITY = ["low", "medium", "high", "very high"]

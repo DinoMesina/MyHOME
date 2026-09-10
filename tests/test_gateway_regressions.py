@@ -6,13 +6,12 @@ import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
-from custom_components.myhome.ownd.connection import (
+from OWNd.connection import (
     OWNCommandSession,
     OWNEventSession,
     OWNGateway,
 )
-from custom_components.myhome.ownd.message import OWNMessage
+from OWNd.message import OWNMessage
 
 
 @pytest.mark.parametrize("dimension", ["0", "#0"])

@@ -20,7 +20,6 @@ END_MARKER = "<!-- END_COVERAGE_TABLE -->"
 
 COMPONENT_NOTES = {
     "custom_components/myhome/validate.py": "Device & gateway schemas, custom WHERE validators, sensor injections",
-    "custom_components/myhome/gateway_profile.py": "Hardware models (`MH200`, `F454`, etc.) and queue pacing limits",
     "custom_components/myhome/const.py": "Protocol commands, dimensions, and integration constants",
     "custom_components/myhome/decoder_pool.py": "Thread-safe streaming proxy audio pool",
     "custom_components/myhome/myhome_device.py": "Home Assistant device registry schema compliance",
@@ -28,7 +27,6 @@ COMPONENT_NOTES = {
     "custom_components/myhome/climate.py": "Heating, cooling, 4-pipe systems, and thermostat controls",
     "custom_components/myhome/gateway.py": "Hardware handler, lockout prevention, adaptive queue pacing",
     "custom_components/myhome/media_player.py": "F441/F441M sound system zones, dynamic proxy, gain-staging",
-    "custom_components/myhome/ownd/connection.py": "Hardened TCP stream, fail-closed auth, watchdog loop",
     "custom_components/myhome/bus_monitor.py": "In-band 500-frame circular ring buffer tap (0 extra sockets)",
     "custom_components/myhome/device_trigger.py": "Stateless CEN/CEN+ scenario device automation triggers",
     "custom_components/myhome/diagnostics.py": "Config entry diagnostics with sensitive data redaction",
@@ -36,8 +34,6 @@ COMPONENT_NOTES = {
     "custom_components/myhome/core/transport/tcp.py": "Modular TCP/IP socket transport with framed stream parsing",
     "custom_components/myhome/core/transport/base.py": "Abstract transport layer defining OWN lifecycle contract",
     "custom_components/myhome/light.py": "Relays, auto-dimmer detection, and brightness transitions",
-    "custom_components/myhome/ownd/discovery.py": "SSDP & UPnP gateway detection and descriptor parsing",
-    "custom_components/myhome/ownd/message.py": "OpenWebNet frame parsers, encoders, and dimension decoders",
     "custom_components/myhome/config_flow.py": "Step handlers, user entry, reauth, and options flow",
     "custom_components/myhome/button.py": "Scenario buttons and bus diagnostic pings",
     "custom_components/myhome/binary_sensor.py": "Magnetic contacts, door/window sensors, motion sensors",

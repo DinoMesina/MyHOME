@@ -2,8 +2,7 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
-from custom_components.myhome.ownd.message import OWNEvent
+from OWNd.message import OWNEvent
 
 
 @pytest.fixture
@@ -452,9 +451,10 @@ class TestCoverEntity:
 
     @pytest.mark.asyncio
     async def test_cover_discovery_message_branches(self, mock_hass, mock_gateway):
+        from OWNd.message import OWNAutomationEvent, OWNEvent
+
         from custom_components.myhome.const import CONF_ENTITY, DOMAIN
         from custom_components.myhome.cover import async_setup_entry
-        from custom_components.myhome.ownd.message import OWNAutomationEvent, OWNEvent
 
         config_entry = MagicMock()
         config_entry.data = {"mac": "00:03:50:00:12:34"}

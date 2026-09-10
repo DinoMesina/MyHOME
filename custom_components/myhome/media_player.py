@@ -54,6 +54,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dispatcher_send
 from homeassistant.helpers.event import async_track_state_change_event
+from OWNd.message import OWNSoundCommand, OWNSoundEvent
 
 from .const import (
     CONF_DECODER_ENTITY,
@@ -66,7 +67,6 @@ from .const import (
 )
 from .decoder_pool import DecoderPool
 from .myhome_device import MyHOMEEntity
-from .ownd.message import OWNSoundCommand, OWNSoundEvent
 
 
 def _build_pool(hass: HomeAssistant, config_entry) -> DecoderPool:

@@ -4,8 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from aiohttp import client_exceptions
-
-from custom_components.myhome.ownd.discovery import (
+from OWNd.discovery import (
     SimpleServiceDiscoveryProtocol,
     SSDPMessage,
     SSDPRequest,
@@ -130,6 +129,9 @@ class MockAioHttpResponse:
     async def text(self):
         return self._text
 
+    def raise_for_status(self):
+        return None
+
 class MockSessionProvider:
     def __init__(self, text_data=None, post_side_effect=None):
         self._text_data = text_data
@@ -191,7 +193,7 @@ async def test_get_scpd_details():
     provider = MockSessionProvider(xml_data)
 
     with patch('aiohttp.ClientSession', return_value=provider), \
-         patch('custom_components.myhome.ownd.discovery.get_port', return_value=20000):
+         patch('OWNd.discovery.get_port', return_value=20000):
 
         details = await _get_scpd_details("http://192.168.1.135:80/description.xml")
 
@@ -220,7 +222,7 @@ async def test_find_gateways():
         return mock_transport, protocol
 
     with patch('asyncio.get_running_loop') as mock_loop, \
-         patch('custom_components.myhome.ownd.discovery._get_scpd_details', return_value={"modelName": "F454", "port": 20000}), \
+         patch('OWNd.discovery._get_scpd_details', return_value={"modelName": "F454", "port": 20000}), \
          patch('asyncio.sleep', return_value=None):
 
         mock_loop.return_value.create_datagram_endpoint = mock_create_datagram_endpoint
@@ -240,8 +242,8 @@ async def test_get_gateway():
         {"address": "192.168.1.135", "modelName": "F454"},
         {"address": "192.168.1.136", "modelName": "MH200N"}
     ]
-    with patch('custom_components.myhome.ownd.discovery._get_scpd_details', side_effect=Exception("no network")), \
-         patch('custom_components.myhome.ownd.discovery.find_gateways', return_value=mock_gateways):
+    with patch('OWNd.discovery._get_scpd_details', side_effect=Exception("no network")), \
+         patch('OWNd.discovery.find_gateways', return_value=mock_gateways):
         gw = await get_gateway("192.168.1.136")
         assert gw is not None
         assert gw["modelName"] == "MH200N"
@@ -255,7 +257,7 @@ async def test_get_gateway():
         "serialNumber": "00:03:50:00:12:34",
         "port": 20000,
     }
-    with patch('custom_components.myhome.ownd.discovery._get_scpd_details', return_value=direct_details):
+    with patch('OWNd.discovery._get_scpd_details', return_value=direct_details):
         gw_direct = await get_gateway("192.168.1.50")
         assert gw_direct["address"] == "192.168.1.50"
         assert gw_direct["serialNumber"] == "00:03:50:00:12:34"

@@ -12,8 +12,7 @@ References:
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
-from custom_components.myhome.ownd.message import (
+from OWNd.message import (
     OWNEvent,
 )
 
@@ -324,6 +323,13 @@ class TestPlatformImportCleanliness:
     def test_all_platforms_import_cleanly(self):
         """Test importing each platform in PLATFORMS without ImportError or syntax issues."""
         import importlib
+        import os
+
+        import custom_components
+
+        repo_cc = os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(__file__)), "custom_components"))
+        if repo_cc not in custom_components.__path__:
+            custom_components.__path__.insert(0, repo_cc)
 
         from custom_components.myhome import PLATFORMS
 
@@ -340,5 +346,13 @@ class TestPlatformImportCleanliness:
     def test_diagnostics_platform_imports_cleanly(self):
         """Test importing the diagnostics platform module."""
         import importlib
+        import os
+
+        import custom_components
+
+        repo_cc = os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(__file__)), "custom_components"))
+        if repo_cc not in custom_components.__path__:
+            custom_components.__path__.insert(0, repo_cc)
+
         mod = importlib.import_module("custom_components.myhome.diagnostics")
         assert hasattr(mod, "async_get_config_entry_diagnostics")

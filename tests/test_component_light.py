@@ -16,6 +16,9 @@ from homeassistant.components.light import (
 )
 from homeassistant.const import CONF_NAME
 from homeassistant.helpers.dispatcher import async_dispatcher_send
+from OWNd.message import (
+    OWNLightingEvent,
+)
 
 from custom_components.myhome.const import (
     CONF_BUS_INTERFACE,
@@ -40,9 +43,6 @@ from custom_components.myhome.light import (
     async_unload_entry,
     eight_bits_to_percent,
     percent_to_eight_bits,
-)
-from custom_components.myhome.ownd.message import (
-    OWNLightingEvent,
 )
 
 
@@ -772,7 +772,7 @@ async def test_light_switch_collision_and_interface_dispatch(hass):
         async_dispatcher_connect(hass, "myhome_update_mac_1_16#4#01", lambda msg: received_unique.append(msg))
         async_dispatcher_connect(hass, "myhome_update_mac_1_16", lambda msg: received_base.append(msg))
 
-        from custom_components.myhome.ownd.message import OWNEvent
+        from OWNd.message import OWNEvent
         msg = OWNEvent.parse("*1*1*16#4#01##")
 
         # Send gateway message
@@ -885,7 +885,7 @@ async def test_light_suppresses_sensor_discovery_and_purges_registry(hass):
 
         # Now test receiving incoming sensor messages:
         # 1. Motion message (*1*34*31##)
-        from custom_components.myhome.ownd.message import OWNEvent
+        from OWNd.message import OWNEvent
         motion_msg = OWNEvent.parse("*1*34*31##")
         async_dispatcher_send(hass, "myhome_message_mac_sensor", motion_msg)
         await hass.async_block_till_done()

@@ -20,6 +20,23 @@ from homeassistant.core import callback
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dispatcher_send
 from homeassistant.helpers.restore_state import RestoreEntity
+from OWNd.message import (
+    CLIMATE_MODE_AUTO,
+    CLIMATE_MODE_COOL,
+    CLIMATE_MODE_HEAT,
+    CLIMATE_MODE_OFF,
+    MESSAGE_TYPE_ACTION,
+    MESSAGE_TYPE_FAN_SPEED,
+    MESSAGE_TYPE_LOCAL_OFFSET,
+    MESSAGE_TYPE_LOCAL_TARGET_TEMPERATURE,
+    MESSAGE_TYPE_MAIN_HUMIDITY,
+    MESSAGE_TYPE_MAIN_TEMPERATURE,
+    MESSAGE_TYPE_MODE,
+    MESSAGE_TYPE_MODE_TARGET,
+    MESSAGE_TYPE_TARGET_TEMPERATURE,
+    OWNHeatingCommand,
+    OWNHeatingEvent,
+)
 
 from .const import (
     CONF_BUS_INTERFACE,
@@ -40,23 +57,6 @@ from .const import (
 )
 from .gateway import MyHOMEGatewayHandler
 from .myhome_device import MyHOMEEntity
-from .ownd.message import (
-    CLIMATE_MODE_AUTO,
-    CLIMATE_MODE_COOL,
-    CLIMATE_MODE_HEAT,
-    CLIMATE_MODE_OFF,
-    MESSAGE_TYPE_ACTION,
-    MESSAGE_TYPE_FAN_SPEED,
-    MESSAGE_TYPE_LOCAL_OFFSET,
-    MESSAGE_TYPE_LOCAL_TARGET_TEMPERATURE,
-    MESSAGE_TYPE_MAIN_HUMIDITY,
-    MESSAGE_TYPE_MAIN_TEMPERATURE,
-    MESSAGE_TYPE_MODE,
-    MESSAGE_TYPE_MODE_TARGET,
-    MESSAGE_TYPE_TARGET_TEMPERATURE,
-    OWNHeatingCommand,
-    OWNHeatingEvent,
-)
 
 
 async def async_setup_entry(hass, config_entry, async_add_entities):

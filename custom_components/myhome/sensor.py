@@ -22,6 +22,21 @@ from homeassistant.core import callback
 from homeassistant.helpers import entity_platform
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
+from OWNd.message import (
+    MESSAGE_TYPE_ACTIVE_POWER,
+    MESSAGE_TYPE_CURRENT_DAY_CONSUMPTION,
+    MESSAGE_TYPE_CURRENT_MONTH_CONSUMPTION,
+    MESSAGE_TYPE_ENERGY_TOTALIZER,
+    MESSAGE_TYPE_ILLUMINANCE,
+    MESSAGE_TYPE_MAIN_TEMPERATURE,
+    MESSAGE_TYPE_SECONDARY_TEMPERATURE,
+    OWNEnergyCommand,
+    OWNEnergyEvent,
+    OWNHeatingCommand,
+    OWNHeatingEvent,
+    OWNLightingCommand,
+    OWNLightingEvent,
+)
 from voluptuous import (
     All,
     Coerce,
@@ -43,21 +58,6 @@ from .const import (
 )
 from .gateway import MyHOMEGatewayHandler
 from .myhome_device import MyHOMEEntity
-from .ownd.message import (
-    MESSAGE_TYPE_ACTIVE_POWER,
-    MESSAGE_TYPE_CURRENT_DAY_CONSUMPTION,
-    MESSAGE_TYPE_CURRENT_MONTH_CONSUMPTION,
-    MESSAGE_TYPE_ENERGY_TOTALIZER,
-    MESSAGE_TYPE_ILLUMINANCE,
-    MESSAGE_TYPE_MAIN_TEMPERATURE,
-    MESSAGE_TYPE_SECONDARY_TEMPERATURE,
-    OWNEnergyCommand,
-    OWNEnergyEvent,
-    OWNHeatingCommand,
-    OWNHeatingEvent,
-    OWNLightingCommand,
-    OWNLightingEvent,
-)
 
 SCAN_INTERVAL = timedelta(seconds=300)
 

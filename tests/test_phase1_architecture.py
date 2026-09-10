@@ -20,6 +20,26 @@ from homeassistant.const import (
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
+from OWNd.connection import (
+    OWNCommandSession,
+    OWNEventSession,
+    OWNGateway,
+    OWNSession,
+)
+from OWNd.message import OWNCommand
+from OWNd.profiles import (
+    WHO_AUTOMATION,
+    WHO_ENERGY,
+    WHO_LIGHTING,
+    WHO_SOUND,
+    F454Profile,
+    F455Profile,
+    GenericGatewayProfile,
+    MH200NProfile,
+    MH202Profile,
+    MyHomeServer1Profile,
+    get_gateway_profile,
+)
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.myhome.config_flow import MyhomeFlowHandler, MyhomeOptionsFlowHandler
@@ -40,26 +60,6 @@ from custom_components.myhome.const import (
     DOMAIN,
 )
 from custom_components.myhome.gateway import MyHOMEGatewayHandler
-from custom_components.myhome.gateway_profile import (
-    WHO_AUTOMATION,
-    WHO_ENERGY,
-    WHO_LIGHTING,
-    WHO_SOUND,
-    F454Profile,
-    F455Profile,
-    GenericGatewayProfile,
-    MH200NProfile,
-    MH202Profile,
-    MyHomeServer1Profile,
-    get_gateway_profile,
-)
-from custom_components.myhome.ownd.connection import (
-    OWNCommandSession,
-    OWNEventSession,
-    OWNGateway,
-    OWNSession,
-)
-from custom_components.myhome.ownd.message import OWNCommand
 from tests.mock_gateway_harness import MockGatewayHarness
 
 # ── 1. GatewayProfile Tests ──────────────────────────────────────────────────
@@ -144,13 +144,13 @@ class TestGatewayProfiles:
     def test_generic_profile(self):
         profile = GenericGatewayProfile("CustomBox")
         assert profile.model_name == "CustomBox"
-        assert profile.max_workers == 2
-        assert profile.max_command_workers == 2
+        assert profile.max_workers == 1
+        assert profile.max_command_workers == 1
         assert profile.command_queue_delay == 0.05
         assert profile.supports_extended_frames is False
         assert profile.display_name == "CustomBox Gateway"
-        assert profile.can_support_workers(2) is True
-        assert profile.can_support_workers(3) is False
+        assert profile.can_support_workers(1) is True
+        assert profile.can_support_workers(2) is False
 
     @pytest.mark.parametrize(
         "name,expected_cls",
@@ -296,9 +296,9 @@ class TestMockGatewayHarness:
             cmd = OWNCommand.parse("*1*1*21##")
             assert await session.send(cmd) is None
             assert harness.received_messages.count("*1*1*21##") == 2
-            mock_logger.warning.assert_called_with(
-                "%s Gateway rejected message %s (NACK, %s response(s)).",
-                gw.log_id, cmd, 0,
+            mock_logger.error.assert_called_with(
+                "%s Could not send message `%s`. No more retries.",
+                gw.log_id, cmd,
             )
 
             # An explicit NACK for status request does NOT retry or warn (logged at DEBUG)
@@ -597,9 +597,10 @@ class TestConnectionHardening:
         })
 
         session = OWNSession(gateway=gw, logger=MagicMock())
-        with patch("asyncio.open_connection", side_effect=asyncio.TimeoutError()):
-            with pytest.raises(asyncio.TimeoutError):
-                await session.test_connection()
+        with patch("asyncio.open_connection", side_effect=asyncio.TimeoutError()), \
+             patch("asyncio.sleep", new_callable=AsyncMock):
+            result = await session.test_connection()
+        assert result == {"Success": False, "Message": "connection_error"}
 
     @pytest.mark.asyncio
     async def test_connect_connection_refused(self):
@@ -615,7 +616,7 @@ class TestConnectionHardening:
         with patch("asyncio.open_connection", side_effect=ConnectionRefusedError("Connection refused")), \
              patch("asyncio.sleep", new_callable=AsyncMock):
             res = await session.test_connection()
-            assert res is None
+            assert res == {"Success": False, "Message": "connection_error"}
 
     @pytest.mark.asyncio
     async def test_own_command_session_send_when_disconnected(self):

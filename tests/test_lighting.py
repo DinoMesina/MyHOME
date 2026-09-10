@@ -1,5 +1,5 @@
 """Tests for OWNLightingEvent and OWNLightingCommand protocol translation."""
-from custom_components.myhome.ownd.message import (
+from OWNd.message import (
     MESSAGE_TYPE_ILLUMINANCE,
     MESSAGE_TYPE_MOTION,
     MESSAGE_TYPE_MOTION_TIMEOUT,

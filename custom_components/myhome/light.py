@@ -22,6 +22,10 @@ from homeassistant.const import (
 from homeassistant.core import callback
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dispatcher_send
+from OWNd.message import (
+    OWNLightingCommand,
+    OWNLightingEvent,
+)
 
 from .const import (
     CONF_BUS_INTERFACE,
@@ -50,10 +54,6 @@ from .const import (
 )
 from .gateway import MyHOMEGatewayHandler
 from .myhome_device import MyHOMEEntity
-from .ownd.message import (
-    OWNLightingCommand,
-    OWNLightingEvent,
-)
 
 
 async def async_setup_entry(hass, config_entry, async_add_entities):

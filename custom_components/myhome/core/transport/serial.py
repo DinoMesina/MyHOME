@@ -14,7 +14,8 @@ import asyncio
 import logging
 from typing import Any, Optional
 
-from ...ownd.message import OWNMessage, OWNSignaling
+from OWNd.message import OWNMessage, OWNSignaling
+
 from .base import OWNTransport
 
 _LOGGER = logging.getLogger(__name__)

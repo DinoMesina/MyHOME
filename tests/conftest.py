@@ -1,7 +1,43 @@
 """Fixtures for MyHOME tests using pytest-homeassistant-custom-component."""
 import asyncio
+import importlib
+import json
+import os
 import platform
+import subprocess
+import sys
 import warnings
+
+# Ensure required integration dependencies declared in manifest.json are available in CI
+try:
+    import OWNd  # noqa: F401
+except ImportError:
+    manifest_path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "custom_components",
+        "myhome",
+        "manifest.json",
+    )
+    if os.path.exists(manifest_path):
+        with open(manifest_path, encoding="utf-8") as f:
+            reqs = json.load(f).get("requirements", [])
+            for req in reqs:
+                subprocess.check_call([sys.executable, "-m", "pip", "install", req])
+    else:
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "OWNd==2.0.0b2"])
+    importlib.invalidate_caches()
+
+# Ensure repository custom_components directory is discoverable even when
+# pytest-homeassistant-custom-component redirects custom_components package path
+try:
+    import custom_components
+    _repo_cc = os.path.abspath(
+        os.path.join(os.path.dirname(os.path.dirname(__file__)), "custom_components")
+    )
+    if hasattr(custom_components, "__path__") and _repo_cc not in custom_components.__path__:
+        custom_components.__path__.insert(0, _repo_cc)
+except ImportError:
+    pass
 
 import pytest
 from homeassistant.core import State

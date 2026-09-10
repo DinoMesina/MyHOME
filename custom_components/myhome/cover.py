@@ -22,6 +22,10 @@ from homeassistant.core import callback
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dispatcher_send
 from homeassistant.helpers.restore_state import RestoreEntity
+from OWNd.message import (
+    OWNAutomationCommand,
+    OWNAutomationEvent,
+)
 
 from .const import (
     CONF_ADVANCED_SHUTTER,
@@ -40,10 +44,6 @@ from .const import (
 )
 from .gateway import MyHOMEGatewayHandler
 from .myhome_device import MyHOMEEntity
-from .ownd.message import (
-    OWNAutomationCommand,
-    OWNAutomationEvent,
-)
 
 
 async def async_setup_entry(hass, config_entry, async_add_entities):

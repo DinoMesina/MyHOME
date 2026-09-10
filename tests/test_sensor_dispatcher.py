@@ -6,10 +6,10 @@ import pytest
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_send
+from OWNd.message import OWNMessage
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.myhome.const import CONF_FILE_PATH, DOMAIN
-from custom_components.myhome.ownd.message import OWNMessage
 
 MAC = "00:03:50:00:12:34"
 

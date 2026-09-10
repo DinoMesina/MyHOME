@@ -33,6 +33,7 @@ test = [
     "check-wheel-contents>=0.6.0",
     "validate-pyproject[all]>=0.16",
     "ruff>=0.4.0",
+    "OWNd>=2.0.0b2",
 ]
 
 [project.urls]
@@ -59,9 +60,7 @@ filterwarnings = [
 ]
 
 [tool.coverage.run]
-omit = [
-    "custom_components/myhome/ownd/__main__.py",
-]
+omit = []
 
 [tool.coverage.report]
 show_missing = true
@@ -79,7 +78,6 @@ exclude = [
     ".venv",
     "build",
     "dist",
-    "custom_components/myhome/ownd",
 ]
 
 [tool.ruff.lint]
