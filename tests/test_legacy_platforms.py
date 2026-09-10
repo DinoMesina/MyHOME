@@ -24,6 +24,7 @@ from custom_components.myhome.const import (
     CONF_DEVICE_MODEL,
     CONF_DEVICE_TYPE,
     CONF_ENTITIES,
+    CONF_ENTITY,
     CONF_ENTITY_NAME,
     CONF_FAN_SUPPORT,
     CONF_FIRMWARE,
@@ -140,6 +141,8 @@ async def test_legacy_platforms_setup_and_execution(hass: HomeAssistant, mock_ga
 
     success = await hass.config_entries.async_setup(config_entry.entry_id)
     assert success
+    await hass.async_block_till_done()
+    hass.data[DOMAIN][mac_addr][CONF_ENTITY]._on_event_connection_state_change(True)
     await hass.async_block_till_done()
 
     # Hit Switch turn_on and turn_off coverage

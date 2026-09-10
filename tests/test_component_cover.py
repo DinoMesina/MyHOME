@@ -200,8 +200,12 @@ class TestMyHOMECoverEntity:
     async def test_async_lifecycle_and_update(self, basic_cover, hass):
         basic_cover.async_on_remove = MagicMock()
         await basic_cover.async_added_to_hass()
-        assert basic_cover.async_on_remove.call_count == 2
+        assert basic_cover.async_on_remove.call_count == 3
 
+        basic_cover._gateway_handler.send_status_request.assert_awaited_once()
+        assert str(basic_cover._gateway_handler.send_status_request.call_args[0][0]) == "*#2*21##"
+
+        basic_cover._gateway_handler.send_status_request.reset_mock()
         await basic_cover.async_update()
         basic_cover._gateway_handler.send_status_request.assert_awaited_once()
 
@@ -221,6 +225,28 @@ class TestMyHOMECoverEntity:
         advanced_cover._gateway_handler.send.reset_mock()
         await advanced_cover.async_set_cover_position(**{ATTR_POSITION: 45})
         advanced_cover._gateway_handler.send.assert_awaited()
+        assert (
+            str(advanced_cover._gateway_handler.send.call_args[0][0])
+            == "*#2*22#4#02*#11#001*45##"
+        )
+
+        # MH201 rejects the calibrated level command at 0%; use plain DOWN.
+        advanced_cover._gateway_handler.send.reset_mock()
+        await advanced_cover.async_set_cover_position(**{ATTR_POSITION: 0})
+        advanced_cover._gateway_handler.send.assert_awaited_once()
+        assert (
+            str(advanced_cover._gateway_handler.send.call_args[0][0])
+            == "*2*2*22#4#02##"
+        )
+
+        # 100% remains a calibrated level command because MH201 accepts it.
+        advanced_cover._gateway_handler.send.reset_mock()
+        await advanced_cover.async_set_cover_position(**{ATTR_POSITION: 100})
+        advanced_cover._gateway_handler.send.assert_awaited_once()
+        assert (
+            str(advanced_cover._gateway_handler.send.call_args[0][0])
+            == "*#2*22#4#02*#11#001*100##"
+        )
 
         # Set position without ATTR_POSITION kwarg
         advanced_cover._gateway_handler.send.reset_mock()
@@ -522,13 +548,19 @@ class TestMyHOMECoverEntity:
         await basic_cover.async_added_to_hass()
         assert basic_cover.current_cover_position == 50
 
-        # 3. Advanced cover does not call async_get_last_state (relies on hardware status)
+        # 3. Advanced cover does not restore stale state and requests live hardware status
         advanced_cover._attr_current_cover_position = 50
         advanced_cover.async_get_last_state = AsyncMock(
             return_value=State("cover.advanced_shutter", "open", {ATTR_CURRENT_POSITION: 80})
         )
+        advanced_cover._gateway_handler.send_status_request.reset_mock()
         await advanced_cover.async_added_to_hass()
         advanced_cover.async_get_last_state.assert_not_called()
+        advanced_cover._gateway_handler.send_status_request.assert_awaited_once()
+        assert (
+            str(advanced_cover._gateway_handler.send_status_request.call_args[0][0])
+            == "*#2*22#4#02*10##"
+        )
         assert advanced_cover._attr_current_cover_position == 50
 
 
@@ -766,7 +798,3 @@ async def test_cover_advanced_shutter_key_precedence(hass, mock_gateway):
 
     assert len(added) == 1
     assert added[0]._advanced is True
-
-
-
-

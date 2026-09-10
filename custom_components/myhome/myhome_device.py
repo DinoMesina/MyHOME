@@ -7,7 +7,9 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from .gateway import MyHOMEGatewayHandler
 
+from homeassistant.core import callback
 from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import Entity
 
 from .const import DOMAIN
@@ -35,6 +37,7 @@ class MyHOMEEntity(Entity):
         self._manufacturer = manufacturer or "BTicino S.p.A."
         self._model = model
         self._gateway_handler = gateway
+        self._availability_listener_registered = False
         self._attr_has_entity_name = False
         self._attr_name = name
         self.entity_id = f"{platform.lower()}.{name.lower().replace(' ', '_').replace('#', '')}"
@@ -58,8 +61,36 @@ class MyHOMEEntity(Entity):
         """Return gateway unique ID associated with this device."""
         return self._gateway_handler.unique_id
 
+    @property
+    def available(self) -> bool:
+        """Return whether the gateway is available."""
+        return self._gateway_handler.available
+
+    @callback
+    def _handle_availability_update(self) -> None:
+        """Write state when the gateway availability changes."""
+        self.async_write_ha_state()
+
+    @callback
+    def _register_availability_listener(self) -> None:
+        """Register the gateway availability listener once."""
+        if self._availability_listener_registered:
+            return
+        target_hass = self.hass or self._hass
+        if target_hass is None:
+            return
+        self.async_on_remove(
+            async_dispatcher_connect(
+                target_hass,
+                self._gateway_handler.availability_signal,
+                self._handle_availability_update,
+            )
+        )
+        self._availability_listener_registered = True
+
     async def async_added_to_hass(self):
         """When entity is added to hass."""
+        self._register_availability_listener()
         await self.async_update()
 
     async def async_will_remove_from_hass(self):
