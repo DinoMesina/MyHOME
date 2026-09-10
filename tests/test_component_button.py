@@ -105,7 +105,7 @@ async def test_disable_button_entity(hass):
 
     assert btn1.name == "Lock"
     assert btn1.entity_id == "button.device_lock"
-    assert btn1.unique_id == "mac-device_1-disable"
+    assert btn1.unique_id == "mac-1-device_1-disable"
     assert btn1.extra_state_attributes["A"] == "1"
     assert btn1.extra_state_attributes["PL"] == "2"
     assert "Int" not in btn1.extra_state_attributes
@@ -177,7 +177,7 @@ async def test_enable_button_entity(hass):
 
     assert btn1.name == "Unlock"
     assert btn1.entity_id == "button.device_unlock"
-    assert btn1.unique_id == "mac-device_1-enable"
+    assert btn1.unique_id == "mac-1-device_1-enable"
 
     await btn1.async_press()
     mock_gateway.send.assert_called_once_with("*14*1*12##")

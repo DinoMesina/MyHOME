@@ -235,6 +235,11 @@ class MyHomeDeviceSchema(Schema):
                     data[device][CONF_NAME] if CONF_NAME in data[device] else "Central unit" if data[device][CONF_ZONE].startswith("#0") else f"Zone {data[device][CONF_ZONE]}"
                 )
                 _rekeyed_data[_new_key] = data[device]
+                _rekeyed_data[str(device)] = data[device]
+                clean_zone = str(data[device][CONF_ZONE]).split("#")[-1]
+                _rekeyed_data[clean_zone] = data[device]
+                _rekeyed_data[str(data[device][CONF_ZONE])] = data[device]
+                _rekeyed_data[f"zone_{clean_zone}"] = data[device]
             if CONF_DEVICE_MODEL not in data[device]:
                 data[device][CONF_DEVICE_MODEL] = None
             if CONF_ICON not in data[device]:

@@ -409,7 +409,10 @@ async def test_setup_entry_duplicate_and_timeout(hass: HomeAssistant):
 
 async def test_register_frontend_branches(hass: HomeAssistant):
     """Test _async_register_frontend static path and frontend script registration."""
-    from custom_components.myhome import _async_register_frontend
+    from custom_components.myhome import _async_register_frontend, _get_card_url
+    card_path = os.path.join(os.path.dirname(__file__), "..", "custom_components", "myhome", "frontend", "myhome-bus-card.js")
+    expected_url = _get_card_url(card_path)
+    assert "?v=" in expected_url
 
     # 1. Reset flag & test when http is None, early return
     hass.data.setdefault(DOMAIN, {})
@@ -429,7 +432,7 @@ async def test_register_frontend_branches(hass: HomeAssistant):
     ) as mock_add_url:
         await _async_register_frontend(hass)
         assert hass.data[DOMAIN]["_frontend_registered"] is True
-        mock_add_url.assert_called_once_with(hass, "/myhome_static/myhome-bus-card.js")
+        mock_add_url.assert_called_once_with(hass, expected_url)
 
     # 3. Early return when already registered
     mock_http.async_register_static_paths.reset_mock()
@@ -465,15 +468,31 @@ async def test_register_frontend_branches(hass: HomeAssistant):
     await _async_register_frontend(hass)
     mock_resources.async_create_item.assert_awaited_once_with({
         "res_type": "module",
-        "url": "/myhome_static/myhome-bus-card.js",
+        "url": expected_url,
     })
 
-    # 7. Lovelace resource already exists
+    # 7. Lovelace resource already exists with old URL -> updates via async_update_item
     hass.data[DOMAIN]["_frontend_registered"] = False
-    mock_resources.async_items.return_value = [{"url": "/myhome_static/myhome-bus-card.js"}]
+    mock_resources.async_items.return_value = [{"id": "item1", "url": "/myhome_static/myhome-bus-card.js"}]
     mock_resources.async_create_item.reset_mock()
+    mock_resources.async_update_item = AsyncMock()
     await _async_register_frontend(hass)
     mock_resources.async_create_item.assert_not_called()
+    mock_resources.async_update_item.assert_awaited_once_with("item1", {
+        "res_type": "module",
+        "url": expected_url,
+    })
+
+    # 7b. Lovelace resource has old query param but async_update_item not available
+    hass.data[DOMAIN]["_frontend_registered"] = False
+    mock_res_noupdate = MagicMock()
+    del mock_res_noupdate.async_update_item
+    mock_res_noupdate.loaded = True
+    mock_res_noupdate.async_items.return_value = [{"url": "/myhome_static/myhome-bus-card.js?v=old"}]
+    mock_res_noupdate.async_create_item = AsyncMock()
+    hass.data["lovelace"] = MagicMock(resources=mock_res_noupdate)
+    await _async_register_frontend(hass)
+    mock_res_noupdate.async_create_item.assert_not_called()
 
     # 8. Lovelace raises exception
     hass.data[DOMAIN]["_frontend_registered"] = False
@@ -517,18 +536,20 @@ async def test_register_frontend_branches(hass: HomeAssistant):
     await hass.async_block_till_done()
     deferred_res.async_create_item.assert_awaited_once_with({
         "res_type": "module",
-        "url": "/myhome_static/myhome-bus-card.js",
+        "url": expected_url,
     })
 
-    # 12. Lovelace resource with query parameter matches and does not duplicate
+    # 12. Lovelace resource with matching versioned URL does not duplicate or update
     hass.data[DOMAIN]["_frontend_registered"] = False
     mock_res_query = MagicMock()
     mock_res_query.loaded = True
-    mock_res_query.async_items.return_value = [{"url": "/myhome_static/myhome-bus-card.js?v=1.0.0"}]
+    mock_res_query.async_items.return_value = [{"id": "item1", "url": expected_url}]
     mock_res_query.async_create_item = AsyncMock()
+    mock_res_query.async_update_item = AsyncMock()
     hass.data["lovelace"] = MagicMock(resources=mock_res_query)
     await _async_register_frontend(hass)
     mock_res_query.async_create_item.assert_not_called()
+    mock_res_query.async_update_item.assert_not_called()
 
     # 13. Lovelace not available registers started listener
     hass.data[DOMAIN]["_frontend_registered"] = False
@@ -565,8 +586,14 @@ async def test_register_frontend_branches(hass: HomeAssistant):
     await _async_register_frontend(hass)
     mock_res_malformed.async_create_item.assert_awaited_once_with({
         "res_type": "module",
-        "url": "/myhome_static/myhome-bus-card.js",
+        "url": expected_url,
     })
+
+    # 16. Test _get_card_url helper directly (fallbacks)
+    assert _get_card_url("/non/existent/path/card.js") == "/myhome_static/myhome-bus-card.js"
+    with patch("builtins.open", side_effect=Exception("Read error")):
+        assert _get_card_url(card_path) == "/myhome_static/myhome-bus-card.js"
+
 
 
 async def test_setup_entry_myhome_yaml_loading(hass: HomeAssistant):
