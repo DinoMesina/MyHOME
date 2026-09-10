@@ -3,6 +3,7 @@
 Issue #268: Friendly Name in Climate section in myhome.yaml not reported after migration
 Issue #269: Lock/unlock buttons create new entity ids upon upgrade
 """
+import os
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -648,6 +649,13 @@ async def test_issue_268_climate_yaml_indexing_in_init(hass: HomeAssistant):
         }
     }
 
+    real_isfile = os.path.isfile
+
+    def fake_isfile(p):
+        if "myhome.yaml" in str(p):
+            return True
+        return real_isfile(p)
+
     with patch(
         "custom_components.myhome.gateway.OWNSession.test_connection",
         return_value={"Success": True, "Message": None},
@@ -656,7 +664,7 @@ async def test_issue_268_climate_yaml_indexing_in_init(hass: HomeAssistant):
     ), patch(
         "custom_components.myhome.gateway.MyHOMEGatewayHandler.sending_loop"
     ), patch(
-        "os.path.isfile", return_value=True
+        "os.path.isfile", side_effect=fake_isfile
     ), patch(
         "homeassistant.util.yaml.loader.load_yaml", return_value=raw_yaml
     ):

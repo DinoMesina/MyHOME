@@ -497,6 +497,7 @@ async def test_register_frontend_branches(hass: HomeAssistant):
     # 8. Lovelace raises exception
     hass.data[DOMAIN]["_frontend_registered"] = False
     mock_resources.async_items.side_effect = Exception("Lovelace storage error")
+    hass.data["lovelace"] = MagicMock(resources=mock_resources)
     with patch.object(hass, "is_running", False):
         await _async_register_frontend(hass)
 
