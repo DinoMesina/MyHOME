@@ -53,6 +53,12 @@ def test_card_js_contains_who_5_and_generalization():
     assert 'value="ack"' in content
     assert 'value="nack"' in content
 
+    # 6. Verify single canonical card registration without duplicate alias in window.customCards
+    assert 'type: "myhome-openwebnet-bus-monitor"' in content
+    assert 'filter((c) => c.type !== "myhome-bus-card")' in content
+    assert 'customElements.define("myhome-bus-card"' in content
+    assert 'name: "MyHOME Bus Card (Alias)"' not in content
+
 
 def test_backend_filter_matches_who_5():
     """Verify backend _matches_filter accurately matches WHO=5 frames."""
