@@ -1116,10 +1116,13 @@ async def test_async_ensure_ownd_engine_auto_install_success(hass: HomeAssistant
 
     with patch("homeassistant.util.package.is_installed", side_effect=mock_is_installed), \
          patch("homeassistant.requirements.async_process_requirements", new_callable=AsyncMock) as mock_proc, \
+         patch("importlib.reload") as mock_reload, \
+         patch("importlib.invalidate_caches"), \
          patch("custom_components.myhome.get_ownd_version", side_effect=["2.0.0b2", INTEGRATION_VERSION]):
         result = await async_ensure_ownd_engine(hass)
         assert result is True
         mock_proc.assert_awaited_once_with(hass, "myhome", [f"OWNd=={INTEGRATION_VERSION}"])
+        assert mock_reload.called
 
 
 async def test_async_ensure_ownd_engine_install_failed(hass: HomeAssistant):
