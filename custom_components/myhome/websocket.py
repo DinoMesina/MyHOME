@@ -17,7 +17,14 @@ from homeassistant.helpers import device_registry as dr
 from OWNd.message import OWNMessage
 
 from .bus_monitor import BusFrame, BusMonitor
-from .const import CONF_ENTITY, CONF_FIRMWARE, CONF_WORKER_COUNT, DOMAIN, INTEGRATION_VERSION
+from .const import (
+    CONF_ENTITY,
+    CONF_FIRMWARE,
+    CONF_WORKER_COUNT,
+    DOMAIN,
+    INTEGRATION_VERSION,
+    get_ownd_version,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -186,6 +193,7 @@ def _extract_gateway_info(gw: Optional[Any]) -> dict[str, Any]:
         "queue_depth": queue_depth,
         "is_connected": is_connected,
         "integration_version": INTEGRATION_VERSION,
+        "ownd_version": get_ownd_version(),
     }
 
 

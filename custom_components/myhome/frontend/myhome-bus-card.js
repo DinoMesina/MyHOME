@@ -488,6 +488,7 @@ class MyHomeBusCard extends HTMLElement {
           <div>RX: <span id="stat-rx" class="stat-val">0</span></div>
           <div>TX: <span id="stat-tx" class="stat-val">0</span></div>
           <div>Queue: <span id="stat-queue" class="stat-val">0</span></div>
+          <div style="margin-left: auto; font-size: 0.75rem; opacity: 0.85;">MyHOME <span id="stat-version" class="stat-val">v2.0.0b4</span></div>
         </div>
 
         <div class="controls">
@@ -595,11 +596,17 @@ class MyHomeBusCard extends HTMLElement {
     const rx = root.getElementById("stat-rx");
     const tx = root.getElementById("stat-tx");
     const queue = root.getElementById("stat-queue");
+    const ver = root.getElementById("stat-version");
     if (buf) buf.textContent = this._frames.length;
     if (max) max.textContent = this._maxDisplayFrames;
     if (rx) rx.textContent = this._stats.total_rx;
     if (tx) tx.textContent = this._stats.total_tx;
     if (queue) queue.textContent = (this._gatewayInfo && this._gatewayInfo.queue_depth != null) ? this._gatewayInfo.queue_depth : 0;
+    if (ver && this._gatewayInfo) {
+      const intVer = this._gatewayInfo.integration_version || "2.0.0b4";
+      const owndVer = this._gatewayInfo.ownd_version;
+      ver.textContent = owndVer && owndVer !== "unknown" ? `v${intVer} (OWNd ${owndVer})` : `v${intVer}`;
+    }
   }
 
   async _copyToClipboard(text) {
@@ -635,7 +642,8 @@ class MyHomeBusCard extends HTMLElement {
       (this.hass && this.hass.config && this.hass.config.version) ||
       "Unknown";
     const gw = this._gatewayInfo || {};
-    const integrationVersion = gw.integration_version || "2.0.0b3";
+    const integrationVersion = gw.integration_version || "2.0.0b4";
+    const owndVersion = gw.ownd_version || "Unknown";
     const userAgent = (typeof navigator !== "undefined" && navigator.userAgent) ? navigator.userAgent : "Unknown";
     const timestamp = new Date().toISOString();
 
@@ -691,6 +699,7 @@ class MyHomeBusCard extends HTMLElement {
 **Environment:**
 - **Home Assistant Version:** ${haVersion}
 - **Integration Version:** ${integrationVersion}
+- **OWNd Protocol Engine:** ${owndVersion}
 - **Browser / User Agent:** ${userAgent}
 - **Timestamp:** ${timestamp}
 
@@ -750,9 +759,10 @@ ${framesText}
       (this._hass && this._hass.config && this._hass.config.version) ||
       (this.hass && this.hass.config && this.hass.config.version) ||
       "";
-    const integrationVersion = (this._gatewayInfo && this._gatewayInfo.integration_version) || "2.0.0b3";
+    const integrationVersion = (this._gatewayInfo && this._gatewayInfo.integration_version) || "2.0.0b4";
+    const owndVersion = (this._gatewayInfo && this._gatewayInfo.ownd_version) || "Unknown";
 
-    const issueUrl = `https://github.com/OpenWebNet-HA/MyHOME/issues/new?template=bug_report.yml&ha_version=${encodeURIComponent(haVersion)}&integration_version=${encodeURIComponent(integrationVersion)}`;
+    const issueUrl = `https://github.com/OpenWebNet-HA/MyHOME/issues/new?template=bug_report.yml&ha_version=${encodeURIComponent(haVersion)}&integration_version=${encodeURIComponent(integrationVersion)}&ownd_version=${encodeURIComponent(owndVersion)}`;
 
     const banner = this.shadowRoot.getElementById("feedback-banner");
     if (this._bannerTimeout) {
@@ -882,7 +892,7 @@ if (!customElements.get("myhome-bus-card")) {
 }
 
 console.info(
-  "%c MYHOME-BUS-CARD %c v2.0.0b3 ",
+  "%c MYHOME-BUS-CARD %c v2.0.0b4 ",
   "background:#03a9f4;color:#fff;font-weight:bold;padding:2px 4px;border-radius:3px 0 0 3px;",
   "background:#263238;color:#fff;padding:2px 4px;border-radius:0 3px 3px 0;"
 );

@@ -582,7 +582,8 @@ def test_extract_gateway_info_edge_cases():
     assert rs_info["serial_port"] == "/dev/ttyUSB0"
     assert rs_info["host"] == ""
     assert rs_info["port"] is None
-    assert rs_info["integration_version"] == "2.0.0b3"
+    assert rs_info["integration_version"] == "2.0.0b4"
+    assert "ownd_version" in rs_info
 
     # 9. String port on raw_gw (e.g. COM3)
     com_gw = MagicMock()

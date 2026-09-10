@@ -6,7 +6,17 @@ DOMAIN = "myhome"
 
 ATTR_GATEWAY = "gateway"
 ATTR_MESSAGE = "message"
-INTEGRATION_VERSION = "2.0.0b3"
+INTEGRATION_VERSION = "2.0.0b4"
+
+
+def get_ownd_version() -> str:
+    """Return the installed version of the OWNd protocol engine."""
+    try:
+        import importlib.metadata
+
+        return importlib.metadata.version("OWNd")
+    except Exception:
+        return "unknown"
 
 CONF = "config"
 CONF_ENTITY = "entity"

@@ -27,7 +27,9 @@ from .const import (
     CONF_WORKER_COUNT,
     CONF_ZONE,
     DOMAIN,
+    INTEGRATION_VERSION,
     LOGGER,
+    get_ownd_version,
 )
 from .gateway import MyHOMEGatewayHandler
 
@@ -157,6 +159,12 @@ async def async_setup(hass, config):
     """Set up the MyHOME component."""
     hass.data.setdefault(DOMAIN, {})
 
+    LOGGER.info(
+        "Initializing MyHOME integration v%s (OWNd v%s)",
+        INTEGRATION_VERSION,
+        get_ownd_version(),
+    )
+
     from .websocket import async_setup_websocket_api
     async_setup_websocket_api(hass)
     await _async_register_frontend(hass)
@@ -173,6 +181,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     from .websocket import async_setup_websocket_api
     async_setup_websocket_api(hass)
     await _async_register_frontend(hass)
+
+    LOGGER.info(
+        "Setting up MyHOME gateway '%s' (v%s, OWNd v%s)",
+        entry.title,
+        INTEGRATION_VERSION,
+        get_ownd_version(),
+    )
 
     if entry.data[CONF_MAC] not in hass.data[DOMAIN]:
         hass.data[DOMAIN][entry.data[CONF_MAC]] = {

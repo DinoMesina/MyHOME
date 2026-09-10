@@ -33,6 +33,10 @@ async def test_diagnostics_without_gateway_handler(hass: HomeAssistant):
 
     diag = await async_get_config_entry_diagnostics(hass, mock_entry)
 
+    # Verify versions
+    assert diag["integration_version"] == "2.0.0b4"
+    assert "ownd_version" in diag
+
     # Verify redactions
     assert diag["config_entry"]["entry_id"] == "test_entry_123"
     assert diag["config_entry"]["data"][CONF_PASSWORD] == "**REDACTED**"
@@ -105,6 +109,10 @@ async def test_diagnostics_with_full_gateway_and_bus_monitor(hass: HomeAssistant
     }
 
     diag = await async_get_config_entry_diagnostics(hass, mock_entry)
+
+    # Verify versions
+    assert diag["integration_version"] == "2.0.0b4"
+    assert "ownd_version" in diag
 
     # Verify gateway details
     assert diag["gateway"]["model_name"] == "MH200N"

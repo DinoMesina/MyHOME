@@ -8,7 +8,13 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_MAC, CONF_PASSWORD
 from homeassistant.core import HomeAssistant
 
-from .const import CONF_ENTITIES, CONF_ENTITY, DOMAIN
+from .const import (
+    CONF_ENTITIES,
+    CONF_ENTITY,
+    DOMAIN,
+    INTEGRATION_VERSION,
+    get_ownd_version,
+)
 
 TO_REDACT = {
     CONF_PASSWORD,
@@ -75,6 +81,8 @@ async def async_get_config_entry_diagnostics(
         platforms_info[platform_name] = len(entities)
 
     return {
+        "integration_version": INTEGRATION_VERSION,
+        "ownd_version": get_ownd_version(),
         "config_entry": {
             "entry_id": entry.entry_id,
             "version": entry.version,

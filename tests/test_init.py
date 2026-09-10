@@ -1080,6 +1080,21 @@ async def test_setup_entry_pruning_exception_handled(hass: HomeAssistant):
         await hass.async_block_till_done()
 
 
+def test_get_ownd_version():
+    """Test get_ownd_version helper returns version or fallback."""
+    from custom_components.myhome.const import get_ownd_version
+
+    # Success path
+    ver = get_ownd_version()
+    assert isinstance(ver, str)
+    assert ver != ""
+
+    # Exception fallback
+    with patch("importlib.metadata.version", side_effect=Exception("Package not found")):
+        assert get_ownd_version() == "unknown"
+
+
+
 
 
 
