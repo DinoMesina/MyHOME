@@ -21,7 +21,7 @@ Maintained by the **[OpenWebNet-HA](https://github.com/OpenWebNet-HA)** communit
 [📦 Installation](#-installation) • [🏛️ Supported Hardware](#️-supported-hardware) • [📚 Wiki Docs](https://github.com/OpenWebNet-HA/MyHOME/wiki) • [💬 Discussions](https://github.com/OpenWebNet-HA/MyHOME/discussions) • [🤝 Contributing](CONTRIBUTING.md) • [🔒 Security](SECURITY.md)
 
 > [!TIP]
-> **🚀 V2 Phase 1 Architecture Beta Now Live**: The modernized OpenWebNet integration is now available as an official GitHub pre-release (**`2.0.0b2`**)! See the [Installation & Beta Guide](#-installation) below to install or update in 2 minutes.
+> **🚀 V2 Phase 1 Architecture Beta Now Live**: The modernized OpenWebNet integration is now available as an official GitHub pre-release (**`2.0.0b3`**)! See the [Installation & Beta Guide](#-installation) below to install or update in 2 minutes.
 
 ---
 
@@ -116,13 +116,13 @@ We now maintain a comprehensive, community-curated **[GitHub Wiki](https://githu
   3. Locate the pre-release switch for MyHome: **`MyHome (Approve pre-releases)`** or **`MyHome Beta`** (enable the entity first if disabled).
   4. Turn that switch **ON**.
   5. Open **HACS → Integrations → MyHome**.
-  6. Click the blue **Download** button (or `⋮` → **Redownload**), select **`2.0.0b2`** from the version dropdown, and click **Download**.
+  6. Click the blue **Download** button (or `⋮` → **Redownload**), select **`2.0.0b3`** from the version dropdown, and click **Download**.
 
 - **In HACS 1.x:**
   1. Open **HACS → Integrations → MyHome**.
   2. Click the **three dots (`⋮`)** in the top-right corner and select **Redownload** (or click **Download**).
   3. Toggle **"Show beta versions"** to **ON**.
-  4. Select **`2.0.0b2`** from the version dropdown and click **Download**.
+  4. Select **`2.0.0b3`** from the version dropdown and click **Download**.
 
 #### Step 3: Restart Home Assistant
 Go to **Settings → System → Restart** (or **Developer Tools → YAML → Restart**).
@@ -135,7 +135,7 @@ If you have the **Terminal & SSH** add-on enabled in Home Assistant, run this co
 
 ```bash
 cd /config/custom_components
-wget https://github.com/OpenWebNet-HA/MyHOME/releases/download/2.0.0b2/myhome.zip -O myhome_beta.zip
+wget https://github.com/OpenWebNet-HA/MyHOME/releases/download/2.0.0b3/myhome.zip -O myhome_beta.zip
 rm -rf myhome
 unzip -q myhome_beta.zip -d myhome
 rm myhome_beta.zip
@@ -153,7 +153,7 @@ ha core restart
 ### Method 3: Manual Installation (Archive / Samba)
 
 1. Download the latest release package:  
-   👉 **[Download myhome.zip (v2.0.0b2)](https://github.com/OpenWebNet-HA/MyHOME/releases/download/2.0.0b2/myhome.zip)**
+   👉 **[Download myhome.zip (v2.0.0b3)](https://github.com/OpenWebNet-HA/MyHOME/releases/download/2.0.0b3/myhome.zip)**
 2. Open your Home Assistant configuration directory (via **Samba Share**, **Studio Code Server**, or **File Editor** add-on).
 3. Extract `myhome.zip` directly into `/config/custom_components/myhome/` (overwriting the existing files).
 4. Restart Home Assistant (**Settings → System → Restart**).
