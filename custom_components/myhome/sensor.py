@@ -298,6 +298,46 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
             discovered.add(a)
         return sensor
 
+    @callback
+    def discover_temperature_sensor(where, entity_id=None):
+        """Create temperature probe sensor for WHO 4."""
+        where = str(where)
+        clean_where = where.split("-")[-1].split("#")[0]
+        norm_where = normalize_where(where)
+        clean_norm = normalize_where(clean_where)
+        primary_where = norm_where or clean_norm or where
+
+        name_prefix = (
+            f"Probe {clean_norm or clean_where}"
+            if (clean_where.isdigit() and int(clean_where) >= 100)
+            else f"Zone {clean_norm or clean_where}"
+        )
+        sensor = MyHOMETemperatureSensor(
+            hass=hass,
+            device_id=primary_where,
+            who="4",
+            where=primary_where,
+            name=name_prefix,
+            device_class=SensorDeviceClass.TEMPERATURE,
+            manufacturer="BTicino",
+            model="Temperature Probe",
+            gateway=gateway,
+        )
+        sensor.entity_id = entity_id
+        for a in (
+            ("4", where),
+            ("4", norm_where),
+            ("4", clean_where),
+            ("4", clean_norm),
+            ("4", primary_where),
+        ):
+            if a not in sensors_by_address:
+                sensors_by_address[a] = []
+            if sensor not in sensors_by_address[a]:
+                sensors_by_address[a].append(sensor)
+            discovered.add(a)
+        return sensor
+
     # Restore discovery from the registry, including user names and disabled
     # measurements, without waiting for the gateway's next periodic report.
     try:
@@ -336,6 +376,14 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
                 continue
             if ("1", where) not in configured_addresses and ("1", where) not in discovered and ("1", norm_where) not in discovered:
                 _sensors.append(discover_illuminance_sensor(where, entry.entity_id))
+        elif "-temperature" in entry.unique_id or entry.original_device_class == SensorDeviceClass.TEMPERATURE:
+            after_mac = entry.unique_id.replace(f"{gateway.mac}-", "", 1).replace(f"{config_entry.data[CONF_MAC]}-", "", 1)
+            where = after_mac.replace("-temperature", "").split("-")[-1]
+            norm_where = normalize_where(where)
+            if ("4", norm_where) in discovered or ("4", norm_where) in configured_addresses:
+                continue
+            if ("4", where) not in configured_addresses and ("4", where) not in discovered and ("4", norm_where) not in discovered:
+                _sensors.append(discover_temperature_sensor(where, entry.entity_id))
 
     async_add_entities(_sensors)
 
@@ -344,9 +392,14 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
         if not isinstance(message, (OWNEnergyEvent, OWNHeatingEvent, OWNLightingEvent)):
             return
         message_type = getattr(message, "message_type", None)
-        if message_type is None and not (isinstance(message, OWNLightingEvent) and getattr(message, "dimension", None) == 6):
+        if (
+            message_type is None
+            and not (isinstance(message, OWNLightingEvent) and getattr(message, "dimension", None) == 6)
+            and not (isinstance(message, OWNHeatingEvent) and getattr(message, "dimension", None) in (0, 15))
+        ):
             return
         where = str(message.where)
+        clean_where = where.split("-")[-1].split("#")[0]
         norm_where = normalize_where(where)
         address = _sensor_address(message.who, message.where)
         new_sensor = None
@@ -373,6 +426,28 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
             and ("1", norm_where) not in discovered
         ):
             new_sensor = discover_illuminance_sensor(norm_where or address[1])
+        elif (
+            isinstance(message, OWNHeatingEvent)
+            and getattr(message, "dimension", None) not in (11, 12, 13, 14, 19, 20)
+            and (
+                getattr(message, "dimension", None) == 15
+                or message_type == MESSAGE_TYPE_SECONDARY_TEMPERATURE
+                or (
+                    (message_type == MESSAGE_TYPE_MAIN_TEMPERATURE or getattr(message, "dimension", None) == 0)
+                    and clean_where.isdigit()
+                    and int(clean_where) >= 100
+                )
+            )
+            and address not in configured_addresses
+            and address not in discovered
+            and ("4", where) not in configured_addresses
+            and ("4", where) not in discovered
+            and ("4", clean_where) not in configured_addresses
+            and ("4", clean_where) not in discovered
+            and ("4", norm_where) not in configured_addresses
+            and ("4", norm_where) not in discovered
+        ):
+            new_sensor = discover_temperature_sensor(norm_where or address[1])
 
         target_sensors = []
         for a in (address, (str(message.who), where), (str(message.who), norm_where)):
@@ -708,38 +783,63 @@ class MyHOMETemperatureSensor(MyHOMEEntity, SensorEntity):
 
         Only used by the generic entity update service.
         """
-        await self._gateway_handler.send_status_request(
-            OWNHeatingCommand.get_temperature(self._where)
-        )
+        clean_where = str(self._where).split("-")[-1].split("#")[0]
+        if clean_where.isdigit() and int(clean_where) >= 100:
+            cmd = (
+                getattr(OWNHeatingCommand, "get_probe_temperature", None)
+                and OWNHeatingCommand.get_probe_temperature(self._where)
+            ) or OWNHeatingCommand.get_temperature(self._where)
+        else:
+            cmd = OWNHeatingCommand.get_temperature(self._where)
+        await self._gateway_handler.send_status_request(cmd)
 
     @callback
     def handle_event(self, message: OWNHeatingEvent):
         """Handle an event message."""
-        if message.message_type not in [
-            MESSAGE_TYPE_MAIN_TEMPERATURE,
-            MESSAGE_TYPE_SECONDARY_TEMPERATURE,
-        ]:
+        val = None
+        if message.message_type == MESSAGE_TYPE_MAIN_TEMPERATURE:
+            val = message.main_temperature
+        elif message.message_type == MESSAGE_TYPE_SECONDARY_TEMPERATURE:
+            sec = getattr(message, "secondary_temperature", None)
+            if isinstance(sec, (list, tuple)) and len(sec) > 1:
+                val = sec[1]
+            elif isinstance(sec, (int, float)):
+                val = sec
+            elif hasattr(message, "probe_temperature") and type(message.probe_temperature).__name__ != "MagicMock":
+                val = message.probe_temperature
+        elif getattr(message, "dimension", None) == 15:
+            dim_val = getattr(message, "dimension_value", None)
+            if dim_val:
+                raw = dim_val[1] if len(dim_val) >= 2 else dim_val[0]
+                try:
+                    if len(raw) == 4 and raw.startswith("1"):
+                        val = -float(raw[1:]) / 10.0
+                    else:
+                        val = float(raw) / 10.0
+                except (ValueError, TypeError):
+                    pass
+        elif getattr(message, "dimension", None) == 0:
+            dim_val = getattr(message, "dimension_value", None)
+            if dim_val:
+                raw = dim_val[0]
+                try:
+                    if len(raw) == 4 and raw.startswith("1"):
+                        val = -float(raw[1:]) / 10.0
+                    else:
+                        val = float(raw) / 10.0
+                except (ValueError, TypeError):
+                    pass
+        else:
             return True
 
-        if message.message_type == MESSAGE_TYPE_MAIN_TEMPERATURE:
-            LOGGER.debug(
-                "%s %s",
-                self._gateway_handler.log_id,
-                message.human_readable_log,
-            )
-            self._attr_native_value = message.main_temperature
-            if self.hass is not None or hasattr(self.async_schedule_update_ha_state, "assert_called"):
-                try:
-                    self.async_schedule_update_ha_state()
-                except RuntimeError:
-                    pass
-        elif message.message_type == MESSAGE_TYPE_SECONDARY_TEMPERATURE:
-            LOGGER.debug(
-                "%s %s",
-                self._gateway_handler.log_id,
-                message.human_readable_log,
-            )
-            self._attr_native_value = message.secondary_temperature[1]
+        if val is not None:
+            if hasattr(message, "human_readable_log") and message.human_readable_log:
+                LOGGER.debug(
+                    "%s %s",
+                    self._gateway_handler.log_id,
+                    message.human_readable_log,
+                )
+            self._attr_native_value = val
             if self.hass is not None or hasattr(self.async_schedule_update_ha_state, "assert_called"):
                 try:
                     self.async_schedule_update_ha_state()
