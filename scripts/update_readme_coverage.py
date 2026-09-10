@@ -109,21 +109,8 @@ def update_readme_and_svg():
 
     tree = ET.parse(COVERAGE_XML)
     root = tree.getroot()
-    total_rate = float(root.attrib.get("line-rate", 0)) * 100
-    rate_round = round(total_rate)
 
-    test_count = get_test_count()
-    test_count_rounded = (test_count // 10) * 10
-    print(f"Dynamically detected test count: {test_count} (rounded: {test_count_rounded})")
-
-    # ── 1. Generate updated coverage.svg ─────────────────────────────────────
-    color = "#4c1" if rate_round >= 80 else ("#dfb317" if rate_round >= 60 else "#e05d44")
-    svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="98" height="20"><linearGradient id="b" x2="0" y2="100%"><stop offset="0" stop-color="#bbb" stop-opacity=".1"/><stop offset="1" stop-opacity=".1"/></linearGradient><mask id="a"><rect width="98" height="20" rx="3" fill="#fff"/></mask><g mask="url(#a)"><path fill="#555" d="M0 0h61v20H0z"/><path fill="{color}" d="M61 0h37v20H61z"/><path fill="url(#b)" d="M0 0h98v20H0z"/></g><g fill="#fff" text-anchor="middle" font-family="DejaVu Sans,Verdana,Geneva,sans-serif" font-size="11"><text x="30.5" y="15" fill="#010101" fill-opacity=".3">coverage</text><text x="30.5" y="14">coverage</text><text x="79.5" y="15" fill="#010101" fill-opacity=".3">{rate_round}%</text><text x="79.5" y="14">{rate_round}%</text></g></svg>'''
-    with open(COVERAGE_SVG, "w", encoding="utf-8") as f:
-        f.write(svg)
-    print(f"Updated {COVERAGE_SVG} -> {rate_round}% ({color})")
-
-    # ── 2. Collect per-component coverage ────────────────────────────────────
+    # ── 1. Collect per-component coverage & enforce strict 100% ─────────────
     file_rates = {}
     for p in root.findall(".//package"):
         for c in p.findall(".//class"):
@@ -133,6 +120,33 @@ def update_readme_and_svg():
                 continue
             cr = float(c.attrib.get("line-rate", 0)) * 100
             file_rates[fn] = cr
+
+    # Fail immediately if any module dropped below 100% coverage
+    failing = [(fn, rate) for fn, rate in file_rates.items() if rate < 100.0]
+    if failing:
+        print("\n" + "=" * 78)
+        print("🚨 COVERAGE ENFORCEMENT ERROR: Test coverage dropped below strict 100.0%!")
+        print("=" * 78)
+        for fn, rate in failing:
+            print(f"  [MISS] {fn}: {rate:.1f}%")
+        print("=" * 78)
+        print("Refusing to commit degraded coverage table or badge to Git repository.")
+        print("Failing CI step immediately.")
+        sys.exit(1)
+
+    total_rate = float(root.attrib.get("line-rate", 0)) * 100
+    rate_round = round(total_rate)
+
+    test_count = get_test_count()
+    test_count_rounded = (test_count // 10) * 10
+    print(f"Dynamically detected test count: {test_count} (rounded: {test_count_rounded})")
+
+    # ── 2. Generate updated coverage.svg ─────────────────────────────────────
+    color = "#4c1" if rate_round >= 80 else ("#dfb317" if rate_round >= 60 else "#e05d44")
+    svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="98" height="20"><linearGradient id="b" x2="0" y2="100%"><stop offset="0" stop-color="#bbb" stop-opacity=".1"/><stop offset="1" stop-opacity=".1"/></linearGradient><mask id="a"><rect width="98" height="20" rx="3" fill="#fff"/></mask><g mask="url(#a)"><path fill="#555" d="M0 0h61v20H0z"/><path fill="{color}" d="M61 0h37v20H61z"/><path fill="url(#b)" d="M0 0h98v20H0z"/></g><g fill="#fff" text-anchor="middle" font-family="DejaVu Sans,Verdana,Geneva,sans-serif" font-size="11"><text x="30.5" y="15" fill="#010101" fill-opacity=".3">coverage</text><text x="30.5" y="14">coverage</text><text x="79.5" y="15" fill="#010101" fill-opacity=".3">{rate_round}%</text><text x="79.5" y="14">{rate_round}%</text></g></svg>'''
+    with open(COVERAGE_SVG, "w", encoding="utf-8") as f:
+        f.write(svg)
+    print(f"Updated {COVERAGE_SVG} -> {rate_round}% ({color})")
 
     # Sort files: 100% files first (by note order), then descending coverage
     def sort_key(item):
