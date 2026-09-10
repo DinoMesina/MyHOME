@@ -108,17 +108,37 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
                 _configured_climate_devices.get(device_id)
                 or _configured_climate_devices.get(where)
                 or _configured_climate_devices.get(clean_where)
+                or _configured_climate_devices.get(f"4-{clean_where}")
+                or _configured_climate_devices.get(f"4-{where}")
+                or _configured_climate_devices.get(f"4-{device_id}")
+                or _configured_climate_devices.get(f"4-#{clean_where}")
+                or _configured_climate_devices.get(f"4-#{where}")
+                or _configured_climate_devices.get(f"#{clean_where}")
+                or _configured_climate_devices.get(f"#{where}")
+                or _configured_climate_devices.get(f"zone_{clean_where}")
+                or _configured_climate_devices.get(f"zone_{where}")
                 or {}
             )
 
             is_central = cfg.get(CONF_CENTRAL, clean_where == "0" or where == "#0")
+            _customs = hass.data.get(DOMAIN, {}).get("customizations", {})
+            _custom_entry = _customs.get(entry.entity_id, {})
+            _entry_name = getattr(entry, "name", None)
+            if not isinstance(_entry_name, str):
+                _entry_name = None
+            _name = (
+                cfg.get(CONF_NAME)
+                or _custom_entry.get("friendly_name")
+                or _entry_name
+                or f"Climate Zone {default_suffix}"
+            )
             _climate = MyHOMEClimate(
                 hass=hass,
                 device_id=device_id,
                 who="4",
                 where=where,
                 interface=interface,
-                name=cfg.get(CONF_NAME) or f"Climate Zone {default_suffix}",
+                name=_name,
                 heating=cfg.get(CONF_HEATING_SUPPORT, True),
                 cooling=cfg.get(CONF_COOLING_SUPPORT, True),
                 fan=cfg.get(CONF_FAN_SUPPORT, False),
@@ -241,16 +261,33 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
                     _configured_climate_devices.get(unique_id)
                     or _configured_climate_devices.get(where)
                     or _configured_climate_devices.get(clean_where)
+                    or _configured_climate_devices.get(f"4-{clean_where}")
+                    or _configured_climate_devices.get(f"4-{where}")
+                    or _configured_climate_devices.get(f"4-{unique_id}")
+                    or _configured_climate_devices.get(f"4-#{clean_where}")
+                    or _configured_climate_devices.get(f"4-#{where}")
+                    or _configured_climate_devices.get(f"#{clean_where}")
+                    or _configured_climate_devices.get(f"#{where}")
+                    or _configured_climate_devices.get(f"zone_{clean_where}")
+                    or _configured_climate_devices.get(f"zone_{where}")
                     or {}
                 )
                 is_central = clean_where == "0" or where == "#0"
+                _customs = hass.data.get(DOMAIN, {}).get("customizations", {})
+                _predicted_id = f"climate.climate_zone_{default_suffix.lower().replace(' ', '_')}"
+                _custom_entry = _customs.get(_predicted_id, {})
+                _name = (
+                    cfg.get(CONF_NAME)
+                    or _custom_entry.get("friendly_name")
+                    or f"Climate Zone {default_suffix}"
+                )
                 _climate = MyHOMEClimate(
                     hass=hass,
                     device_id=unique_id,
                     who=str(getattr(message, "who", "4")),
                     where=where,
                     interface=interface,
-                    name=cfg.get(CONF_NAME) or f"Climate Zone {default_suffix}",
+                    name=_name,
                     heating=cfg.get(CONF_HEATING_SUPPORT, True),
                     cooling=cfg.get(CONF_COOLING_SUPPORT, True),
                     fan=cfg.get(CONF_FAN_SUPPORT, False),

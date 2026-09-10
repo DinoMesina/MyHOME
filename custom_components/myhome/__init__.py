@@ -1,5 +1,6 @@
 """ MyHOME integration. """
 import asyncio
+import hashlib
 import os
 
 from homeassistant.config_entries import SOURCE_REAUTH, ConfigEntry
@@ -24,6 +25,7 @@ from .const import (
     CONF_GENERATE_EVENTS,
     CONF_PLATFORMS,
     CONF_WORKER_COUNT,
+    CONF_ZONE,
     DOMAIN,
     LOGGER,
 )
@@ -31,6 +33,18 @@ from .gateway import MyHOMEGatewayHandler
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 PLATFORMS = ["light", "switch", "cover", "climate", "binary_sensor", "sensor", "media_player", "button", "alarm_control_panel"]
+
+
+def _get_card_url(card_path: str, base_url: str = "/myhome_static/myhome-bus-card.js") -> str:
+    """Return versioned URL with content hash for Lovelace card cache-busting."""
+    try:
+        if os.path.isfile(card_path):
+            with open(card_path, "rb") as f:
+                content_hash = hashlib.sha256(f.read()).hexdigest()[:8]
+            return f"{base_url}?v={content_hash}"
+    except Exception as err:
+        LOGGER.debug("Could not compute card content hash: %s", err)
+    return base_url
 
 
 async def _async_register_lovelace_resource(hass: HomeAssistant, url_path: str) -> bool:
@@ -50,17 +64,39 @@ async def _async_register_lovelace_resource(hass: HomeAssistant, url_path: str) 
             resources.loaded = True
         if hasattr(resources, "async_create_item"):
             clean_url = url_path.split("?")[0]
-            existing = [
-                item["url"].split("?")[0]
-                for item in (resources.async_items() or [])
-                if isinstance(item, dict) and isinstance(item.get("url"), str)
-            ]
-            if clean_url not in existing:
+            existing_match = None
+            for item in (resources.async_items() or []):
+                if isinstance(item, dict) and isinstance(item.get("url"), str):
+                    if item["url"].split("?")[0] == clean_url:
+                        existing_match = item
+                        break
+
+            if existing_match is None:
                 await resources.async_create_item({
                     "res_type": "module",
                     "url": url_path,
                 })
                 LOGGER.debug("Auto-registered Lovelace bus monitor resource: %s", url_path)
+            elif existing_match.get("url") != url_path:
+                if hasattr(resources, "async_update_item") and "id" in existing_match:
+                    await resources.async_update_item(
+                        existing_match["id"],
+                        {
+                            "res_type": "module",
+                            "url": url_path,
+                        },
+                    )
+                    LOGGER.info(
+                        "Updated Lovelace bus monitor resource URL: %s -> %s",
+                        existing_match.get("url"),
+                        url_path,
+                    )
+                else:
+                    LOGGER.debug(
+                        "Lovelace bus monitor resource URL changed but update not supported: %s -> %s",
+                        existing_match.get("url"),
+                        url_path,
+                    )
             else:
                 LOGGER.debug("Lovelace bus monitor resource already present: %s", url_path)
         return True
@@ -74,7 +110,8 @@ async def _async_register_frontend(hass: HomeAssistant) -> None:
     domain_data = hass.data.setdefault(DOMAIN, {})
 
     card_path = os.path.join(os.path.dirname(__file__), "frontend", "myhome-bus-card.js")
-    url_path = "/myhome_static/myhome-bus-card.js"
+    static_url = "/myhome_static/myhome-bus-card.js"
+    versioned_url = _get_card_url(card_path, static_url)
 
     http = getattr(hass, "http", None)
     if not domain_data.get("_frontend_registered"):
@@ -83,33 +120,33 @@ async def _async_register_frontend(hass: HomeAssistant) -> None:
                 try:
                     from homeassistant.components.http import StaticPathConfig
                     await http.async_register_static_paths([
-                        StaticPathConfig(url_path, card_path, False)
+                        StaticPathConfig(static_url, card_path, False)
                     ])
                 except Exception:
-                    http.register_static_path(url_path, card_path, False)
+                    http.register_static_path(static_url, card_path, False)
             elif hasattr(http, "register_static_path"):
-                http.register_static_path(url_path, card_path, False)
+                http.register_static_path(static_url, card_path, False)
 
             try:
                 from homeassistant.components import frontend
-                frontend.add_extra_js_url(hass, url_path)
+                frontend.add_extra_js_url(hass, versioned_url)
             except Exception as e:
                 LOGGER.debug("Could not add extra js url for Lovelace card: %s", e)
 
             domain_data["_frontend_registered"] = True
 
     # Auto-register resource in Lovelace dashboard resources collection
-    if not await _async_register_lovelace_resource(hass, url_path):
+    if not await _async_register_lovelace_resource(hass, versioned_url):
         if not domain_data.get("_lovelace_listener_registered"):
             if getattr(hass, "is_running", False):
                 async def _delayed_retry():
                     await asyncio.sleep(1)
-                    await _async_register_lovelace_resource(hass, url_path)
+                    await _async_register_lovelace_resource(hass, versioned_url)
 
                 hass.async_create_task(_delayed_retry())
             else:
                 async def _on_ha_started(event):
-                    await _async_register_lovelace_resource(hass, url_path)
+                    await _async_register_lovelace_resource(hass, versioned_url)
 
                 from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
                 hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, _on_ha_started)
@@ -204,8 +241,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
                         if plat in hass.data[DOMAIN][entry.data[CONF_MAC]][CONF_PLATFORMS]:
                             for d_id, d_cfg in devices.items():
                                 hass.data[DOMAIN][entry.data[CONF_MAC]][CONF_PLATFORMS][plat][d_id] = d_cfg
-                                if isinstance(d_cfg, dict) and "where" in d_cfg:
-                                    hass.data[DOMAIN][entry.data[CONF_MAC]][CONF_PLATFORMS][plat][str(d_cfg["where"])] = d_cfg
+                                if isinstance(d_cfg, dict):
+                                    if "where" in d_cfg:
+                                        hass.data[DOMAIN][entry.data[CONF_MAC]][CONF_PLATFORMS][plat][str(d_cfg["where"])] = d_cfg
+                                    if CONF_ZONE in d_cfg or "zone" in d_cfg:
+                                        z_val = str(d_cfg.get(CONF_ZONE) or d_cfg.get("zone"))
+                                        hass.data[DOMAIN][entry.data[CONF_MAC]][CONF_PLATFORMS][plat][z_val] = d_cfg
+                                        clean_z = z_val.split("#")[-1]
+                                        hass.data[DOMAIN][entry.data[CONF_MAC]][CONF_PLATFORMS][plat][clean_z] = d_cfg
+                                        hass.data[DOMAIN][entry.data[CONF_MAC]][CONF_PLATFORMS][plat][f"zone_{clean_z}"] = d_cfg
                     LOGGER.info("Loaded legacy myhome.yaml configuration for gateway %s (%s platforms)", entry.data[CONF_MAC], len(yaml_platforms))
         except Exception as e:
             LOGGER.error("Failed to parse myhome.yaml from %s: %s", _config_file_path, e)
@@ -237,17 +281,79 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
         parts = reg_entry.unique_id.split("-")
         # Old unique_id format: MAC-WHERE (MAC may be formatted with colons or raw hex)
         is_matching_mac = False
-        if len(parts) == 2:
-            if parts[0] == _mac or parts[0] == entry.data[CONF_MAC]:
-                is_matching_mac = True
-            elif parts[0]:
-                try:
-                    is_matching_mac = (dr.format_mac(parts[0]) == _mac)
-                except Exception:
-                    is_matching_mac = False
+        mac_prefix = parts[0] if parts else ""
+        if mac_prefix == _mac or mac_prefix == entry.data[CONF_MAC]:
+            is_matching_mac = True
+        elif mac_prefix:
+            try:
+                is_matching_mac = (dr.format_mac(mac_prefix) == _mac)
+            except Exception:
+                is_matching_mac = False
 
-        if is_matching_mac:
-            where_part = parts[1]
+        if not is_matching_mac:
+            continue
+
+        after_mac = reg_entry.unique_id[len(mac_prefix) + 1:]
+
+        if reg_entry.domain == "button":
+            btn_type = "disable" if after_mac.endswith("-disable") else "enable" if after_mac.endswith("-enable") else None
+            if btn_type:
+                raw_where = after_mac[:-len(btn_type)-1]
+                subparts = raw_where.split("-")
+                if len(subparts) == 1:
+                    # Missing WHO (2.0b3 unique_id format {mac}-{where}-{btn_type})
+                    who = None
+                    device_registry = dr.async_get(hass)
+                    if reg_entry.device_id:
+                        dev = device_registry.async_get(reg_entry.device_id)
+                        if dev:
+                            for ident in dev.identifiers:
+                                if len(ident) == 2 and ident[0] == DOMAIN:
+                                    id_parts = str(ident[1]).split("-")
+                                    if len(id_parts) >= 3 and id_parts[1].isdigit():
+                                        who = id_parts[1]
+                                        break
+                    if not who:
+                        gw_platforms = hass.data.get(DOMAIN, {}).get(entry.data[CONF_MAC], {}).get(CONF_PLATFORMS, {})
+                        if "cover" in gw_platforms and (raw_where in gw_platforms["cover"] or f"2-{raw_where}" in gw_platforms["cover"]):
+                            who = "2"
+                        else:
+                            who = "1"
+
+                    target_unique_id = f"{_mac}-{who}-{raw_where}-{btn_type}"
+                    existing_canonical_id = entity_registry.async_get_entity_id("button", DOMAIN, target_unique_id)
+                    if existing_canonical_id and existing_canonical_id != reg_entry.entity_id:
+                        try:
+                            entity_registry.async_remove(reg_entry.entity_id)
+                            LOGGER.info("Pruned duplicate button entity %s in favor of %s", reg_entry.entity_id, existing_canonical_id)
+                        except Exception as err:
+                            LOGGER.warning("Could not prune duplicate button entity %s: %s", reg_entry.entity_id, err)
+                    else:
+                        update_kwargs = {"new_unique_id": target_unique_id}
+                        if reg_entry.entity_id.endswith("_2"):
+                            base_id = reg_entry.entity_id[:-2]
+                            if not entity_registry.async_get(base_id):
+                                update_kwargs["new_entity_id"] = base_id
+                        try:
+                            entity_registry.async_update_entity(reg_entry.entity_id, **update_kwargs)
+                            reg_entry = entity_registry.async_get(reg_entry.entity_id)
+                            LOGGER.info("Migrated button entity %s to canonical unique_id %s", reg_entry.entity_id, target_unique_id)
+                        except ValueError as err:
+                            LOGGER.warning("Could not auto-migrate button entity %s: %s", reg_entry.entity_id, err)
+                elif mac_prefix != _mac:
+                    target_unique_id = f"{_mac}-{after_mac}"
+                    if not entity_registry.async_get_entity_id("button", DOMAIN, target_unique_id):
+                        try:
+                            entity_registry.async_update_entity(reg_entry.entity_id, new_unique_id=target_unique_id)
+                            reg_entry = entity_registry.async_get(reg_entry.entity_id)
+                        except ValueError:
+                            pass
+            continue
+
+        # Other platforms (light, cover, switch, media_player, climate)
+        subparts = after_mac.split("-")
+        if len(subparts) == 1:
+            where_part = subparts[0]
             who = _domain_to_who.get(reg_entry.domain)
             if who:
                 new_unique_id = f"{_mac}-{who}-{where_part}"
@@ -276,6 +382,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
                         )
                     except Exception as e:
                         LOGGER.warning("Could not auto-migrate device %s to new identifier: %s", old_device.id, e)
+        elif mac_prefix != _mac:
+            new_unique_id = f"{_mac}-{after_mac}"
+            if not entity_registry.async_get_entity_id(reg_entry.domain, DOMAIN, new_unique_id):
+                try:
+                    entity_registry.async_update_entity(
+                        reg_entry.entity_id, new_unique_id=new_unique_id
+                    )
+                    reg_entry = entity_registry.async_get(reg_entry.entity_id)
+                except ValueError:
+                    pass
 
     # Hack to forcefully absorb customize.yaml for users who deleted their integrations
     # and therefore lost the transparent entity_registry migration!

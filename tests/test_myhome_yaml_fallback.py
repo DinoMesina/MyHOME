@@ -103,10 +103,10 @@ async def test_setup_entry_with_yaml_fallback(hass: HomeAssistant, tmp_path):
             assert config_entry.state is ConfigEntryState.LOADED
 
             # Check Lovelace card registration was triggered
-            mock_resources.async_create_item.assert_called_once_with({
-                "res_type": "module",
-                "url": "/myhome_static/myhome-bus-card.js",
-            })
+            mock_resources.async_create_item.assert_called_once()
+            call_arg = mock_resources.async_create_item.call_args[0][0]
+            assert call_arg["res_type"] == "module"
+            assert call_arg["url"].startswith("/myhome_static/myhome-bus-card.js?v=")
 
             # Check entities were added
             ent_reg = er.async_get(hass)
