@@ -180,11 +180,12 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
 
             cfg = _configured_lights.get(device_id) or _configured_lights.get(where) or _configured_lights.get(clean_where) or {}
 
+            default_suffix = f"{clean_where}I{interface}" if interface else clean_where
             _customs = hass.data.get(DOMAIN, {}).get("customizations", {})
-            _predicted_id = f"light.light_{clean_where.replace(' ', '_')}"
+            _predicted_id = f"light.light_{default_suffix.lower().replace(' ', '_')}"
             _custom_entry = _customs.get(entry.entity_id, {}) or _customs.get(_predicted_id, {})
             _is_dimmable = cfg.get(CONF_DIMMABLE, _custom_entry.get("dimmable", False))
-            _name = cfg.get(CONF_NAME, f"Light {clean_where}")
+            _name = cfg.get(CONF_NAME, f"Light {default_suffix}")
             _entity_name = cfg.get(CONF_ENTITY_NAME)
             _icon = cfg.get(CONF_ICON)
             _icon_on = cfg.get(CONF_ICON_ON)
@@ -216,8 +217,10 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
         interface = cfg.get(CONF_BUS_INTERFACE)
         device_where_id = f"{where}#4#{interface}" if interface else str(where)
         clean_where = where.split("-")[-1]
+        clean_unique_id = f"{clean_where}#4#{interface}" if interface else clean_where
+        default_suffix = f"{clean_where}I{interface}" if interface else clean_where
 
-        if clean_where in seen_configured_where or device_where_id in known_lights or dev_id in known_lights:
+        if clean_unique_id in seen_configured_where or device_where_id in known_lights or dev_id in known_lights:
             continue
         if (
             clean_where in switch_wheres
@@ -228,9 +231,9 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
             or dev_id in sensor_wheres
         ):
             continue
-        seen_configured_where.add(clean_where)
+        seen_configured_where.add(clean_unique_id)
 
-        _name = cfg.get(CONF_NAME, f"Light {clean_where}")
+        _name = cfg.get(CONF_NAME, f"Light {default_suffix}")
         _light = MyHOMELight(
             hass=hass,
             name=_name,
@@ -248,7 +251,8 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
         )
         known_lights.add(device_where_id)
         known_lights.add(dev_id)
-        known_lights.add(clean_where)
+        if not interface:
+            known_lights.add(clean_where)
         restored_lights.append(_light)
 
         # Signal button platform to create Lock/Unlock buttons
@@ -333,10 +337,11 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
         if unique_id not in known_lights:
             # We found a new light!
             clean_where = where.split('-')[-1]
+            default_suffix = f"{clean_where}I{interface}" if interface else clean_where
             cfg = _configured_lights.get(unique_id) or _configured_lights.get(where) or _configured_lights.get(clean_where) or {}
 
             _customs = hass.data.get(DOMAIN, {}).get("customizations", {})
-            _predicted_id = f"light.light_{clean_where.replace(' ', '_')}"
+            _predicted_id = f"light.light_{default_suffix.lower().replace(' ', '_')}"
             _custom_entry = _customs.get(_predicted_id, {})
             _is_dimmable = cfg.get(CONF_DIMMABLE, _custom_entry.get("dimmable", False))
 
@@ -347,7 +352,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
                     or message.brightness_preset is not None
                 )
 
-            _name = cfg.get(CONF_NAME, f"Light {clean_where}")
+            _name = cfg.get(CONF_NAME, f"Light {default_suffix}")
             _entity_name = cfg.get(CONF_ENTITY_NAME)
             _icon = cfg.get(CONF_ICON)
             _icon_on = cfg.get(CONF_ICON_ON)

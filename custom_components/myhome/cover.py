@@ -52,8 +52,12 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
 
     # Restore previously discovered entities from the Entity Registry so they
     # are available immediately on restart, even before the gateway responds.
-    entity_registry = er.async_get(hass)
-    existing_entries = er.async_entries_for_config_entry(entity_registry, config_entry.entry_id)
+    try:
+        entity_registry = er.async_get(hass)
+        existing_entries = er.async_entries_for_config_entry(entity_registry, config_entry.entry_id)
+    except Exception:
+        entity_registry = None
+        existing_entries = []
     restored_covers = []
 
     gateway = hass.data[DOMAIN][config_entry.data[CONF_MAC]][CONF_ENTITY]
@@ -77,12 +81,13 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
                 interface = None
 
             clean_where = where.split('-')[-1]
+            default_suffix = f"{clean_where}I{interface}" if interface else clean_where
             cfg = _configured_covers.get(device_id) or _configured_covers.get(where) or _configured_covers.get(clean_where) or {}
             _advanced = cfg.get(
                 CONF_ADVANCED_SHUTTER, cfg.get("advanced_shutter", False)
             )
             _travel_time = int(cfg.get(CONF_TRAVEL_TIME, DEFAULT_TRAVEL_TIME))
-            _name = cfg.get(CONF_NAME, f"Cover {clean_where}")
+            _name = cfg.get(CONF_NAME) or f"Cover {default_suffix}"
             _cover = MyHOMECover(
                 hass=hass,
                 name=_name,
@@ -107,12 +112,14 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
         interface = cfg.get(CONF_BUS_INTERFACE)
         device_where_id = f"{where}#4#{interface}" if interface else str(where)
         clean_where = where.split("-")[-1]
+        clean_unique_id = f"{clean_where}#4#{interface}" if interface else clean_where
+        default_suffix = f"{clean_where}I{interface}" if interface else clean_where
 
-        if clean_where in seen_configured_where or device_where_id in known_covers or dev_id in known_covers:
+        if clean_unique_id in seen_configured_where or device_where_id in known_covers or dev_id in known_covers:
             continue
-        seen_configured_where.add(clean_where)
+        seen_configured_where.add(clean_unique_id)
 
-        _name = cfg.get(CONF_NAME, f"Cover {clean_where}")
+        _name = cfg.get(CONF_NAME) or f"Cover {default_suffix}"
         _advanced = cfg.get(
             CONF_ADVANCED_SHUTTER, cfg.get("advanced_shutter", False)
         )
@@ -133,7 +140,8 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
         )
         known_covers.add(device_where_id)
         known_covers.add(dev_id)
-        known_covers.add(clean_where)
+        if not interface:
+            known_covers.add(clean_where)
         restored_covers.append(_cover)
 
         # Signal button platform to create Lock/Unlock buttons
@@ -178,12 +186,13 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
         if unique_id not in known_covers:
             # We found a new cover!
             clean_where = where.split('-')[-1]
+            default_suffix = f"{clean_where}I{interface}" if interface else clean_where
             cfg = _configured_covers.get(unique_id) or _configured_covers.get(where) or _configured_covers.get(clean_where) or {}
             _advanced = cfg.get(
                 CONF_ADVANCED_SHUTTER, cfg.get("advanced_shutter", False)
             )
             _travel_time = int(cfg.get(CONF_TRAVEL_TIME, DEFAULT_TRAVEL_TIME))
-            _name = cfg.get(CONF_NAME, f"Cover {clean_where}")
+            _name = cfg.get(CONF_NAME) or f"Cover {default_suffix}"
             _cover = MyHOMECover(
                 hass=hass,
                 name=_name,

@@ -219,6 +219,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
         "cover": "2",
         "switch": "1",
         "media_player": "16",
+        "climate": "4",
     }
 
     registry_entries = er.async_entries_for_config_entry(entity_registry, entry.entry_id)

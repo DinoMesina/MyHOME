@@ -37,7 +37,7 @@ class MyHOMEEntity(Entity):
         self._gateway_handler = gateway
         self._attr_has_entity_name = False
         self._attr_name = name
-        self.entity_id = f"{platform.lower()}.{name.lower().replace(' ', '_')}"
+        self.entity_id = f"{platform.lower()}.{name.lower().replace(' ', '_').replace('#', '')}"
 
         self._attr_entity_registry_enabled_default = True
         self._attr_should_poll = False

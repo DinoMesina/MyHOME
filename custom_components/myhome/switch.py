@@ -79,9 +79,10 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
                 interface = None
 
             clean_where = where.split('-')[-1]
+            default_suffix = f"{clean_where}I{interface}" if interface else clean_where
             cfg = _configured_switches.get(device_id) or _configured_switches.get(where) or _configured_switches.get(clean_where) or {}
 
-            _name = cfg.get(CONF_NAME, f"Switch {clean_where}")
+            _name = cfg.get(CONF_NAME) or f"Switch {default_suffix}"
             _entity_name = cfg.get(CONF_ENTITY_NAME)
             _icon = cfg.get(CONF_ICON)
             _icon_on = cfg.get(CONF_ICON_ON)
@@ -105,7 +106,8 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
                 gateway=gateway,
             )
             known_switches.add(device_id)
-            known_switches.add(clean_where)
+            if not interface:
+                known_switches.add(clean_where)
             restored_switches.append(_switch)
 
     # Also instantiate any configured switches from myhome.yaml not yet in registry
@@ -113,14 +115,16 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     for dev_id, cfg in _configured_switches.items():
         where = str(cfg.get(CONF_WHERE, dev_id))
         clean_where = where.split("-")[-1]
-        interface = cfg.get(CONF_BUS_INTERFACE) if CONF_BUS_INTERFACE in cfg else cfg.get("interface")
+        interface = cfg.get(CONF_BUS_INTERFACE) or cfg.get("bus_interface") or cfg.get("interface")
         device_where_id = f"{clean_where}#4#{interface}" if interface else str(clean_where)
+        clean_unique_id = device_where_id
+        default_suffix = f"{clean_where}I{interface}" if interface else clean_where
 
-        if clean_where in seen_configured_where or device_where_id in known_switches or dev_id in known_switches:
+        if clean_unique_id in seen_configured_where or device_where_id in known_switches or dev_id in known_switches:
             continue
-        seen_configured_where.add(clean_where)
+        seen_configured_where.add(clean_unique_id)
 
-        _name = cfg.get(CONF_NAME, f"Switch {clean_where}")
+        _name = cfg.get(CONF_NAME) or f"Switch {default_suffix}"
         _device_class = cfg.get(CONF_DEVICE_CLASS) or cfg.get("device_class") or SwitchDeviceClass.SWITCH
         _switch = MyHOMESwitch(
             hass=hass,
@@ -138,7 +142,8 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
             gateway=gateway,
         )
         known_switches.add(device_where_id)
-        known_switches.add(clean_where)
+        if not interface:
+            known_switches.add(clean_where)
         known_switches.add(dev_id)
         restored_switches.append(_switch)
 
