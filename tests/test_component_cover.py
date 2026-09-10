@@ -240,24 +240,73 @@ class TestMyHOMECoverEntity:
         await basic_cover.async_set_cover_position(**{ATTR_POSITION: 50})
         basic_cover._gateway_handler.send.assert_not_called()
 
-        # Set to 80 (open)
+        # Set to 80 (open) with gateway echo resilience
         with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
             await basic_cover.async_set_cover_position(**{ATTR_POSITION: 80})
             assert basic_cover.is_opening is True
             assert basic_cover._stop_task is not None
+            # Simulate OpenWebNet gateway echoing the open command *2*1*21##
+            basic_cover.handle_event(OWNEvent.parse("*2*1*21##"))
+            # Crucial: _stop_task MUST NOT be cancelled by gateway echo
+            assert basic_cover._stop_task is not None
             # Await the stop task
             await basic_cover._stop_task
             assert basic_cover.is_opening is False
+            assert basic_cover.current_cover_position == 80
 
-        # Set to 20 (close)
+        # Set to 20 (close) with gateway echo resilience
         with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
             await basic_cover.async_set_cover_position(**{ATTR_POSITION: 20})
             assert basic_cover.is_closing is True
             assert basic_cover._stop_task is not None
+            # Simulate OpenWebNet gateway echoing the close command *2*2*21##
+            basic_cover.handle_event(OWNEvent.parse("*2*2*21##"))
+            # Crucial: _stop_task MUST NOT be cancelled by gateway echo
+            assert basic_cover._stop_task is not None
             await basic_cover._stop_task
             assert basic_cover.is_closing is False
+            assert basic_cover.current_cover_position == 20
 
-        # Test active stop task cancellation
+        # Direction reversal 1: Opening cover receives external closing event
+        basic_cover.handle_event(OWNEvent.parse("*2*0*21##"))
+        basic_cover._attr_current_cover_position = 20
+        basic_cover._start_position = 20
+        with patch("asyncio.sleep", new_callable=AsyncMock):
+            await basic_cover.async_set_cover_position(**{ATTR_POSITION: 80})
+            assert basic_cover.is_opening is True
+            assert basic_cover._stop_task is not None
+            # External close event arrives (reversal)
+            basic_cover.handle_event(OWNEvent.parse("*2*2*21##"))
+            assert basic_cover._stop_task is None
+            assert basic_cover.is_opening is False
+            assert basic_cover.is_closing is True
+
+        # Direction reversal 2: Closing cover receives external opening event
+        basic_cover.handle_event(OWNEvent.parse("*2*0*21##"))
+        basic_cover._attr_current_cover_position = 80
+        basic_cover._start_position = 80
+        with patch("asyncio.sleep", new_callable=AsyncMock):
+            await basic_cover.async_set_cover_position(**{ATTR_POSITION: 20})
+            assert basic_cover.is_closing is True
+            assert basic_cover._stop_task is not None
+            # External open event arrives (reversal)
+            basic_cover.handle_event(OWNEvent.parse("*2*1*21##"))
+            assert basic_cover._stop_task is None
+            assert basic_cover.is_opening is True
+            assert basic_cover.is_closing is False
+
+        # External stop event cancels stop task
+        basic_cover.handle_event(OWNEvent.parse("*2*0*21##"))
+        basic_cover._attr_current_cover_position = 20
+        basic_cover._start_position = 20
+        with patch("asyncio.sleep", new_callable=AsyncMock):
+            await basic_cover.async_set_cover_position(**{ATTR_POSITION: 80})
+            assert basic_cover._stop_task is not None
+            basic_cover.handle_event(OWNEvent.parse("*2*0*21##"))
+            assert basic_cover._stop_task is None
+            assert basic_cover.is_opening is False
+
+        # Test active stop task manual cancellation
         await basic_cover.async_set_cover_position(**{ATTR_POSITION: 80})
         task = basic_cover._stop_task
         assert task is not None

@@ -446,6 +446,11 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
             try:
                 await asyncio.sleep(run_duration)
                 await self.async_stop_cover()
+                self._attr_current_cover_position = target_position
+                self._start_position = target_position
+                self._attr_is_closed = (target_position == 0)
+                if self.hass is not None:
+                    self.async_write_ha_state()
             except asyncio.CancelledError:
                 pass
 
@@ -493,7 +498,8 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
             else:
                 self._attr_is_closed = (self._attr_current_cover_position == 0)
         elif message.is_opening:
-            self._cancel_stop_task()
+            if self._attr_is_closing:
+                self._cancel_stop_task()
             if not self._advanced and not self._attr_is_opening:
                 self._start_position = self.current_cover_position if self.current_cover_position is not None else 0
                 self._move_start_time = time.monotonic()
@@ -501,7 +507,8 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
             self._attr_is_closing = False
             self._attr_is_closed = False
         elif message.is_closing:
-            self._cancel_stop_task()
+            if self._attr_is_opening:
+                self._cancel_stop_task()
             if not self._advanced and not self._attr_is_closing:
                 self._start_position = self.current_cover_position if self.current_cover_position is not None else 100
                 self._move_start_time = time.monotonic()
