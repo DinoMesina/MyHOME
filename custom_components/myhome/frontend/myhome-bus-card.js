@@ -5,6 +5,30 @@
  * for BTicino / Legrand MyHOME SCS bus systems via OpenWebNet.
  */
 
+const WHO_CATALOG = {
+  "0": { name: "Scenarios (Basic)", short: "Scenario", class: "who-cen" },
+  "1": { name: "Lighting / Switches", short: "Light/Switch", class: "who-light" },
+  "2": { name: "Automation / Shutters", short: "Automation", class: "who-cover" },
+  "3": { name: "Load Control", short: "Load Ctrl", class: "who-energy" },
+  "4": { name: "Heating / Thermoregulation", short: "Heating", class: "who-thermo" },
+  "5": { name: "Burglar Alarm", short: "Burglar Alarm", class: "who-alarm" },
+  "6": { name: "Door Entry / Access Control", short: "Door Entry", class: "who-access" },
+  "7": { name: "Video Door Entry / Multimedia", short: "Video Entry", class: "who-video" },
+  "9": { name: "Auxiliary", short: "Auxiliary", class: "who-default" },
+  "13": { name: "Gateway Management", short: "Gateway", class: "who-diag" },
+  "14": { name: "Actuator Diagnostics & Lock", short: "Actuator Lock", class: "who-diag" },
+  "15": { name: "CEN Pushbuttons", short: "CEN", class: "who-cen" },
+  "16": { name: "Sound System", short: "Sound", class: "who-sound" },
+  "17": { name: "Scenario Management / MH200N", short: "MH200N", class: "who-cen" },
+  "18": { name: "Energy Management", short: "Energy", class: "who-energy" },
+  "22": { name: "Sound Diffusion Extended", short: "Sound Ext", class: "who-sound" },
+  "24": { name: "Lighting Management / DALI", short: "DALI Light", class: "who-light" },
+  "25": { name: "CEN+ / Security", short: "CEN+/Sec", class: "who-cen" },
+  "1001": { name: "Lighting Diagnostics", short: "Diag Light", class: "who-diag" },
+  "1004": { name: "Heating Diagnostics", short: "Diag Heat", class: "who-diag" },
+  "1013": { name: "Gateway Diagnostics", short: "Diag Gateway", class: "who-diag" },
+};
+
 class MyHomeBusCard extends HTMLElement {
   constructor() {
     super();
@@ -113,6 +137,9 @@ class MyHomeBusCard extends HTMLElement {
         const newHistory = res.frames.filter(
           (f) => !existingKeys.has(`${f.timestamp}_${f.raw}_${f.direction}`)
         );
+        for (const f of newHistory) {
+          if (f.who != null) this._ensureWhoRegistered(f.who);
+        }
         this._frames = newHistory.concat(this._frames);
         if (this._frames.length > this._maxDisplayFrames) {
           this._frames = this._frames.slice(-this._maxDisplayFrames);
@@ -212,11 +239,49 @@ class MyHomeBusCard extends HTMLElement {
     }
   }
 
+  _ensureWhoRegistered(who) {
+    if (who == null || String(who).trim() === "") return;
+    const whoStr = String(who).trim();
+    const select = this.shadowRoot && this.shadowRoot.getElementById("filter-who");
+    if (!select) return;
+
+    for (let i = 0; i < select.options.length; i++) {
+      if (select.options[i].value === whoStr) return;
+    }
+
+    const catalogEntry = WHO_CATALOG[whoStr];
+    const label = catalogEntry
+      ? `${catalogEntry.name} (WHO=${whoStr})`
+      : `Subsystem (WHO=${whoStr})`;
+
+    const opt = document.createElement("option");
+    opt.value = whoStr;
+    opt.textContent = label;
+
+    const whoNum = parseInt(whoStr, 10);
+    let inserted = false;
+    for (let i = 1; i < select.options.length; i++) {
+      const curNum = parseInt(select.options[i].value, 10);
+      if (!isNaN(whoNum) && !isNaN(curNum) && whoNum < curNum) {
+        select.insertBefore(opt, select.options[i]);
+        inserted = true;
+        break;
+      }
+    }
+    if (!inserted) {
+      select.appendChild(opt);
+    }
+  }
+
   _onNewFrame(frame) {
     if (this._connectionStatus !== "connected" && !this._isPaused) {
       this._updateConnectionStatus("connected");
     }
     if (this._isPaused) return;
+
+    if (frame.who != null) {
+      this._ensureWhoRegistered(frame.who);
+    }
 
     if (frame.direction === "rx") this._stats.total_rx++;
     else this._stats.total_tx++;
@@ -232,45 +297,100 @@ class MyHomeBusCard extends HTMLElement {
   }
 
   _matchesFilter(frame) {
-    if (this._filterDir !== "all" && frame.direction !== this._filterDir) {
-      return false;
+    if (this._filterDir !== "all") {
+      const dir = (frame.direction || "").toLowerCase();
+      if (this._filterDir === "rx" && dir !== "rx") return false;
+      if (this._filterDir === "tx" && dir !== "tx") return false;
+      if (this._filterDir === "ack" && !frame.is_ack) return false;
+      if (this._filterDir === "nack" && !frame.is_nack) return false;
     }
     if (this._filterWho !== "all" && String(frame.who) !== String(this._filterWho)) {
       return false;
     }
-    if (this._filterWhere && !String(frame.where || "").toLowerCase().includes(this._filterWhere.toLowerCase())) {
-      return false;
+    if (this._filterWhere) {
+      const q = this._filterWhere.trim().toLowerCase();
+      if (q) {
+        if (q.startsWith("where:") || q.startsWith("where=")) {
+          const val = q.substring(6).trim();
+          if (!String(frame.where || "").toLowerCase().includes(val)) return false;
+        } else if (q.startsWith("what:") || q.startsWith("what=")) {
+          const val = q.substring(5).trim();
+          if (!String(frame.what || "").toLowerCase().includes(val)) return false;
+        } else if (q.startsWith("dim:") || q.startsWith("dim=")) {
+          const val = q.substring(4).trim();
+          if (!String(frame.dimension || "").toLowerCase().includes(val)) return false;
+        } else if (q.startsWith("raw:") || q.startsWith("raw=")) {
+          const val = q.substring(4).trim();
+          if (!String(frame.raw || "").toLowerCase().includes(val)) return false;
+        } else {
+          const inWhere = String(frame.where || "").toLowerCase().includes(q);
+          const inRaw = String(frame.raw || "").toLowerCase().includes(q);
+          const inWhat = String(frame.what || "").toLowerCase().includes(q);
+          const inDim = String(frame.dimension || "").toLowerCase().includes(q);
+          if (!inWhere && !inRaw && !inWhat && !inDim) return false;
+        }
+      }
     }
     return true;
   }
 
   _formatWho(who) {
-    const map = {
-      "1": "Light/Switch",
-      "2": "Automation",
-      "4": "Heating",
-      "15": "CEN",
-      "16": "Sound",
-      "18": "Energy",
-      "25": "CEN+/Sec",
-    };
-    return map[String(who)] || (who ? `WHO=${who}` : "Sys");
+    if (who == null || String(who).trim() === "") return "Sys";
+    const strWho = String(who).trim();
+    const entry = WHO_CATALOG[strWho];
+    if (entry && entry.short) return entry.short;
+    if (entry && entry.name) return entry.name;
+    return `WHO=${strWho}`;
   }
 
   _getWhoClass(who) {
-    switch (String(who)) {
-      case "1": return "who-light";
-      case "2": return "who-cover";
-      case "4": return "who-thermo";
-      case "15":
-      case "25": return "who-cen";
-      case "16": return "who-sound";
-      case "18": return "who-energy";
-      default: return "who-default";
+    if (who == null) return "who-default";
+    const entry = WHO_CATALOG[String(who).trim()];
+    if (entry && entry.class) return entry.class;
+    return "who-default";
+  }
+
+  _getWhoBadgeStyle(who) {
+    if (who == null || String(who).trim() === "") return "";
+    const str = String(who).trim();
+    if (WHO_CATALOG[str] && WHO_CATALOG[str].class !== "who-default") {
+      return "";
     }
+    const num = parseInt(str, 10);
+    const hue = !isNaN(num) ? (num * 137.5) % 360 : 200;
+    return `style="background: hsl(${hue}, 45%, 18%); color: hsl(${hue}, 85%, 75%);"`;
   }
 
   _render() {
+    const sortedWhoKeys = Object.keys(WHO_CATALOG).sort((a, b) => {
+      const na = parseInt(a, 10);
+      const nb = parseInt(b, 10);
+      if (!isNaN(na) && !isNaN(nb)) return na - nb;
+      return a.localeCompare(b);
+    });
+
+    const optionsList = [
+      `<option value="all"${this._filterWho === "all" ? " selected" : ""}>All Subsystems</option>`
+    ];
+    for (const key of sortedWhoKeys) {
+      const item = WHO_CATALOG[key];
+      const sel = String(this._filterWho) === key ? " selected" : "";
+      optionsList.push(`<option value="${key}"${sel}>${item.name} (WHO=${key})</option>`);
+    }
+
+    const seenWhos = new Set(sortedWhoKeys);
+    for (const f of this._frames) {
+      if (f.who != null) {
+        const wStr = String(f.who).trim();
+        if (wStr && !seenWhos.has(wStr)) {
+          seenWhos.add(wStr);
+          const sel = String(this._filterWho) === wStr ? " selected" : "";
+          optionsList.push(`<option value="${wStr}"${sel}>Subsystem (WHO=${wStr})</option>`);
+        }
+      }
+    }
+    const whoOptionsHtml = optionsList.join("\n            ");
+
     this.shadowRoot.innerHTML = `
       <style>
         :host {
@@ -406,9 +526,13 @@ class MyHomeBusCard extends HTMLElement {
         .who-light { background: #4a3b00; color: #ffe082; }
         .who-cover { background: #0d47a1; color: #90caf9; }
         .who-thermo { background: #b71c1c; color: #ef9a9a; }
+        .who-alarm { background: #880e4f; color: #f48fb1; }
         .who-cen { background: #4a148c; color: #ce93d8; }
         .who-sound { background: #004d40; color: #80cbc4; }
         .who-energy { background: #006064; color: #80deea; }
+        .who-access { background: #bf360c; color: #ffcc80; }
+        .who-video { background: #1a237e; color: #c5cae9; }
+        .who-diag { background: #263238; color: #cfd8dc; }
         .who-default { background: #37474f; color: #b0bec5; }
         .col-raw { color: #fff; word-break: break-all; }
         .raw-ack { color: #69f0ae; font-weight: 600; }
@@ -493,22 +617,17 @@ class MyHomeBusCard extends HTMLElement {
 
         <div class="controls">
           <select id="filter-who">
-            <option value="all">All Subsystems</option>
-            <option value="1">Lighting / Switches (WHO=1)</option>
-            <option value="2">Automation / Shutters (WHO=2)</option>
-            <option value="4">Heating / Thermoregulation (WHO=4)</option>
-            <option value="15">CEN Pushbuttons (WHO=15)</option>
-            <option value="16">Sound System (WHO=16)</option>
-            <option value="18">Energy Management (WHO=18)</option>
-            <option value="25">CEN+ / Security (WHO=25)</option>
+            ${whoOptionsHtml}
           </select>
 
-          <input type="text" id="filter-where" placeholder="Filter WHERE (e.g. 12)..." style="width: 140px;" />
+          <input type="text" id="filter-where" placeholder="Filter WHERE / WHAT / Raw..." value="${this._escapeHtml(this._filterWhere)}" style="width: 170px;" />
 
           <select id="filter-dir">
-            <option value="all">All Directions</option>
-            <option value="rx">RX (Bus Traffic)</option>
-            <option value="tx">TX (Commands)</option>
+            <option value="all"${this._filterDir === "all" ? " selected" : ""}>All Directions</option>
+            <option value="rx"${this._filterDir === "rx" ? " selected" : ""}>RX (Bus Traffic)</option>
+            <option value="tx"${this._filterDir === "tx" ? " selected" : ""}>TX (Commands)</option>
+            <option value="ack"${this._filterDir === "ack" ? " selected" : ""}>ACK (*#*1##)</option>
+            <option value="nack"${this._filterDir === "nack" ? " selected" : ""}>NACK (*#*0##)</option>
           </select>
         </div>
 
@@ -863,6 +982,7 @@ ${framesText}
     const dirLabel = frame.direction ? frame.direction.toUpperCase() : "RX";
     const whoClass = this._getWhoClass(frame.who);
     const whoLabel = this._formatWho(frame.who);
+    const whoCustomStyle = this._getWhoBadgeStyle(frame.who);
 
     let rawClass = "col-raw";
     if (frame.is_ack) rawClass += " raw-ack";
@@ -871,7 +991,7 @@ ${framesText}
     div.innerHTML = `
       <span class="col-time">${timeStr}</span>
       <span class="col-dir ${dirClass}">${dirLabel}</span>
-      <span class="col-who ${whoClass}">${whoLabel}</span>
+      <span class="col-who ${whoClass}" ${whoCustomStyle}>${this._escapeHtml(whoLabel)}</span>
       <span class="${rawClass}">${this._escapeHtml(frame.raw)}</span>
     `;
     return div;
