@@ -211,8 +211,7 @@ async def test_async_unload_entry(mock_hass, mock_config_entry):
 async def test_async_setup_entry_illuminance_registry_and_discovery(hass, mock_config_entry):
     """Test illuminance sensor registry restoration, duplicate skipping, and dynamic discovery."""
     from homeassistant.helpers.dispatcher import async_dispatcher_send
-
-    from custom_components.myhome.ownd.message import OWNEnergyEvent, OWNEvent, OWNLightingEvent
+    from OWNd.message import OWNEnergyEvent, OWNEvent, OWNLightingEvent
 
     mac = mock_config_entry.data[CONF_MAC]
     mock_gateway = MagicMock()
@@ -380,8 +379,7 @@ async def test_sensor_setup_registry_exception(mock_hass, mock_config_entry):
 async def test_illuminance_sensor_zero_padded_where_and_deduplication(hass: HomeAssistant):
     """Test illuminance sensor handling 4-digit WHO 1 frames (*#1*0015*6*33338##) and deduplication."""
     from homeassistant.helpers.dispatcher import async_dispatcher_send
-
-    from custom_components.myhome.ownd.message import OWNEvent
+    from OWNd.message import OWNEvent
 
     mac = "00:03:50:00:15:15"
     mock_gateway = MagicMock()

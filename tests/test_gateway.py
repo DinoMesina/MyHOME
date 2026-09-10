@@ -10,6 +10,20 @@ from homeassistant.const import (
     CONF_PASSWORD,
     CONF_PORT,
 )
+from OWNd.message import (
+    OWNAlarmEvent,
+    OWNAutomationEvent,
+    OWNCENEvent,
+    OWNCENPlusEvent,
+    OWNCommand,
+    OWNEnergyEvent,
+    OWNGatewayCommand,
+    OWNGatewayEvent,
+    OWNHeatingCommand,
+    OWNLightingEvent,
+    OWNMessage,
+)
+from OWNd.profiles import GatewayProfile
 
 from custom_components.myhome.const import (
     CONF_DEVICE_TYPE,
@@ -30,19 +44,6 @@ from custom_components.myhome.const import (
     DOMAIN,
 )
 from custom_components.myhome.gateway import MyHOMEGatewayHandler
-from custom_components.myhome.ownd.message import (
-    OWNAlarmEvent,
-    OWNAutomationEvent,
-    OWNCENEvent,
-    OWNCENPlusEvent,
-    OWNCommand,
-    OWNEnergyEvent,
-    OWNGatewayCommand,
-    OWNGatewayEvent,
-    OWNHeatingCommand,
-    OWNLightingEvent,
-    OWNMessage,
-)
 
 
 @pytest.fixture
@@ -628,7 +629,10 @@ async def test_sending_loop_collected_responses_and_pacing(gateway_handler):
         mock_cmd_class.return_value = mock_cmd_session
 
         # Configure gateway profile delay
-        gateway_handler.gateway.profile.command_queue_delay = 0.01
+        gateway_handler.gateway.profile = GatewayProfile(
+            model_name=gateway_handler.gateway.profile.model_name,
+            command_queue_delay=0.01,
+        )
 
         # Queue contains 1 message, then None to terminate
         cmd = MagicMock(spec=OWNCommand)
@@ -819,8 +823,9 @@ async def test_sending_loop_idle_timeout_closes_session(gateway_handler, monkeyp
 
 async def test_issue_254_mh201_idle_disconnect_and_reconnection_e2e(gateway_handler, monkeypatch):
     """Verify Issue #254: MH201 idle disconnect releases socket and reconnects for subsequent commands."""
+    from OWNd.message import OWNCommand
+
     import custom_components.myhome.gateway as gw_module
-    from custom_components.myhome.ownd.message import OWNCommand
 
     # Set idle timeout short for testing
     monkeypatch.setattr(gw_module, "COMMAND_SESSION_IDLE_TIMEOUT", 0.04)

@@ -5,8 +5,7 @@ import pytest
 from homeassistant.components.climate.const import (
     HVACMode,
 )
-
-from custom_components.myhome.ownd.message import (
+from OWNd.message import (
     OWNEvent,
 )
 
@@ -170,10 +169,13 @@ class TestSensorEntity:
 class TestGatewayConnection:
     @pytest.mark.asyncio
     async def test_test_connection_dns_failure(self, mock_gateway):
-        from custom_components.myhome.ownd.connection import OWNSession
+        from OWNd.connection import OWNSession
         with patch("asyncio.open_connection", side_effect=ConnectionRefusedError()):
             mock_gateway.address = "invalid_host"
             mock_gateway.port = 20000
             session = OWNSession(gateway=mock_gateway, logger=MagicMock())
             response = await session.test_connection()
-            assert response is None
+            assert response == {
+                "Success": False,
+                "Message": "connection_error",
+            }

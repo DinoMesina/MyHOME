@@ -13,6 +13,9 @@ from homeassistant.const import CONF_MAC
 from homeassistant.core import State
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.dispatcher import async_dispatcher_send
+from OWNd.message import (
+    OWNSoundEvent,
+)
 
 from custom_components.myhome.const import (
     CONF_DECODER_ENTITY,
@@ -27,9 +30,6 @@ from custom_components.myhome.media_player import (
     _build_pool,
     async_setup_entry,
     async_unload_entry,
-)
-from custom_components.myhome.ownd.message import (
-    OWNSoundEvent,
 )
 
 

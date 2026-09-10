@@ -2,17 +2,17 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from OWNd.message import (
+    OWNAutomationCommand,
+    OWNCommand,
+    OWNLightingCommand,
+)
 
 from custom_components.myhome.button import (
     DisableCommandButtonEntity,
     EnableCommandButtonEntity,
 )
 from custom_components.myhome.const import is_apl_address, normalize_where
-from custom_components.myhome.ownd.message import (
-    OWNAutomationCommand,
-    OWNCommand,
-    OWNLightingCommand,
-)
 
 
 class TestPointToPointFeasibility:
@@ -245,8 +245,9 @@ class TestProbeAndStatusFeasibility:
         import asyncio
         from unittest.mock import AsyncMock, MagicMock, patch
 
+        from OWNd.message import OWNLightingEvent
+
         from custom_components.myhome.gateway import MyHOMEGatewayHandler
-        from custom_components.myhome.ownd.message import OWNLightingEvent
 
         config_entry = MagicMock()
         config_entry.data = {
@@ -283,7 +284,8 @@ class TestProbeAndStatusFeasibility:
         """Status request NACK (e.g. *#16*0## without audio matrix) must log DEBUG and not WARN."""
         from unittest.mock import MagicMock
 
-        from custom_components.myhome.ownd.connection import OWNCommandSession, OWNGateway
+        from OWNd.connection import OWNCommandSession, OWNGateway
+
         from tests.mock_gateway_harness import MockGatewayHarness
 
         harness = MockGatewayHarness()

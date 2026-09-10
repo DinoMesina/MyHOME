@@ -4,13 +4,7 @@ import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
-from custom_components.myhome.ownd.connection import (
-    OWNCommandSession,
-    OWNEventSession,
-    OWNGateway,
-    OWNSession,
-)
+from OWNd.connection import OWNCommandSession, OWNEventSession, OWNGateway, OWNSession
 
 # ── OWNGateway ─────────────────────────────────────────────────────────────
 
@@ -136,7 +130,7 @@ class TestOWNGateway:
         assert gw.password is None
         assert gw.model_name == "Unknown model"
         assert gw.manufacturer == "BTicino S.p.A."
-        assert gw.port is None
+        assert gw.port == 20000
 
 
 # ── OWNSession Properties ──────────────────────────────────────────────────
@@ -393,6 +387,7 @@ class TestOWNCommandSession:
     async def test_send_retry_on_reset(self, session):
         session._stream_writer = MagicMock()
         session._stream_writer.drain = AsyncMock()
+        session._stream_writer.wait_closed = AsyncMock()
         session._stream_reader = AsyncMock()
 
         session._stream_writer.write.side_effect = ConnectionResetError
@@ -463,7 +458,9 @@ class TestOpenWebNet4jHardening:
 
     @pytest.fixture
     def event_session(self):
-        gw = OWNGateway({"address": "127.0.0.1", "port": 20000})
+        gw = OWNGateway(
+            {"address": "127.0.0.1", "port": 20000, "modelName": "F454"}
+        )
         return OWNEventSession(gateway=gw, logger=logging.getLogger("test"))
 
     @pytest.mark.asyncio
@@ -519,13 +516,11 @@ class TestOpenWebNet4jHardening:
         with patch('asyncio.open_connection', return_value=(mock_reader, mock_writer)):
             with patch.object(OWNSession, '_negotiate', return_value={"Success": True}):
                 await event_session.connect()
-                assert event_session._is_active is True
                 assert event_session._keepalive_task is not None
                 assert not event_session._keepalive_task.done()
 
                 # Closing session should cleanly cancel keepalive task
                 await event_session.close()
-                assert event_session._is_active is False
                 assert event_session._keepalive_task is None
 
 
@@ -538,14 +533,14 @@ class TestOWNGatewayDiscoveryAndClassmethods:
 
     @pytest.mark.asyncio
     async def test_get_first_available_gateway(self):
-        with patch("custom_components.myhome.ownd.connection.find_gateways", return_value=[{"address": "192.168.1.50"}]):
+        with patch("OWNd.connection.find_gateways", return_value=[{"address": "192.168.1.50"}]):
             gw = await OWNGateway.get_first_available_gateway(password="secret")
             assert gw.host == "192.168.1.50"
             assert gw.password == "secret"
 
     @pytest.mark.asyncio
     async def test_find_from_address_present(self):
-        with patch("custom_components.myhome.ownd.connection.get_gateway", return_value={"address": "192.168.1.55"}):
+        with patch("OWNd.connection.get_gateway", return_value={"address": "192.168.1.55"}):
             gw = await OWNGateway.find_from_address("192.168.1.55")
             assert gw.host == "192.168.1.55"
 
@@ -572,7 +567,7 @@ class TestOWNGatewayDiscoveryAndClassmethods:
             "ssdp_location": "http://192.168.1.100:8080/desc.xml",
             "port": None,
         }
-        with patch("custom_components.myhome.ownd.connection.get_port", return_value=20000):
+        with patch("OWNd.connection.get_port", return_value=20000):
             gw = await OWNGateway.build_from_discovery_info(info)
             assert gw.port == 20000
 
@@ -638,7 +633,7 @@ class TestOWNSessionFullCoverage:
         with patch("asyncio.sleep", return_value=None):
             with patch("asyncio.open_connection", side_effect=ConnectionRefusedError):
                 res = await session.test_connection()
-                assert res is None
+                assert res == {"Success": False, "Message": "connection_error"}
 
     @pytest.mark.asyncio
     async def test_test_connection_reset_error(self, session):
@@ -787,7 +782,7 @@ class TestOWNSessionNegotiateBranches:
         ]
         res = await session._negotiate()
         assert res["Success"] is False
-        assert res["Message"] == "negociation_error"
+        assert res["Message"] == "negotiation_error"
         session._stream_writer.write.assert_any_call(b"*#*0##")
 
     @pytest.mark.asyncio
@@ -800,7 +795,7 @@ class TestOWNSessionNegotiateBranches:
         ]
         res = await session._negotiate()
         assert res["Success"] is False
-        assert res["Message"] == "password_error"
+        assert res["Message"] == "connection_closed"
 
     @pytest.mark.asyncio
     async def test_negotiate_sha_timeout(self, session):
@@ -812,7 +807,7 @@ class TestOWNSessionNegotiateBranches:
         ]
         res = await session._negotiate()
         assert res["Success"] is False
-        assert res["Message"] == "password_error"
+        assert res["Message"] == "negotiation_timeout"
 
     @pytest.mark.asyncio
     async def test_negotiate_nonce_numeric_password_success(self, session):
@@ -903,7 +898,7 @@ class TestOWNEventAndCommandSessionRemainingCoverage:
 
     @pytest.mark.asyncio
     async def test_event_session_keepalive_loop_sends_ping(self, event_session):
-        event_session._is_active = True
+        event_session._keepalive_interval = 90
         mock_writer = MagicMock()
         mock_writer.drain = AsyncMock()
         mock_writer.is_closing.return_value = False
@@ -919,8 +914,8 @@ class TestOWNEventAndCommandSessionRemainingCoverage:
 
     @pytest.mark.asyncio
     async def test_event_session_keepalive_loop_exception(self, event_session):
-        event_session._is_active = True
-        with patch("asyncio.sleep", side_effect=RuntimeError("Keepalive failed")):
+        event_session._keepalive_interval = 90
+        with patch("asyncio.sleep", side_effect=OSError("Keepalive failed")):
             await event_session._keepalive_loop()
 
     @pytest.mark.asyncio
@@ -933,16 +928,22 @@ class TestOWNEventAndCommandSessionRemainingCoverage:
             assert await event_session.get_next() is None
 
         # AttributeError
+        event_session._stream_reader = AsyncMock()
         event_session._stream_reader.readuntil.side_effect = AttributeError("Malformed")
-        assert await event_session.get_next() is None
+        with patch.object(event_session, "connect", new_callable=AsyncMock):
+            assert await event_session.get_next() is None
 
         # ConnectionError
+        event_session._stream_reader = AsyncMock()
         event_session._stream_reader.readuntil.side_effect = ConnectionResetError()
-        assert await event_session.get_next() is None
+        with patch.object(event_session, "connect", new_callable=AsyncMock):
+            assert await event_session.get_next() is None
 
         # Broad Exception
+        event_session._stream_reader = AsyncMock()
         event_session._stream_reader.readuntil.side_effect = RuntimeError("Crash")
-        assert await event_session.get_next() is None
+        with patch.object(event_session, "connect", new_callable=AsyncMock):
+            assert await event_session.get_next() is None
 
     @pytest.mark.asyncio
     async def test_probe_gateway_failures(self):
@@ -985,100 +986,8 @@ class TestOWNEventAndCommandSessionRemainingCoverage:
     async def test_command_session_send_broad_exception(self, command_session):
         command_session._stream_reader = AsyncMock()
         command_session._stream_writer = MagicMock()
+        command_session._stream_writer.wait_closed = AsyncMock()
         command_session._stream_writer.write.side_effect = RuntimeError("Fatal")
         res = await command_session.send("*1*1*12##")
         assert res is None
         assert command_session._stream_writer is None
-
-    def test_own_session_is_connected_and_state_notifications(self):
-        session = OWNSession(gateway=MagicMock(), logger=MagicMock())
-        state_changes = []
-        session._on_state_change = lambda c: state_changes.append(c)
-
-        # 1. is_connected without writer
-        session._stream_writer = None
-        assert session.is_connected is False
-
-        # 2. is_connected with active writer
-        mock_writer = MagicMock()
-        mock_writer.is_closing.return_value = False
-        session._stream_writer = mock_writer
-        assert session.is_connected is True
-
-        # 3. is_connected with closing writer
-        mock_writer.is_closing.return_value = True
-        assert session.is_connected is False
-
-        # 4. _notify_state_change success
-        session._notify_state_change(True)
-        session._notify_state_change(False)
-        assert state_changes == [True, False]
-
-        # 5. _notify_state_change with callback exception
-        def failing_cb(val):
-            raise RuntimeError("Boom")
-
-        session._on_state_change = failing_cb
-        session._notify_state_change(True)  # Should not raise
-
-    @pytest.mark.asyncio
-    async def test_event_session_is_connected_and_connect_failure(self, event_session):
-        state_changes = []
-        event_session._on_state_change = lambda c: state_changes.append(c)
-
-        # 1. is_connected when inactive
-        assert event_session.is_connected is False
-
-        # 2. is_connected when active and writer active
-        event_session._is_active = True
-        mock_writer = MagicMock()
-        mock_writer.is_closing.return_value = False
-        event_session._stream_writer = mock_writer
-        assert event_session.is_connected is True
-
-        # 3. connect returning failure notifies state change False
-        with patch.object(OWNSession, "connect", new_callable=AsyncMock) as mock_super_connect:
-            mock_super_connect.return_value = {"Success": False, "Message": "auth_failed"}
-            res = await event_session.connect()
-            assert res == {"Success": False, "Message": "auth_failed"}
-            assert False in state_changes
-
-    @pytest.mark.asyncio
-    async def test_command_session_idle_timeout_reconnection(self, command_session):
-        """Verify command session reconnects fresh when idle exceeds IDLE_TIMEOUT."""
-        command_session._stream_writer = MagicMock()
-        command_session._stream_writer.drain = AsyncMock()
-        command_session._stream_reader = AsyncMock()
-        command_session._stream_reader.readuntil.return_value = b"*#*1##"
-
-        # Simulate connection was used 100 seconds ago (well past 15s IDLE_TIMEOUT)
-        loop = asyncio.get_running_loop()
-        command_session._last_activity = loop.time() - 100.0
-
-        async def fake_connect():
-            command_session._stream_writer = MagicMock()
-            command_session._stream_writer.drain = AsyncMock()
-            command_session._stream_reader = AsyncMock()
-            command_session._stream_reader.readuntil.return_value = b"*#*1##"
-            return {"Success": True}
-
-        with patch.object(command_session, "connect", side_effect=fake_connect) as mock_connect:
-            res = await command_session.send("*2*1*14##")
-            assert res is True
-            mock_connect.assert_called_once()
-            assert command_session._last_activity is not None
-            assert loop.time() - command_session._last_activity < 1.0
-
-
-    @pytest.mark.asyncio
-    async def test_command_session_connect_and_close_activity_lifecycle(self, command_session):
-        """Verify connect sets _last_activity and close resets it to None."""
-        with patch.object(OWNSession, "connect", new_callable=AsyncMock) as mock_super_connect:
-            mock_super_connect.return_value = {"Success": True}
-            await command_session.connect()
-            assert command_session._last_activity is not None
-
-        await command_session.close()
-        assert command_session._last_activity is None
-
-

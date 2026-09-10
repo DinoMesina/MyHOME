@@ -2,12 +2,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from homeassistant.const import UnitOfPower, UnitOfTemperature
-
-from custom_components.myhome.binary_sensor import (
-    MyHOMEAuxiliary,
-    MyHOMEMotionSensor,
-)
-from custom_components.myhome.ownd.message import (
+from OWNd.message import (
     MESSAGE_TYPE_ACTIVE_POWER,
     MESSAGE_TYPE_CURRENT_DAY_CONSUMPTION,
     MESSAGE_TYPE_CURRENT_MONTH_CONSUMPTION,
@@ -15,6 +10,11 @@ from custom_components.myhome.ownd.message import (
     MESSAGE_TYPE_ILLUMINANCE,
     MESSAGE_TYPE_MAIN_TEMPERATURE,
     MESSAGE_TYPE_SECONDARY_TEMPERATURE,
+)
+
+from custom_components.myhome.binary_sensor import (
+    MyHOMEAuxiliary,
+    MyHOMEMotionSensor,
 )
 from custom_components.myhome.sensor import (
     MyHOMEEnergySensor,

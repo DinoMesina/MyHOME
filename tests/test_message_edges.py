@@ -3,8 +3,7 @@ import datetime
 from unittest.mock import patch
 
 import pytest
-
-from custom_components.myhome.ownd.message import (
+from OWNd.message import (
     CLIMATE_MODE_AUTO,
     CLIMATE_MODE_COOL,
     CLIMATE_MODE_HEAT,
@@ -295,15 +294,17 @@ class TestHeatingEdgeCases:
         assert isinstance(msg, OWNHeatingEvent)
 
     def test_local_offset_knob_off(self):
-        """Value 4 or 5 means offset knob is off."""
+        """Value 4 reports local control off, not a numeric offset."""
         msg = OWNEvent.parse("*#4*1*13*4##")
         assert isinstance(msg, OWNHeatingEvent)
-        assert msg.local_offset == 0
+        assert msg.local_offset is None
+        assert msg.local_control_state == "local_off"
 
     def test_local_offset_knob_5(self):
         msg = OWNEvent.parse("*#4*1*13*5##")
         assert isinstance(msg, OWNHeatingEvent)
-        assert msg.local_offset == 0
+        assert msg.local_offset is None
+        assert msg.local_control_state == "local_protection"
 
     def test_local_offset_zero_single_digit(self):
         msg = OWNEvent.parse("*#4*1*13*0##")
@@ -989,7 +990,7 @@ class TestMoreEdgeCoverage:
             def today(cls):
                 return real_date(2024, 1, 1)
 
-        with patch("custom_components.myhome.ownd.message.datetime.date", MockDate):
+        with patch("OWNd.message.datetime.date", MockDate):
             leap_err = OWNEnergyEvent.parse("*#18*71*511#2#29*1*100##")
             assert leap_err is not None
             assert getattr(leap_err, "_type", None) is None
@@ -1149,7 +1150,7 @@ class TestProtocolFixesAudit:
         assert evt_energy_single.sensor == "1"
 
     def test_gateway_profile_constants(self):
-        from custom_components.myhome.gateway_profile import (
+        from OWNd.profiles import (
             DEFAULT_SUPPORTED_WHO,
             WHO_LOAD_CONTROL,
             WHO_SOUND_DIFFUSION,

@@ -6,6 +6,11 @@ import pytest
 from homeassistant.components.climate.const import HVACMode
 from homeassistant.const import CONF_MAC
 from homeassistant.helpers.dispatcher import async_dispatcher_send
+from OWNd.message import (
+    OWNAutomationEvent,
+    OWNHeatingEvent,
+    OWNLightingEvent,
+)
 
 from custom_components.myhome.climate import (
     MyHOMEClimate,
@@ -26,11 +31,6 @@ from custom_components.myhome.cover import (
 )
 from custom_components.myhome.light import (
     async_setup_entry as async_setup_light_entry,
-)
-from custom_components.myhome.ownd.message import (
-    OWNAutomationEvent,
-    OWNHeatingEvent,
-    OWNLightingEvent,
 )
 from custom_components.myhome.switch import (
     async_setup_entry as async_setup_switch_entry,

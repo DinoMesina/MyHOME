@@ -3,14 +3,14 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from OWNd.connection import OWNGateway
+from OWNd.message import OWNEvent
 
 from custom_components.myhome.core.transport import (
     AsyncSerialTransport,
     AsyncTcpTransport,
     OWNTransport,
 )
-from custom_components.myhome.ownd.connection import OWNGateway
-from custom_components.myhome.ownd.message import OWNEvent
 
 # ── 1. Base Transport ────────────────────────────────────────────────────────
 
@@ -344,7 +344,7 @@ async def test_serial_transport_demux_logic():
     assert transport._pending_future.result() is True
 
     # 6. Raw string fallback ACK/NACK when OWNMessage.parse returns None
-    with patch("custom_components.myhome.ownd.message.OWNMessage.parse", return_value=None):
+    with patch("OWNd.message.OWNMessage.parse", return_value=None):
         transport._pending_future = loop.create_future()
         transport._pending_collected = []
         transport._process_inbound_frame("*#*1##")

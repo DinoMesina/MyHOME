@@ -1,5 +1,5 @@
 """Tests for OWNHeatingEvent and OWNHeatingCommand protocol translation."""
-from custom_components.myhome.ownd.message import (
+from OWNd.message import (
     CLIMATE_MODE_AUTO,
     CLIMATE_MODE_COOL,
     CLIMATE_MODE_HEAT,

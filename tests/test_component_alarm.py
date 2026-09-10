@@ -10,6 +10,11 @@ from homeassistant.const import (
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.dispatcher import async_dispatcher_send
+from OWNd.message import (
+    OWNAlarmCommand,
+    OWNAlarmEvent,
+    OWNEvent,
+)
 
 from custom_components.myhome.alarm_control_panel import (
     PLATFORM,
@@ -25,11 +30,6 @@ from custom_components.myhome.const import (
     CONF_PLATFORMS,
     CONF_WHERE,
     DOMAIN,
-)
-from custom_components.myhome.ownd.message import (
-    OWNAlarmCommand,
-    OWNAlarmEvent,
-    OWNEvent,
 )
 
 

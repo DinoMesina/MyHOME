@@ -14,10 +14,10 @@ from homeassistant.const import CONF_HOST, CONF_MAC, CONF_NAME, CONF_PORT
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
+from OWNd.message import OWNMessage
 
 from .bus_monitor import BusFrame, BusMonitor
 from .const import CONF_ENTITY, CONF_FIRMWARE, CONF_WORKER_COUNT, DOMAIN, INTEGRATION_VERSION
-from .ownd.message import OWNMessage
 
 _LOGGER = logging.getLogger(__name__)
 

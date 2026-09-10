@@ -4,6 +4,13 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from homeassistant.components.binary_sensor import BinarySensorDeviceClass
+from OWNd.message import (
+    MESSAGE_TYPE_MOTION,
+    MESSAGE_TYPE_MOTION_TIMEOUT,
+    MESSAGE_TYPE_PIR_SENSITIVITY,
+    OWNDryContactEvent,
+    OWNLightingEvent,
+)
 
 from custom_components.myhome.binary_sensor import (
     MyHOMEAuxiliary,
@@ -13,13 +20,6 @@ from custom_components.myhome.binary_sensor import (
     async_unload_entry,
 )
 from custom_components.myhome.const import DOMAIN
-from custom_components.myhome.ownd.message import (
-    MESSAGE_TYPE_MOTION,
-    MESSAGE_TYPE_MOTION_TIMEOUT,
-    MESSAGE_TYPE_PIR_SENSITIVITY,
-    OWNDryContactEvent,
-    OWNLightingEvent,
-)
 
 
 async def test_setup_and_unload_entry(hass):
@@ -351,8 +351,7 @@ async def test_motion_sensor_restore_state_and_timeout_expiration(hass):
 async def test_binary_sensor_dispatcher_and_discovery(hass):
     """Test dynamic discovery and forwarding of binary sensor bus events."""
     from homeassistant.helpers.dispatcher import async_dispatcher_send
-
-    from custom_components.myhome.ownd.message import OWNEvent
+    from OWNd.message import OWNEvent
 
     mock_gateway = MagicMock()
     mock_gateway.mac = "00:03:50:00:25:25"
@@ -400,8 +399,7 @@ async def test_binary_sensor_dispatcher_and_discovery(hass):
 async def test_binary_sensor_entity_registry_and_motion_discovery(hass):
     """Test binary sensor registry restoration and dynamic motion sensor discovery."""
     from homeassistant.helpers.dispatcher import async_dispatcher_send
-
-    from custom_components.myhome.ownd.message import OWNEvent
+    from OWNd.message import OWNEvent
 
     mock_gateway = MagicMock()
     mock_gateway.mac = "00:03:50:00:11:22"
@@ -539,8 +537,7 @@ async def test_binary_sensor_registry_exception(hass):
 async def test_dry_contact_garage_door_deduplication_and_zero_padded_where(hass):
     """Test dry contact garage door deduplication of legacy registry entries and zero-padded WHERE frames."""
     from homeassistant.helpers.dispatcher import async_dispatcher_send
-
-    from custom_components.myhome.ownd.message import OWNEvent
+    from OWNd.message import OWNEvent
 
     mac = "00:03:50:00:25:99"
     mock_gateway = MagicMock()
@@ -635,8 +632,7 @@ async def test_dry_contact_garage_door_deduplication_and_zero_padded_where(hass)
 async def test_motion_sensor_zero_padded_where_and_legrand_048834_frames(hass):
     """Test motion sensor at WHERE 0015 (Area 00, PL 15) handles Legrand 048834 frames (*1*34*0015##, *#1*0015*5*2##, *#1*0015*7*0*0*10##) and defaults to False."""
     from homeassistant.helpers.dispatcher import async_dispatcher_send
-
-    from custom_components.myhome.ownd.message import OWNEvent
+    from OWNd.message import OWNEvent
 
     mac = "00:03:50:00:15:99"
     mock_gateway = MagicMock()
@@ -729,8 +725,8 @@ async def test_motion_sensor_zero_padded_where_and_legrand_048834_frames(hass):
 async def test_motion_sensor_0015_and_switch_15_coexistence(hass):
     """Verify that APL 15 switch (A=1, PL=5) and APL 0015 motion sensor (A=0, PL=15) have distinct devices and do not collide."""
     from homeassistant.helpers.dispatcher import async_dispatcher_send
+    from OWNd.message import OWNEvent
 
-    from custom_components.myhome.ownd.message import OWNEvent
     from custom_components.myhome.switch import async_setup_entry as async_setup_switch_entry
 
     mac = "00:03:50:00:15:AA"

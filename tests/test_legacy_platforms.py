@@ -13,6 +13,7 @@ from homeassistant.const import (
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.dispatcher import async_dispatcher_send
+from OWNd.message import OWNEvent
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from syrupy.assertion import SnapshotAssertion
 from syrupy.matchers import path_type
@@ -42,7 +43,6 @@ from custom_components.myhome.const import (
     CONF_ZONE,
     DOMAIN,
 )
-from custom_components.myhome.ownd.message import OWNEvent
 
 
 @pytest.fixture

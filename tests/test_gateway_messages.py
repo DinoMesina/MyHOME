@@ -1,5 +1,5 @@
 """Tests for Gateway, Alarm, Aux, CEN, CEN+, Scenario, Scene, Energy, DryContact, and Signaling messages."""
-from custom_components.myhome.ownd.message import (
+from OWNd.message import (
     MESSAGE_TYPE_ACTIVE_POWER,
     MESSAGE_TYPE_CURRENT_DAY_CONSUMPTION,
     MESSAGE_TYPE_CURRENT_MONTH_CONSUMPTION,
@@ -358,7 +358,7 @@ class TestEventParseRouter:
 
     def test_unparseable_returns_raw(self):
         result = OWNEvent.parse("garbage")
-        assert result == "garbage"
+        assert result is None
 
     def test_who_greater_1000_returns_base(self):
         msg = OWNEvent.parse("*1001*1*21##")

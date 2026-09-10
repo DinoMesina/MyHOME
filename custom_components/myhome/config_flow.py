@@ -24,6 +24,8 @@ from homeassistant.core import callback
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import selector
+from OWNd.connection import OWNGateway, OWNSession
+from OWNd.discovery import find_gateways, get_gateway
 from voluptuous import (
     All,
     Coerce,
@@ -55,8 +57,6 @@ from .const import (
     LOGGER,
 )
 from .gateway import MyHOMEGatewayHandler
-from .ownd.connection import OWNGateway, OWNSession
-from .ownd.discovery import find_gateways, get_gateway
 
 
 class MACAddress:

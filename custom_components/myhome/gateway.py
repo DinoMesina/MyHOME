@@ -13,6 +13,25 @@ from homeassistant.const import (
 from homeassistant.core import callback
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.dispatcher import async_dispatcher_send
+from OWNd.connection import OWNCommandSession, OWNEventSession, OWNGateway, OWNSession
+from OWNd.message import (
+    OWNAlarmEvent,
+    OWNAutomationEvent,
+    OWNAuxEvent,
+    OWNCENEvent,
+    OWNCENPlusEvent,
+    OWNCommand,
+    OWNDryContactEvent,
+    OWNEnergyCommand,
+    OWNEnergyEvent,
+    OWNGatewayCommand,
+    OWNGatewayEvent,
+    OWNHeatingCommand,
+    OWNHeatingEvent,
+    OWNLightingCommand,
+    OWNLightingEvent,
+    OWNMessage,
+)
 
 from .bus_monitor import BusMonitor
 from .const import (
@@ -33,25 +52,6 @@ from .const import (
     CONF_UDN,
     DOMAIN,
     LOGGER,
-)
-from .ownd.connection import OWNCommandSession, OWNEventSession, OWNGateway, OWNSession
-from .ownd.message import (
-    OWNAlarmEvent,
-    OWNAutomationEvent,
-    OWNAuxEvent,
-    OWNCENEvent,
-    OWNCENPlusEvent,
-    OWNCommand,
-    OWNDryContactEvent,
-    OWNEnergyCommand,
-    OWNEnergyEvent,
-    OWNGatewayCommand,
-    OWNGatewayEvent,
-    OWNHeatingCommand,
-    OWNHeatingEvent,
-    OWNLightingCommand,
-    OWNLightingEvent,
-    OWNMessage,
 )
 
 EVENT_READY_TIMEOUT = 120

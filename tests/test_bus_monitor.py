@@ -1,6 +1,7 @@
 """Tests for BusMonitor and BusFrame in-band bus tap."""
+from OWNd.message import OWNEvent, OWNSignaling
+
 from custom_components.myhome.bus_monitor import BusFrame, BusMonitor
-from custom_components.myhome.ownd.message import OWNEvent, OWNSignaling
 
 
 def test_bus_frame_parsing():

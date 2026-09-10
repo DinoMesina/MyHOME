@@ -15,9 +15,7 @@ MYHOME_DIR = os.path.join(REPO_ROOT, "custom_components", "myhome")
 COVERAGE_XML = os.path.join(REPO_ROOT, "coverage.xml")
 
 # Standalone interactive or trivial modules excluded from coverage enforcement
-EXCLUDED_MODULES = {
-    "custom_components/myhome/ownd/__main__.py",
-}
+EXCLUDED_MODULES = set()
 
 
 def collapse_line_ranges(line_numbers):

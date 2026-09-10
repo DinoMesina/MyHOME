@@ -378,8 +378,7 @@ async def test_switch_yaml_fallback_deduplication_and_no_ghost_light(hass: HomeA
     """Test Issue #241: switch from myhome.yaml is not duplicated, cleans ghost lights, and updates from bus."""
     from homeassistant.components.switch import SwitchDeviceClass
     from homeassistant.helpers.dispatcher import async_dispatcher_send
-
-    from custom_components.myhome.ownd.message import OWNLightingEvent
+    from OWNd.message import OWNLightingEvent
 
     yaml_content = """
 00:03:50:81:22:33:

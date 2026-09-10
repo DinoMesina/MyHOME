@@ -9,6 +9,7 @@ from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
+from OWNd.message import OWNCommand, OWNGatewayCommand
 
 from .const import (
     ATTR_GATEWAY,
@@ -27,7 +28,6 @@ from .const import (
     LOGGER,
 )
 from .gateway import MyHOMEGatewayHandler
-from .ownd.message import OWNCommand, OWNGatewayCommand
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 PLATFORMS = ["light", "switch", "cover", "climate", "binary_sensor", "sensor", "media_player", "button", "alarm_control_panel"]

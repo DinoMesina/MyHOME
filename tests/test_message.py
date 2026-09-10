@@ -1,4 +1,4 @@
-from custom_components.myhome.ownd.message import OWNEvent, OWNSoundCommand, OWNSoundEvent
+from OWNd.message import OWNEvent, OWNSoundCommand, OWNSoundEvent
 
 
 def test_own_sound_event_parsing_baseband():
@@ -204,7 +204,7 @@ def test_own_sound_live_capture_full_sequence():
 def test_own_event_unspecialized_who_returns_own_event():
     """Test that valid event frames for unspecialized WHO families (e.g. WHO 6 Door Entry, WHO 8 Intercom)
     return an OWNEvent instance (satisfying isinstance(..., OWNMessage)) instead of raw string."""
-    from custom_components.myhome.ownd.message import OWNMessage
+    from OWNd.message import OWNMessage
 
     frames = [
         ("*8*1#1#4*11##", 8, "11"),
