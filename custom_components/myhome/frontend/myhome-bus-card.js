@@ -27,7 +27,7 @@ class MyHomeBusCard extends HTMLElement {
 
   static getStubConfig() {
     return {
-      title: "MyHOME Bus Monitor",
+      title: "MyHOME OpenWebNet Bus Monitor",
       max_frames: 200,
     };
   }
@@ -44,7 +44,7 @@ class MyHomeBusCard extends HTMLElement {
   setConfig(config) {
     this._config = Object.assign(
       {
-        title: "MyHOME Bus Monitor",
+        title: "MyHOME OpenWebNet Bus Monitor",
         max_frames: 200,
         mac: null,
       },
@@ -872,16 +872,21 @@ ${framesText}
   }
 }
 
+if (!customElements.get("myhome-openwebnet-bus-monitor")) {
+  customElements.define("myhome-openwebnet-bus-monitor", MyHomeBusCard);
+}
+
+// Backward-compatible alias for existing dashboards
 if (!customElements.get("myhome-bus-card")) {
-  customElements.define("myhome-bus-card", MyHomeBusCard);
+  customElements.define("myhome-bus-card", class extends MyHomeBusCard {});
 }
 
 window.customCards = window.customCards || [];
-if (!window.customCards.some((c) => c.type === "myhome-bus-card")) {
+if (!window.customCards.some((c) => c.type === "myhome-openwebnet-bus-monitor")) {
   window.customCards.push({
-    type: "myhome-bus-card",
-    name: "MyHOME Bus Monitor",
-    description: "Real-time OpenWebNet bus traffic stream and diagnostic frame sender.",
+    type: "myhome-openwebnet-bus-monitor",
+    name: "MyHOME OpenWebNet Bus Monitor",
+    description: "Real-time BTicino / Legrand SCS OpenWebNet bus traffic stream, packet inspector, and diagnostic frame sender.",
     preview: true,
   });
 }

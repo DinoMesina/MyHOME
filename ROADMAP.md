@@ -41,7 +41,7 @@ The foundational rebuild of the integration engine, eliminating legacy concurren
 - **Stream Framing & Connection Watchdog**:
   - Chunk-free `readuntil(b"##")` stream delimiter parsing.
   - Active keep-alive supervisor with exponential backoff and fail-closed authentication (HMAC-SHA256, HMAC-SHA1, OpenWebNet password hashing).
-- **In-Band Lovelace Bus Monitor Card (`<myhome-bus-card>`)**:
+- **In-Band Lovelace Bus Monitor Card (`<myhome-openwebnet-bus-monitor>`)**:
   - Real-time diagnostic WebSocket ring buffer, WHO filtering, command injection, and 1-click diagnostic clipboard reports for GitHub issues.
 - **Full Subsystem Feature Parity**:
   - **Covers (WHO = 2)**: Virtual travel-time positioning interpolation, target positioning (`set_cover_position`), and native WHO=2 dimension 10 support.

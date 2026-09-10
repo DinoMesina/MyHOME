@@ -223,7 +223,8 @@ To capture raw OpenWebNet frames from physical hardware or diagnostic sessions:
 
 1. Add the Lovelace Bus Monitor Card to your dashboard:
    ```yaml
-   type: custom:myhome-bus-card
+   type: custom:myhome-openwebnet-bus-monitor
+   # Note: custom:myhome-bus-card is also supported as an alias
    ```
 2. Operate your devices (e.g. adjust a DALI color ballast, toggle a dry contact switch, or change audio volume).
 3. Click **`📋 Report Issue / Copy Trace`** to copy a sanitized diagnostics report with the exact bus frames.

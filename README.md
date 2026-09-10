@@ -200,15 +200,15 @@ This integration includes a **Dynamic Proxy** that lets you stream IP audio (via
 
 The integration includes an in-band real-time bus monitor operating over the existing gateway event stream with zero extra socket connections:
 
-### Lovelace Bus Monitor Card (`<myhome-bus-card>`)
+### Lovelace Bus Monitor Card (`<myhome-openwebnet-bus-monitor>`)
 
 <p align="center">
-  <img src="docs/images/myhome-bus-card.jpg" alt="MyHOME Bus Monitor Lovelace Card" width="750">
+  <img src="docs/images/myhome-bus-card.jpg" alt="MyHOME OpenWebNet Bus Monitor Lovelace Card" width="750">
 </p>
 
 A modern custom Lovelace element is automatically registered with zero configuration:
 
-- **Visual Card Picker & GUI Editor**: Fully integrated with Home Assistant's card picker — simply search for **"MyHOME Bus Monitor"** under `+ Add Card` and configure the title or buffer size visually without touching raw YAML.
+- **Visual Card Picker & GUI Editor**: Fully integrated with Home Assistant's card picker — simply search for **"MyHOME OpenWebNet Bus Monitor"** (or search **"MyHOME"** / **"OpenWebNet"**) under `+ Add Card` and configure the title or buffer size visually without touching raw YAML (YAML type `custom:myhome-openwebnet-bus-monitor`, with `custom:myhome-bus-card` supported as a backward-compatible alias).
 - **Live Bus Stream**: High-performance scrolling feed with color-coded badges for subsystems (Lighting `WHO=1`, Automation `WHO=2`, Climate `WHO=4`, Sound `WHO=16`, Energy `WHO=18`, CEN `WHO=15/25`) and ACK (`*#*1##`) / NACK (`*#*0##`) highlighting.
 - **Interactive Controls**: Live Pause/Resume, buffer clearing, and instant filtering by subsystem, WHERE address, and Direction (RX/TX).
 - **Manual Frame Injector**: Send raw OpenWebNet diagnostic frames directly to the bus with syntax validation.
@@ -314,7 +314,7 @@ The development of the MyHOME integration is organized into five strategic relea
   - [x] Declarative hardware gateway profiles (`MH200` to `F454`).
   - [x] Dual asynchronous transports: Async TCP & Serial/USB (`Legrand 3578 / OpenZigBee`).
   - [x] Adaptive inter-frame bus pacing & sentinel supervisor lifecycle.
-  - [x] In-band Lovelace Bus Monitor Card (`<myhome-bus-card>`) & WebSocket streaming proxy.
+  - [x] In-band Lovelace Bus Monitor Card (`<myhome-openwebnet-bus-monitor>`) & WebSocket streaming proxy.
   - [x] Native Home Assistant Diagnostics (`diagnostics.py`) & GitHub Issue Forms.
   - [x] Full feature parity across primary subsystems: Light, Switch, Cover, Climate (Fancoil), Alarm, Binary Sensor (3477 Dry Contact / IR), Device Triggers (CEN/CEN+).
   - [x] 100% automated test coverage across all component modules.
