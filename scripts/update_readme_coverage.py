@@ -102,6 +102,22 @@ def get_test_count() -> int:
     return 701
 
 
+def normalize_coverage_filename(fn: str) -> str:
+    """Normalize filenames from coverage.xml to custom_components/myhome/... paths."""
+    fn = fn.replace("\\", "/")
+    if os.path.isabs(fn):
+        try:
+            fn = os.path.relpath(fn, REPO_ROOT).replace("\\", "/")
+        except ValueError:
+            pass
+    if not fn.startswith("custom_components/myhome/"):
+        if fn.startswith("myhome/"):
+            fn = f"custom_components/{fn}"
+        else:
+            fn = f"custom_components/myhome/{fn}"
+    return fn
+
+
 def update_readme_and_svg():
     if not os.path.exists(COVERAGE_XML):
         print(f"Error: {COVERAGE_XML} not found. Run pytest with --cov-report=xml first.")
@@ -114,7 +130,8 @@ def update_readme_and_svg():
     file_rates = {}
     for p in root.findall(".//package"):
         for c in p.findall(".//class"):
-            fn = c.attrib.get("filename", "").replace("\\", "/")
+            raw_fn = c.attrib.get("filename", "")
+            fn = normalize_coverage_filename(raw_fn)
             # Filter out non-code or trivial init
             if fn in ("custom_components/myhome/ownd/__main__.py", "custom_components/myhome/ownd/__init__.py", "custom_components/myhome/core/__init__.py", "custom_components/myhome/core/transport/__init__.py"):
                 continue
@@ -125,7 +142,7 @@ def update_readme_and_svg():
     failing = [(fn, rate) for fn, rate in file_rates.items() if rate < 100.0]
     if failing:
         print("\n" + "=" * 78)
-        print("🚨 COVERAGE ENFORCEMENT ERROR: Test coverage dropped below strict 100.0%!")
+        print("[CRITICAL] COVERAGE ENFORCEMENT ERROR: Test coverage dropped below strict 100.0%!")
         print("=" * 78)
         for fn, rate in failing:
             print(f"  [MISS] {fn}: {rate:.1f}%")

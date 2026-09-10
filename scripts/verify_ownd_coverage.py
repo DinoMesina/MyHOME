@@ -56,6 +56,22 @@ def get_source_snippet(file_path: str, line_no: int) -> str:
     return ""
 
 
+def normalize_coverage_filename(fn: str) -> str:
+    """Normalize filenames from coverage.xml to custom_components/myhome/... paths."""
+    fn = fn.replace("\\", "/")
+    if os.path.isabs(fn):
+        try:
+            fn = os.path.relpath(fn, REPO_ROOT).replace("\\", "/")
+        except ValueError:
+            pass
+    if not fn.startswith("custom_components/myhome/"):
+        if fn.startswith("myhome/"):
+            fn = f"custom_components/{fn}"
+        else:
+            fn = f"custom_components/myhome/{fn}"
+    return fn
+
+
 def verify_all_coverage(xml_path: str = COVERAGE_XML) -> int:
     """Validate that every custom_components/myhome module has 100% test coverage."""
     if not os.path.exists(xml_path):
@@ -69,7 +85,8 @@ def verify_all_coverage(xml_path: str = COVERAGE_XML) -> int:
     coverage_data = {}
     for pkg in root.findall(".//package"):
         for cls in pkg.findall(".//class"):
-            fn = cls.attrib.get("filename", "").replace("\\", "/")
+            raw_fn = cls.attrib.get("filename", "")
+            fn = normalize_coverage_filename(raw_fn)
             lines = cls.findall(".//line")
             total_stmts = len(lines)
             rate = float(cls.attrib.get("line-rate", 0)) * 100.0
@@ -116,7 +133,7 @@ def verify_all_coverage(xml_path: str = COVERAGE_XML) -> int:
 
     if errors:
         print("\n" + "=" * 78)
-        print("🚨 STRICT 100% TEST COVERAGE ENFORCEMENT FAILED:")
+        print("[CRITICAL] STRICT 100% TEST COVERAGE ENFORCEMENT FAILED:")
         print("=" * 78)
         for rel, stmts, rate, uncovered, msg in errors:
             print(f"\n{msg}")

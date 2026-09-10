@@ -6,9 +6,19 @@ import pytest
 from scripts.verify_ownd_coverage import (
     collapse_line_ranges,
     get_source_snippet,
+    normalize_coverage_filename,
     verify_all_coverage,
 )
 from scripts.update_readme_coverage import update_readme_and_svg
+
+
+def test_normalize_coverage_filename():
+    """Verify filename normalization handles relative, absolute, and bare paths."""
+    assert normalize_coverage_filename("cover.py") == "custom_components/myhome/cover.py"
+    assert normalize_coverage_filename("ownd/message.py") == "custom_components/myhome/ownd/message.py"
+    assert normalize_coverage_filename("custom_components/myhome/sensor.py") == "custom_components/myhome/sensor.py"
+    assert normalize_coverage_filename("myhome/switch.py") == "custom_components/myhome/switch.py"
+    assert normalize_coverage_filename(r"core\transport\tcp.py") == "custom_components/myhome/core/transport/tcp.py"
 
 
 def test_collapse_line_ranges():
