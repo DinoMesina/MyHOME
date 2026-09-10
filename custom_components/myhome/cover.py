@@ -163,6 +163,7 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
 
         self._start_time: float | None = None
         self._start_pos: int = 100
+        self._moving_to_target: bool = False
         self._timer_task: asyncio.Task | None = None
 
     async def async_added_to_hass(self):
@@ -197,6 +198,7 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         if self._timer_task is not None and not self._timer_task.done():
             self._timer_task.cancel()
         self._timer_task = None
+        self._moving_to_target = False
 
     def _calculate_intermediate_position(self):
         """Calculate intermediate position when motion stops."""
@@ -232,15 +234,24 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
         """Wait for travel time then stop cover and update position."""
         try:
             await asyncio.sleep(run_time)
+            LOGGER.info(
+                "%s Reached target position %s%% after %.2fs. Sending STOP command to %s.",
+                self._gateway_handler.log_id,
+                target,
+                run_time,
+                self._full_where,
+            )
             await self._gateway_handler.send(OWNAutomationCommand.stop_shutter(self._full_where))
             self._attr_current_cover_position = target
             self._attr_is_closed = (target == 0)
             self._attr_is_opening = False
             self._attr_is_closing = False
+            self._moving_to_target = False
             self._start_time = None
             self.async_write_ha_state()
         except asyncio.CancelledError:
-            pass
+            self._moving_to_target = False
+
 
     async def _async_full_travel_complete(self, run_time: float, target: int):
         """Wait for full travel time to finish animation and guarantee final state."""
@@ -308,12 +319,6 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
             return
         target = kwargs[ATTR_POSITION]
 
-        if self._advanced:
-            await self._gateway_handler.send(
-                OWNAutomationCommand.set_shutter_level(self._full_where, target)
-            )
-            return
-
         current = (
             self._attr_current_cover_position
             if self._attr_current_cover_position is not None
@@ -323,6 +328,7 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
             return
 
         self._cancel_timer()
+        self._moving_to_target = True
 
         if target > current:
             delta = target - current
@@ -375,6 +381,13 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
 
         if message.is_opening:
             if not self._attr_is_opening:
+                # If we are already moving to target or just started < 1.2s ago, keep target timer
+                if self._moving_to_target or (self._start_time is not None and (time.monotonic() - self._start_time) < 1.2):
+                    self._attr_is_opening = True
+                    self._attr_is_closing = False
+                    self.async_schedule_update_ha_state()
+                    return
+
                 self._cancel_timer()
                 if self._attr_is_closing:
                     self._calculate_intermediate_position()
@@ -392,6 +405,13 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
                 )
         elif message.is_closing:
             if not self._attr_is_closing:
+                # If we are already moving to target or just started < 1.2s ago, keep target timer
+                if self._moving_to_target or (self._start_time is not None and (time.monotonic() - self._start_time) < 1.2):
+                    self._attr_is_closing = True
+                    self._attr_is_opening = False
+                    self.async_schedule_update_ha_state()
+                    return
+
                 self._cancel_timer()
                 if self._attr_is_opening:
                     self._calculate_intermediate_position()
@@ -408,13 +428,25 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
                     self._async_full_travel_complete(remaining_time, 0)
                 )
         elif message.state == 0:
+            # Ignore initial transient startup stop/switch frame (< 1.2s after command initiated)
+            if self._start_time is not None and (time.monotonic() - self._start_time) < 1.2:
+                LOGGER.debug(
+                    "%s Ignoring initial transient stop frame for %s (elapsed %.3fs)",
+                    self._gateway_handler.log_id,
+                    self._full_where,
+                    time.monotonic() - self._start_time,
+                )
+                return
+
             # Stopped (wall switch, timeout, or stop command)
             self._cancel_timer()
+            self._moving_to_target = False
             if self._attr_is_opening or self._attr_is_closing:
                 self._calculate_intermediate_position()
             else:
                 self._attr_is_opening = False
                 self._attr_is_closing = False
+
 
         if message.is_closed is not None:
             self._attr_is_closed = message.is_closed

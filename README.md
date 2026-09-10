@@ -3,9 +3,12 @@
 </p>
 
 # MyHOME (Modernized Fork)
-**Version: v1.4.0**
+**Version: v1.4.1**
 
 ## 🌟 Changelog
+* **v1.4.1**: **Actuator Transient Echo Fix & Universal Virtual Positioning!**
+  - **Actuator Transient Stop Echo Filter**: Fixed an issue where the initial ~80ms transient stop/switch frame emitted by BTicino actuators upon starting movement prematurely aborted the percentage timer, causing curtains to move all the way to 0% or 100%. The integration now maintains movement tracking and accurately stops at the requested target position.
+  - **Universal Virtual Positioning**: Removed hardware bypass that attempted to send OpenWebNet level write frames (`*#2*WHERE*#11#...##`) when `advanced: True` was present in existing configurations. All covers now use the reliable virtual time-based positioning regardless of whether `advanced` is specified in `myhome.yaml`.
 * **v1.4.0**: **Native Shutter Percentage Control & "Unknown" State Elimination!**
   - **Virtual Time-Based Positioning (`SET_POSITION`)**: Full native support for cover percentage control (0% to 100%) on standard BTicino shutter actuators (`F411/2`, `F411/4`, `3476`, etc.). Home Assistant now displays an interactive percentage slider and preset buttons (0%, 25%, 50%, 75%, 100%) for all shutters.
   - **Permanently Eliminated "Unknown" ("Sconosciuto") State**: Fixed a fundamental issue where standard BTicino stop frames (`*2*0*WHERE##`) caused Home Assistant to revert cover entities to "Unknown". Covers now accurately retain and reflect their state (`open`, `closed`, `opening`, `closing`) at all times.
@@ -16,14 +19,15 @@
   - **`OWNSignaling` Crash Loop Fixed**: Fixed `AttributeError: 'OWNSignaling' object has no attribute '_who'` which caused a continuous 1-second crash/reconnect loop whenever protocol signaling frames (ACK, NACK, Nonce, handshake) arrived from gateways (particularly MyHomeServer1).
   - **MHS1 & Embedded Gateway Scan Reliability**: Increased response deadline to 200ms and inter-command spacing to 30ms to accommodate slower embedded gateways like MHS1 on physical 9600-baud SCS buses. Added automatic socket reconnection and recovery during active bus scans.
   - **YAML Metadata Preservation during Onboarding**: When both "Import YAML" and "Auto Scan" are enabled, existing YAML-imported devices (custom entity names, models, manufacturers) are preserved and never overwritten by generic scan names.
+
+<details>
+<summary><b>Previous versions changelog (Click to expand)</b></summary>
+
 * **v1.3.1**: **Critical Gateway Anti-Flooding Fix & Sound Diffusion Upgrades!**
   - **Eliminated Command Queue Flooding & Delay**: Fixed an issue where periodic actuator diagnostic frames (`WHO 1001` / `WHO 1004`) triggered an infinite storm of status queries on unconfigured hardware addresses, causing up to 2-minute delays on light switches.
   - **Entity Validation & 60s Throttling**: Diagnostic status queries now strictly verify that the target device exists in Home Assistant and rate-limit queries to a maximum of once every 60 seconds per device.
   - **Zero Retries for Status Queries**: Failed status requests are dropped immediately instead of blocking the gateway sender queue.
   - **Sound Diffusion Improvements (WHO 22/16)**: Integrated full support for F441 audio matrices, H4562 wall controls with bidirectional sync, 3-frame source switching, FM Tuner metadata tracking (frequencies & presets), and gateway freeze prevention (contributed by @bboykaos).
-
-<details>
-<summary><b>Previous versions changelog (Click to expand)</b></summary>
 
 * **v1.3.0**: **Gateway Diagnostics & Sleek "MyHOME Monitor" Lovelace Card!**
   - **Zero-Overhead Gateway Diagnostics**: Added native diagnostic entities for BTicino gateways:
