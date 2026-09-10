@@ -1,17 +1,16 @@
 """Support for common values for MyHome devices."""
 
 from __future__ import annotations
+
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .gateway import MyHOMEGatewayHandler
 
-from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.device_registry import DeviceInfo
-from homeassistant.const import CONF_ENTITIES
+from homeassistant.helpers.entity import Entity
 
-
-from .const import DOMAIN, CONF_PLATFORMS, CONF_ENTITIES
+from .const import DOMAIN
 
 
 class MyHOMEEntity(Entity):
@@ -39,7 +38,7 @@ class MyHOMEEntity(Entity):
         self._attr_has_entity_name = False
         self._attr_name = name
         self.entity_id = f"{platform.lower()}.{name.lower().replace(' ', '_')}"
-        
+
         self._attr_entity_registry_enabled_default = True
         self._attr_should_poll = False
 

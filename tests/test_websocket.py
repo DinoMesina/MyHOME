@@ -1,13 +1,13 @@
 """Tests for MyHOME WebSocket API commands."""
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant
 
 from custom_components.myhome.bus_monitor import BusFrame, BusMonitor
 from custom_components.myhome.const import CONF_ENTITY, DOMAIN
-from custom_components.myhome.ownd.message import OWNEvent, OWNMessage
+from custom_components.myhome.ownd.message import OWNEvent
 from custom_components.myhome.websocket import (
     _extract_gateway_info,
     _get_gateway_and_monitor,

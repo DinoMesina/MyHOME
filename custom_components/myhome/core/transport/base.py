@@ -1,9 +1,9 @@
 """Base abstract class for OpenWebNet transports."""
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
 import logging
-from typing import Any, Callable, Optional, Set
+from abc import ABC, abstractmethod
+from typing import Any, Callable, Set
 
 _LOGGER = logging.getLogger(__name__)
 

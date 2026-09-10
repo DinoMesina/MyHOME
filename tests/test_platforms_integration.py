@@ -1,11 +1,11 @@
 """Integration tests spanning all platforms to ensure setup, unload, and dispatcher wiring."""
-import pytest
 from unittest.mock import patch
 
-from homeassistant.core import HomeAssistant
+import pytest
 from homeassistant.config_entries import ConfigEntryState
-from homeassistant.helpers.dispatcher import async_dispatcher_send
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.myhome.const import DOMAIN
@@ -113,11 +113,11 @@ async def test_platform_dynamic_discovery(hass: HomeAssistant, mock_gateway_conn
 
     # Entities should now be in the registry
     entity_registry = er.async_get(hass)
-    
+
     # Check light entity exists
     light_entry = entity_registry.async_get("light.light_21")
     assert light_entry is not None
-    
+
     # Send another status update to test the handle_event dispatcher
     light_off_msg = OWNEvent.parse("*1*0*21##")
     async_dispatcher_send(hass, f"myhome_message_{config_entry.data['mac']}", light_off_msg)

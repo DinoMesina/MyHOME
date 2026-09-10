@@ -1,15 +1,12 @@
 """Automated test suite enforcing Home Assistant architectural standards."""
-import ast
-import json
-from pathlib import Path
-import pytest
 
 from scripts.verify_ha_standards import (
     StandardsChecker,
-    check_discovery_flows,
-    check_translation_coverage,
     check_deprecated_constants,
+    check_discovery_flows,
     check_no_blocking_calls,
+    check_ruff_standards,
+    check_translation_coverage,
 )
 
 
@@ -39,3 +36,11 @@ def test_no_blocking_calls_in_async_code():
     checker = StandardsChecker()
     check_no_blocking_calls(checker)
     assert not checker.errors, f"Blocking call violations found: {checker.errors}"
+
+
+def test_ruff_static_analysis_standards():
+    """Verify codebase satisfies Ruff static analysis standards."""
+    checker = StandardsChecker()
+    check_ruff_standards(checker)
+    assert not checker.errors, f"Ruff static analysis violations found: {checker.errors}"
+

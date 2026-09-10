@@ -41,10 +41,12 @@ before — it controls the BTicino amplifier zone via WHO=16 commands only.
 import asyncio
 
 from homeassistant.components.media_player import (
+    DOMAIN as PLATFORM,
+)
+from homeassistant.components.media_player import (
     MediaPlayerEntity,
     MediaPlayerEntityFeature,
     MediaPlayerState,
-    DOMAIN as PLATFORM,
 )
 from homeassistant.const import CONF_MAC
 from homeassistant.core import HomeAssistant, callback
@@ -53,8 +55,6 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dispatcher_send
 from homeassistant.helpers.event import async_track_state_change_event
 
-from .decoder_pool import DecoderPool
-from .ownd.message import OWNSoundEvent, OWNSoundCommand
 from .const import (
     CONF_DECODER_ENTITY,
     CONF_DECODER_PRE_GAIN,
@@ -64,7 +64,9 @@ from .const import (
     DOMAIN,
     LOGGER,
 )
+from .decoder_pool import DecoderPool
 from .myhome_device import MyHOMEEntity
+from .ownd.message import OWNSoundCommand, OWNSoundEvent
 
 
 def _build_pool(hass: HomeAssistant, config_entry) -> DecoderPool:
@@ -162,8 +164,8 @@ async def async_setup_entry(hass: HomeAssistant, config_entry, async_add_entitie
             for player_id in known_media_players:
                 if player_id.split("#")[0].endswith(point):
                     async_dispatcher_send(
-                        hass, 
-                        f"myhome_update_{config_entry.data[CONF_MAC]}_16_{player_id}", 
+                        hass,
+                        f"myhome_update_{config_entry.data[CONF_MAC]}_16_{player_id}",
                         message
                     )
             return

@@ -1,59 +1,65 @@
 """Validator for the MyHome configuration file."""
 import re
 
-from voluptuous import (
-    Schema,
-    Optional,
-    Required,
-    Coerce,
-    Boolean,
-    Any,
-    All,
-    In,
-    Invalid,
+from homeassistant.components.alarm_control_panel import DOMAIN as ALARM_CONTROL_PANEL
+from homeassistant.components.binary_sensor import (
+    DOMAIN as BINARY_SENSOR,
 )
-from homeassistant.helpers.device_registry import format_mac as ha_format_mac
-from homeassistant.components.light import DOMAIN as LIGHT
-from homeassistant.components.switch import (
-    SwitchDeviceClass,
-    DOMAIN as SWITCH,
-)
-from homeassistant.components.button import DOMAIN as BUTTON
-from homeassistant.components.cover import DOMAIN as COVER
 from homeassistant.components.binary_sensor import (
     BinarySensorDeviceClass,
-    DOMAIN as BINARY_SENSOR,
+)
+from homeassistant.components.button import DOMAIN as BUTTON
+from homeassistant.components.climate import DOMAIN as CLIMATE
+from homeassistant.components.cover import DOMAIN as COVER
+from homeassistant.components.light import DOMAIN as LIGHT
+from homeassistant.components.sensor import (
+    DOMAIN as SENSOR,
 )
 from homeassistant.components.sensor import (
     SensorDeviceClass,
-    DOMAIN as SENSOR,
 )
-from homeassistant.components.climate import DOMAIN as CLIMATE
-from homeassistant.components.alarm_control_panel import DOMAIN as ALARM_CONTROL_PANEL
-from homeassistant.const import CONF_NAME, CONF_MAC
+from homeassistant.components.switch import (
+    DOMAIN as SWITCH,
+)
+from homeassistant.components.switch import (
+    SwitchDeviceClass,
+)
+from homeassistant.const import CONF_MAC, CONF_NAME
+from homeassistant.helpers.device_registry import format_mac as ha_format_mac
+from voluptuous import (
+    All,
+    Any,
+    Boolean,
+    Coerce,
+    In,
+    Invalid,
+    Optional,
+    Required,
+    Schema,
+)
 
 from .const import (
-    CONF_PLATFORMS,
-    CONF_WHO,
-    CONF_WHERE,
+    CONF_ADVANCED_SHUTTER,
     CONF_BUS_INTERFACE,
+    CONF_CENTRAL,
+    CONF_COOLING_SUPPORT,
+    CONF_DEVICE_CLASS,
+    CONF_DEVICE_MODEL,
+    CONF_DIMMABLE,
     CONF_ENTITIES,
     CONF_ENTITY_NAME,
+    CONF_FAN_SUPPORT,
+    CONF_HEATING_SUPPORT,
     CONF_ICON,
     CONF_ICON_ON,
-    CONF_ZONE,
-    CONF_FAN_SUPPORT,
-    CONF_MANUFACTURER,
-    CONF_DEVICE_MODEL,
-    CONF_DEVICE_CLASS,
-    CONF_DIMMABLE,
-    CONF_ADVANCED_SHUTTER,
-    CONF_TRAVEL_TIME,
     CONF_INVERTED,
-    CONF_HEATING_SUPPORT,
-    CONF_COOLING_SUPPORT,
+    CONF_MANUFACTURER,
+    CONF_PLATFORMS,
     CONF_STANDALONE,
-    CONF_CENTRAL,
+    CONF_TRAVEL_TIME,
+    CONF_WHERE,
+    CONF_WHO,
+    CONF_ZONE,
 )
 
 
@@ -84,7 +90,7 @@ class General(object):
         self.msg = msg
 
     def __call__(self, v):
-        if type(v) == str and v == "0":
+        if isinstance(v, str) and v == "0":
             return v
         else:
             raise Invalid(f"Invalid General WHERE {v}, it must be 0.")
@@ -98,7 +104,7 @@ class Area(object):
         self.msg = msg
 
     def __call__(self, v):
-        if type(v) == str and v in ["00", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]:
+        if isinstance(v, str) and v in ["00", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]:
             return v
         else:
             raise Invalid(f"Invalid Area WHERE {v}, it must be a string in [00, 1-9, 10].")
@@ -112,7 +118,7 @@ class Group(object):
         self.msg = msg
 
     def __call__(self, v):
-        if type(v) == str and v.startswith("#") and v[1:].isdigit() and int(v[1:]) >= 1 and int(v[1:]) <= 255:
+        if isinstance(v, str) and v.startswith("#") and v[1:].isdigit() and int(v[1:]) >= 1 and int(v[1:]) <= 255:
             return f"#{int(v[1:])}"
         else:
             raise Invalid(f"Invalid Group WHERE {v}, it must be a string like '#[1-255]'.")
@@ -126,7 +132,7 @@ class PointToPoint(object):
         self.msg = msg
 
     def __call__(self, v):
-        if type(v) == str and v.isdigit():
+        if isinstance(v, str) and v.isdigit():
             _length = len(v)
             if _length == 2 or _length == 4:
                 _a = v[0 : _length // 2]
@@ -149,7 +155,7 @@ class SpecialWhere(object):
         self.msg = msg
 
     def __call__(self, v):
-        if type(v) == str and v.isdigit():
+        if isinstance(v, str) and v.isdigit():
             return v
         else:
             raise Invalid(f"Invalid WHERE {v}, it must be a string of digits.")
@@ -163,7 +169,7 @@ class BusInterface(object):
         self.msg = msg
 
     def __call__(self, v):
-        if type(v) == str and v.isdigit() and len(v) == 2:
+        if isinstance(v, str) and v.isdigit() and len(v) == 2:
             if int(v) > 15:
                 raise Invalid(f"Invalid Bus Interface number {v}, it must be between 00 and 15.")
         elif v is not None:

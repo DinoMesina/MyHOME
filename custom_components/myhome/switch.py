@@ -1,39 +1,40 @@
 """Support for MyHome switches (light modules used for controlled outlets, relays)."""
-from homeassistant.core import callback
 from homeassistant.components.switch import (
     DOMAIN as PLATFORM,
+)
+from homeassistant.components.switch import (
     SwitchDeviceClass,
     SwitchEntity,
 )
 from homeassistant.const import (
-    CONF_NAME,
     CONF_MAC,
+    CONF_NAME,
 )
+from homeassistant.core import callback
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dispatcher_send
 
-from .ownd.message import (
-    OWNLightingEvent,
-    OWNLightingCommand,
-)
-
 from .const import (
-    CONF_PLATFORMS,
+    CONF_BUS_INTERFACE,
+    CONF_DEVICE_CLASS,
+    CONF_DEVICE_MODEL,
     CONF_ENTITY,
     CONF_ENTITY_NAME,
     CONF_ICON,
     CONF_ICON_ON,
-    CONF_WHO,
-    CONF_WHERE,
-    CONF_BUS_INTERFACE,
     CONF_MANUFACTURER,
-    CONF_DEVICE_MODEL,
-    CONF_DEVICE_CLASS,
+    CONF_PLATFORMS,
+    CONF_WHERE,
+    CONF_WHO,
     DOMAIN,
     LOGGER,
 )
-from .myhome_device import MyHOMEEntity
 from .gateway import MyHOMEGatewayHandler
+from .myhome_device import MyHOMEEntity
+from .ownd.message import (
+    OWNLightingCommand,
+    OWNLightingEvent,
+)
 
 
 async def async_setup_entry(hass, config_entry, async_add_entities):

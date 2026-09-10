@@ -32,6 +32,7 @@ test = [
     "twine>=5.0.0",
     "check-wheel-contents>=0.6.0",
     "validate-pyproject[all]>=0.16",
+    "ruff>=0.4.0",
 ]
 
 [project.urls]
@@ -69,4 +70,20 @@ exclude_lines = [
     "pragma: no cover",
     "if __name__ == .__main__.:",
     "if TYPE_CHECKING:",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+exclude = [
+    ".venv",
+    "build",
+    "dist",
+    "custom_components/myhome/ownd",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = [
+    "E501",  # Line length handled by inspection/formatting
 ]

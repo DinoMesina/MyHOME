@@ -11,9 +11,9 @@ Tests cover:
 """
 import asyncio
 import platform
+from unittest.mock import MagicMock
 
 import pytest
-from unittest.mock import MagicMock
 
 # Fix: pytest-homeassistant-custom-component overrides the event loop policy
 # to IocpProactor on Windows, which requires socket.socketpair() at creation.
@@ -22,9 +22,9 @@ from unittest.mock import MagicMock
 if platform.system() == "Windows":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
-from custom_components.myhome.decoder_pool import DecoderPool
 from homeassistant.components.media_player import MediaPlayerState
 
+from custom_components.myhome.decoder_pool import DecoderPool
 
 # -- Overrides ----------------------------------------------------------------
 

@@ -5,55 +5,55 @@ from homeassistant.components.light import (
     ATTR_BRIGHTNESS,
     ATTR_BRIGHTNESS_PCT,
     ATTR_FLASH,
+    ATTR_TRANSITION,
     FLASH_LONG,
     FLASH_SHORT,
-    ATTR_TRANSITION,
-    DOMAIN as PLATFORM,
     ColorMode,
     LightEntity,
     LightEntityFeature,
 )
+from homeassistant.components.light import (
+    DOMAIN as PLATFORM,
+)
 from homeassistant.const import (
-    CONF_NAME,
     CONF_MAC,
+    CONF_NAME,
 )
 from homeassistant.core import callback
 from homeassistant.helpers import entity_registry as er
-
-from .ownd.message import (
-    OWNLightingEvent,
-    OWNLightingCommand,
-)
-
 from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dispatcher_send
 
 from .const import (
-    CONF_PLATFORMS,
+    CONF_BUS_INTERFACE,
+    CONF_DEVICE_MODEL,
+    CONF_DIMMABLE,
     CONF_ENTITY,
     CONF_ENTITY_NAME,
     CONF_ICON,
     CONF_ICON_ON,
-    CONF_WHO,
-    CONF_WHERE,
-    CONF_BUS_INTERFACE,
     CONF_MANUFACTURER,
-    CONF_DEVICE_MODEL,
-    CONF_DIMMABLE,
+    CONF_PLATFORMS,
     CONF_TRANSITION_MODE,
+    CONF_WHERE,
+    CONF_WHO,
     CONF_WORKER_COUNT,
     DEFAULT_TRANSITION_MODE,
-    TRANSITION_MODE_NATIVE,
-    TRANSITION_MODE_SOFTWARE,
-    TRANSITION_MODE_AUTO,
-    SOFTWARE_TRANSITION_STEP_INTERVAL,
-    SOFTWARE_TRANSITION_MIN_STEPS,
-    SOFTWARE_TRANSITION_MAX_STEPS,
     DOMAIN,
     LOGGER,
+    SOFTWARE_TRANSITION_MAX_STEPS,
+    SOFTWARE_TRANSITION_MIN_STEPS,
+    SOFTWARE_TRANSITION_STEP_INTERVAL,
+    TRANSITION_MODE_AUTO,
+    TRANSITION_MODE_NATIVE,
+    TRANSITION_MODE_SOFTWARE,
     normalize_where,
 )
-from .myhome_device import MyHOMEEntity
 from .gateway import MyHOMEGatewayHandler
+from .myhome_device import MyHOMEEntity
+from .ownd.message import (
+    OWNLightingCommand,
+    OWNLightingEvent,
+)
 
 
 async def async_setup_entry(hass, config_entry, async_add_entities):

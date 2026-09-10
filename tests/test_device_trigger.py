@@ -1,7 +1,7 @@
 """Tests for MyHOME device triggers."""
-import pytest
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 from homeassistant.const import (
     CONF_DEVICE_ID,
     CONF_DOMAIN,
@@ -12,14 +12,13 @@ from homeassistant.core import HomeAssistant
 
 from custom_components.myhome.const import (
     CONF_LONG_PRESS,
-    CONF_SHORT_PRESS,
-    CONF_ROTARY_CW_FAST,
     CONF_ROTARY_CCW_FAST,
+    CONF_ROTARY_CW_FAST,
+    CONF_SHORT_PRESS,
     DOMAIN,
 )
 from custom_components.myhome.device_trigger import (
     CONF_ADDRESS,
-    CONF_OBJECT,
     CONF_SUBTYPE,
     TRIGGER_SUBTYPES,
     TRIGGER_TYPES,

@@ -90,7 +90,7 @@ def verify_all_coverage(xml_path: str = COVERAGE_XML) -> int:
             lines = cls.findall(".//line")
             total_stmts = len(lines)
             rate = float(cls.attrib.get("line-rate", 0)) * 100.0
-            uncovered = [l.attrib.get("number") for l in lines if l.attrib.get("hits") == "0"]
+            uncovered = [line_elem.attrib.get("number") for line_elem in lines if line_elem.attrib.get("hits") == "0"]
             coverage_data[fn] = (total_stmts, rate, uncovered)
 
     # Discover all Python source files on disk in custom_components/myhome

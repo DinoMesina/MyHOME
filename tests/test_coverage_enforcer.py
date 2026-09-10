@@ -1,15 +1,16 @@
 """Automated test suite verifying the strict 100% test coverage enforcer."""
 import os
 import xml.etree.ElementTree as ET
+
 import pytest
 
+from scripts.update_readme_coverage import update_readme_and_svg
 from scripts.verify_ownd_coverage import (
     collapse_line_ranges,
     get_source_snippet,
     normalize_coverage_filename,
     verify_all_coverage,
 )
-from scripts.update_readme_coverage import update_readme_and_svg
 
 
 def test_normalize_coverage_filename():
@@ -46,7 +47,7 @@ def test_verify_all_coverage_success(tmp_path):
     """Verify that a 100% coverage report passes."""
     xml_file = tmp_path / "coverage.xml"
 
-    from scripts.verify_ownd_coverage import MYHOME_DIR, REPO_ROOT, EXCLUDED_MODULES
+    from scripts.verify_ownd_coverage import EXCLUDED_MODULES, MYHOME_DIR, REPO_ROOT
 
     disk_files = []
     for root_dir, _, files in os.walk(MYHOME_DIR):

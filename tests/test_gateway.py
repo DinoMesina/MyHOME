@@ -1,48 +1,47 @@
-import pytest
 import asyncio
-from unittest.mock import MagicMock, patch, AsyncMock
-from homeassistant.core import HomeAssistant
+from unittest.mock import AsyncMock, MagicMock, patch
 
-from custom_components.myhome.gateway import MyHOMEGatewayHandler
+import pytest
+from homeassistant.const import (
+    CONF_FRIENDLY_NAME,
+    CONF_HOST,
+    CONF_MAC,
+    CONF_NAME,
+    CONF_PASSWORD,
+    CONF_PORT,
+)
+
 from custom_components.myhome.const import (
-    DOMAIN,
-    CONF_SHORT_PRESS,
-    CONF_SHORT_RELEASE,
+    CONF_DEVICE_TYPE,
+    CONF_FIRMWARE,
     CONF_LONG_PRESS,
     CONF_LONG_RELEASE,
-    CONF_ROTARY_CW_SLOW,
-    CONF_ROTARY_CW_FAST,
-    CONF_ROTARY_CCW_SLOW,
-    CONF_ROTARY_CCW_FAST,
-    CONF_SSDP_LOCATION,
-    CONF_SSDP_ST,
-    CONF_DEVICE_TYPE,
     CONF_MANUFACTURER,
     CONF_MANUFACTURER_URL,
-    CONF_FIRMWARE,
+    CONF_ROTARY_CCW_FAST,
+    CONF_ROTARY_CCW_SLOW,
+    CONF_ROTARY_CW_FAST,
+    CONF_ROTARY_CW_SLOW,
+    CONF_SHORT_PRESS,
+    CONF_SHORT_RELEASE,
+    CONF_SSDP_LOCATION,
+    CONF_SSDP_ST,
     CONF_UDN,
+    DOMAIN,
 )
-from homeassistant.const import (
-    CONF_HOST,
-    CONF_PORT,
-    CONF_PASSWORD,
-    CONF_NAME,
-    CONF_MAC,
-    CONF_FRIENDLY_NAME,
-)
+from custom_components.myhome.gateway import MyHOMEGatewayHandler
 from custom_components.myhome.ownd.message import (
-    OWNLightingEvent,
-    OWNLightingCommand,
-    OWNAutomationEvent,
-    OWNHeatingCommand,
-    OWNCENPlusEvent,
-    OWNCENEvent,
-    OWNEnergyEvent,
-    OWNGatewayEvent,
-    OWNGatewayCommand,
     OWNAlarmEvent,
-    OWNMessage,
+    OWNAutomationEvent,
+    OWNCENEvent,
+    OWNCENPlusEvent,
     OWNCommand,
+    OWNEnergyEvent,
+    OWNGatewayCommand,
+    OWNGatewayEvent,
+    OWNHeatingCommand,
+    OWNLightingEvent,
+    OWNMessage,
 )
 
 

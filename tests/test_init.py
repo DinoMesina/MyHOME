@@ -1,14 +1,14 @@
 """Tests for the MyHOME custom component initialization."""
 import os
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import patch, AsyncMock, MagicMock
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
-from homeassistant.config_entries import ConfigEntryState
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.myhome.const import DOMAIN, CONF_PLATFORMS
-from custom_components.myhome.ownd.connection import OWNGateway
+from custom_components.myhome.const import CONF_PLATFORMS, DOMAIN
 
 
 async def test_setup_entry_success(hass: HomeAssistant):
@@ -209,8 +209,8 @@ async def test_options_update_rebuilds_decoder_pool(hass: HomeAssistant):
     """Test options update listener rebuilds decoder pool."""
     from custom_components.myhome.const import (
         CONF_DECODER_ENTITY,
-        CONF_DECODER_SOURCE,
         CONF_DECODER_PRE_GAIN,
+        CONF_DECODER_SOURCE,
     )
 
     with patch(
@@ -255,7 +255,7 @@ async def test_entity_migration_and_yaml_recovery_edges(hass: HomeAssistant):
     """Test entity registry auto-migration branches and customize.yaml error handling."""
     from unittest.mock import MagicMock
     mock_entry_reg = MagicMock()
-    
+
     # Entity 1: unformatted MAC e.g. "000350001234-12" (lines 82-86)
     reg_e1 = MagicMock()
     reg_e1.domain = "light"
@@ -351,6 +351,7 @@ async def test_entity_migration_and_yaml_recovery_edges(hass: HomeAssistant):
 async def test_setup_entry_duplicate_and_timeout(hass: HomeAssistant):
     """Test duplicate entry setup and gateway connection timeout error."""
     import asyncio
+
     from homeassistant.exceptions import ConfigEntryNotReady
 
     # 1. Config entry unique_id migration (lines 58-62)
@@ -422,7 +423,7 @@ async def test_register_frontend_branches(hass: HomeAssistant):
     mock_http.async_register_static_paths = AsyncMock()
     hass.http = mock_http
 
-    with patch("homeassistant.components.http.StaticPathConfig", create=True) as mock_spc, patch(
+    with patch("homeassistant.components.http.StaticPathConfig", create=True), patch(
         "homeassistant.components.frontend.add_extra_js_url"
     ) as mock_add_url:
         await _async_register_frontend(hass)
@@ -537,7 +538,7 @@ async def test_register_frontend_branches(hass: HomeAssistant):
 async def test_setup_entry_myhome_yaml_loading(hass: HomeAssistant):
     """Test loading legacy myhome.yaml with all branches."""
     import tempfile
-    from homeassistant.const import CONF_FILE_PATH
+
 
     mac = "00:03:50:00:12:34"
     sample_yaml = """00:03:50:00:12:34:
@@ -664,7 +665,7 @@ async def test_setup_entry_myhome_yaml_loading(hass: HomeAssistant):
 async def test_empty_orphaned_device_pruning(hass: HomeAssistant):
     """Test that orphaned devices with 0 entities are pruned from the device registry on setup."""
     from homeassistant.helpers import device_registry as dr
-    
+
     with patch(
         "custom_components.myhome.gateway.OWNSession.test_connection",
         return_value={"Success": True, "Message": None}

@@ -1,8 +1,8 @@
 """Gateway profiles representing capabilities and constraints of MyHOME hardware."""
 from __future__ import annotations
-from dataclasses import dataclass, field
-from typing import Dict, Optional, Set, Tuple, Type
 
+from dataclasses import dataclass
+from typing import Dict, Optional, Tuple, Type
 
 # OpenWebNet WHO Subsystem constants
 WHO_LIGHTING = 1

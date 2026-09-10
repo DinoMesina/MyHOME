@@ -7,63 +7,60 @@
 - Entity registry migration safety, collision avoidance, and entity_id canonicalization
 """
 import asyncio
-from unittest.mock import MagicMock, AsyncMock, patch
-import pytest
+from unittest.mock import AsyncMock, MagicMock, patch
 
-from homeassistant.core import HomeAssistant
+import pytest
 from homeassistant.const import (
-    CONF_HOST,
-    CONF_PORT,
-    CONF_PASSWORD,
-    CONF_NAME,
-    CONF_MAC,
     CONF_FRIENDLY_NAME,
-    CONF_ID,
+    CONF_HOST,
+    CONF_MAC,
+    CONF_NAME,
+    CONF_PASSWORD,
+    CONF_PORT,
 )
-from homeassistant.helpers import entity_registry as er, device_registry as dr
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components.myhome.config_flow import MyhomeFlowHandler, MyhomeOptionsFlowHandler
 from custom_components.myhome.const import (
-    DOMAIN,
-    CONF_WORKER_COUNT,
-    CONF_GENERATE_EVENTS,
-    CONF_TRANSITION_MODE,
-    DEFAULT_TRANSITION_MODE,
-    CONF_SSDP_LOCATION,
-    CONF_SSDP_ST,
+    CONF_DECODER_ENTITY,
+    CONF_DECODER_PRE_GAIN,
+    CONF_DECODER_SOURCE,
     CONF_DEVICE_TYPE,
+    CONF_FIRMWARE,
+    CONF_GENERATE_EVENTS,
     CONF_MANUFACTURER,
     CONF_MANUFACTURER_URL,
-    CONF_FIRMWARE,
+    CONF_SSDP_LOCATION,
+    CONF_SSDP_ST,
+    CONF_TRANSITION_MODE,
     CONF_UDN,
-    CONF_DECODER_ENTITY,
-    CONF_DECODER_SOURCE,
-    CONF_DECODER_PRE_GAIN,
+    CONF_WORKER_COUNT,
+    DOMAIN,
 )
+from custom_components.myhome.gateway import MyHOMEGatewayHandler
 from custom_components.myhome.gateway_profile import (
-    GatewayProfile,
+    WHO_AUTOMATION,
+    WHO_ENERGY,
+    WHO_LIGHTING,
+    WHO_SOUND,
     F454Profile,
     F455Profile,
+    GenericGatewayProfile,
     MH200NProfile,
     MH202Profile,
     MyHomeServer1Profile,
-    GenericGatewayProfile,
     get_gateway_profile,
-    WHO_LIGHTING,
-    WHO_AUTOMATION,
-    WHO_HEATING,
-    WHO_CEN,
-    WHO_SOUND,
-    WHO_ENERGY,
-    WHO_LOAD_CONTROL,
-    WHO_CEN_PLUS,
 )
-from custom_components.myhome.gateway import MyHOMEGatewayHandler
-from custom_components.myhome.ownd.connection import OWNGateway, OWNSession, OWNCommandSession, OWNEventSession
-from custom_components.myhome.ownd.message import OWNCommand, OWNEvent
-from custom_components.myhome.config_flow import MyhomeFlowHandler, MyhomeOptionsFlowHandler
+from custom_components.myhome.ownd.connection import (
+    OWNCommandSession,
+    OWNEventSession,
+    OWNGateway,
+    OWNSession,
+)
+from custom_components.myhome.ownd.message import OWNCommand
 from tests.mock_gateway_harness import MockGatewayHarness
-
 
 # ── 1. GatewayProfile Tests ──────────────────────────────────────────────────
 

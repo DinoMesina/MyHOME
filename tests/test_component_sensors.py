@@ -1,27 +1,28 @@
-import pytest
-from unittest.mock import MagicMock, AsyncMock
-from homeassistant.const import UnitOfPower, UnitOfEnergy, UnitOfTemperature
+from unittest.mock import AsyncMock, MagicMock
 
-from custom_components.myhome.sensor import (
-    MyHOMEPowerSensor,
-    MyHOMEEnergySensor,
-    MyHOMETemperatureSensor,
-    MyHOMEIlluminanceSensor,
-)
-from custom_components.myhome.ownd.message import (
-    MESSAGE_TYPE_ACTIVE_POWER,
-    MESSAGE_TYPE_ENERGY_TOTALIZER,
-    MESSAGE_TYPE_CURRENT_MONTH_CONSUMPTION,
-    MESSAGE_TYPE_CURRENT_DAY_CONSUMPTION,
-    MESSAGE_TYPE_MAIN_TEMPERATURE,
-    MESSAGE_TYPE_SECONDARY_TEMPERATURE,
-    MESSAGE_TYPE_ILLUMINANCE,
-)
+import pytest
+from homeassistant.const import UnitOfPower, UnitOfTemperature
+
 from custom_components.myhome.binary_sensor import (
-    MyHOMEDryContact,
     MyHOMEAuxiliary,
     MyHOMEMotionSensor,
 )
+from custom_components.myhome.ownd.message import (
+    MESSAGE_TYPE_ACTIVE_POWER,
+    MESSAGE_TYPE_CURRENT_DAY_CONSUMPTION,
+    MESSAGE_TYPE_CURRENT_MONTH_CONSUMPTION,
+    MESSAGE_TYPE_ENERGY_TOTALIZER,
+    MESSAGE_TYPE_ILLUMINANCE,
+    MESSAGE_TYPE_MAIN_TEMPERATURE,
+    MESSAGE_TYPE_SECONDARY_TEMPERATURE,
+)
+from custom_components.myhome.sensor import (
+    MyHOMEEnergySensor,
+    MyHOMEIlluminanceSensor,
+    MyHOMEPowerSensor,
+    MyHOMETemperatureSensor,
+)
+
 
 @pytest.fixture
 def mock_gateway():

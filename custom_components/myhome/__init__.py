@@ -2,14 +2,13 @@
 import asyncio
 import os
 
-from .ownd.message import OWNCommand, OWNGatewayCommand
-from .gateway import MyHOMEGatewayHandler
-
 from homeassistant.config_entries import SOURCE_REAUTH, ConfigEntry
+from homeassistant.const import CONF_HOST, CONF_MAC
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
-from homeassistant.helpers import device_registry as dr, entity_registry as er, config_validation as cv
-from homeassistant.const import CONF_HOST, CONF_MAC
+from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 
 from .const import (
     ATTR_GATEWAY,
@@ -18,16 +17,18 @@ from .const import (
     CONF_DECODER_PRE_GAIN,
     CONF_DECODER_SLOTS,
     CONF_DECODER_SOURCE,
-    CONF_PLATFORMS,
-    CONF_ENTITY,
     CONF_ENTITIES,
-    CONF_GATEWAY,
-    CONF_WORKER_COUNT,
+    CONF_ENTITY,
     CONF_FILE_PATH,
     CONF_GENERATE_EVENTS,
+    CONF_PLATFORMS,
+    CONF_WORKER_COUNT,
     DOMAIN,
     LOGGER,
 )
+from .gateway import MyHOMEGatewayHandler
+from .ownd.message import OWNCommand, OWNGatewayCommand
+
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 PLATFORMS = ["light", "switch", "cover", "climate", "binary_sensor", "sensor", "media_player", "button", "alarm_control_panel"]
 
@@ -140,6 +141,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
 
     if os.path.isfile(_config_file_path):
         from homeassistant.util.yaml.loader import load_yaml
+
         from .validate import config_schema
         try:
             raw_yaml = await hass.async_add_executor_job(load_yaml, _config_file_path)
@@ -208,17 +210,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
             entry, unique_id=dr.format_mac(entry.unique_id)
         )
         LOGGER.warning("Migrating config entry unique_id to %s", entry.unique_id)
-        
+
     entity_registry = er.async_get(hass)
     _mac = dr.format_mac(entry.data[CONF_MAC])
-    
+
     _domain_to_who = {
         "light": "1",
         "cover": "2",
         "switch": "1",
         "media_player": "16",
     }
-    
+
     registry_entries = er.async_entries_for_config_entry(entity_registry, entry.entry_id)
     for reg_entry in registry_entries:
         parts = reg_entry.unique_id.split("-")
@@ -267,7 +269,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     # Hack to forcefully absorb customize.yaml for users who deleted their integrations
     # and therefore lost the transparent entity_registry migration!
     from homeassistant.util.yaml.loader import load_yaml
-    
+
     hass.data[DOMAIN]["customizations"] = {}
     customize_file = hass.config.path("customize.yaml")
     if os.path.isfile(customize_file):

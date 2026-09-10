@@ -4,31 +4,26 @@ Tests all validators, schemas, device and sensor rekeying, auto-button generatio
 and error boundaries to achieve 100% test coverage.
 """
 import pytest
-from voluptuous import Invalid, ALLOW_EXTRA
-
 from homeassistant.components.binary_sensor import BinarySensorDeviceClass
 from homeassistant.components.sensor import SensorDeviceClass
 from homeassistant.components.switch import SwitchDeviceClass
 from homeassistant.const import CONF_MAC, CONF_NAME
+from voluptuous import ALLOW_EXTRA, Invalid
 
 from custom_components.myhome.const import (
     CONF_ADVANCED_SHUTTER,
     CONF_BUS_INTERFACE,
     CONF_CENTRAL,
-    CONF_COOLING_SUPPORT,
     CONF_DEVICE_CLASS,
     CONF_DEVICE_MODEL,
     CONF_DIMMABLE,
     CONF_ENTITIES,
     CONF_ENTITY_NAME,
-    CONF_FAN_SUPPORT,
-    CONF_HEATING_SUPPORT,
     CONF_ICON,
     CONF_ICON_ON,
     CONF_INVERTED,
     CONF_MANUFACTURER,
     CONF_PLATFORMS,
-    CONF_STANDALONE,
     CONF_WHERE,
     CONF_WHO,
     CONF_ZONE,
@@ -39,8 +34,6 @@ from custom_components.myhome.validate import (
     General,
     Group,
     MacAddress,
-    MyHomeConfigSchema,
-    MyHomeDeviceSchema,
     MyHomeSensorSchema,
     PointToPoint,
     SpecialWhere,
@@ -49,12 +42,10 @@ from custom_components.myhome.validate import (
     config_schema,
     cover_schema,
     format_mac,
-    gateway_schema,
     light_schema,
     sensor_schema,
     switch_schema,
 )
-
 
 # ============================================================================
 # format_mac and MacAddress Tests

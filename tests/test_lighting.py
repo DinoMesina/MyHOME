@@ -1,16 +1,14 @@
 """Tests for OWNLightingEvent and OWNLightingCommand protocol translation."""
-import pytest
 from custom_components.myhome.ownd.message import (
-    OWNEvent,
-    OWNLightingEvent,
-    OWNLightingCommand,
-    OWNCommand,
-    MESSAGE_TYPE_MOTION,
-    MESSAGE_TYPE_PIR_SENSITIVITY,
     MESSAGE_TYPE_ILLUMINANCE,
+    MESSAGE_TYPE_MOTION,
     MESSAGE_TYPE_MOTION_TIMEOUT,
+    MESSAGE_TYPE_PIR_SENSITIVITY,
+    OWNCommand,
+    OWNEvent,
+    OWNLightingCommand,
+    OWNLightingEvent,
 )
-
 
 # ── Event Parsing ──────────────────────────────────────────────────────────
 

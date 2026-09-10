@@ -1,23 +1,49 @@
 """Coverage tests for legacy MyHOME platforms relying on static CONF_PLATFORMS."""
-import pytest
 from unittest.mock import patch
 
-from homeassistant.core import HomeAssistant
-from homeassistant.const import (CONF_MAC, CONF_NAME, CONF_DEVICE_CLASS, CONF_HOST, CONF_PORT, CONF_PASSWORD, CONF_FRIENDLY_NAME)
-from pytest_homeassistant_custom_component.common import MockConfigEntry
-
-from custom_components.myhome.const import (
-    DOMAIN, CONF_PLATFORMS, CONF_ENTITIES, CONF_WHO, CONF_WHERE, 
-    CONF_ZONE, CONF_ENTITY_NAME, CONF_INVERTED,
-    CONF_MANUFACTURER, CONF_DEVICE_MODEL, CONF_HEATING_SUPPORT, CONF_COOLING_SUPPORT,
-    CONF_FAN_SUPPORT, CONF_STANDALONE, CONF_CENTRAL, CONF_ICON, CONF_ICON_ON,
-    CONF_SSDP_LOCATION, CONF_SSDP_ST, CONF_DEVICE_TYPE,
-    CONF_MANUFACTURER_URL, CONF_FIRMWARE, CONF_UDN
+import pytest
+from homeassistant.const import (
+    CONF_DEVICE_CLASS,
+    CONF_FRIENDLY_NAME,
+    CONF_HOST,
+    CONF_MAC,
+    CONF_NAME,
+    CONF_PASSWORD,
+    CONF_PORT,
 )
-from custom_components.myhome.ownd.message import OWNEvent
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.dispatcher import async_dispatcher_send
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 from syrupy.assertion import SnapshotAssertion
 from syrupy.matchers import path_type
+
+from custom_components.myhome.const import (
+    CONF_CENTRAL,
+    CONF_COOLING_SUPPORT,
+    CONF_DEVICE_MODEL,
+    CONF_DEVICE_TYPE,
+    CONF_ENTITIES,
+    CONF_ENTITY_NAME,
+    CONF_FAN_SUPPORT,
+    CONF_FIRMWARE,
+    CONF_HEATING_SUPPORT,
+    CONF_ICON,
+    CONF_ICON_ON,
+    CONF_INVERTED,
+    CONF_MANUFACTURER,
+    CONF_MANUFACTURER_URL,
+    CONF_PLATFORMS,
+    CONF_SSDP_LOCATION,
+    CONF_SSDP_ST,
+    CONF_STANDALONE,
+    CONF_UDN,
+    CONF_WHERE,
+    CONF_WHO,
+    CONF_ZONE,
+    DOMAIN,
+)
+from custom_components.myhome.ownd.message import OWNEvent
+
 
 @pytest.fixture
 def mock_gateway_connection():
@@ -42,9 +68,9 @@ async def test_legacy_platforms_setup_and_execution(hass: HomeAssistant, mock_ga
     caplog.set_level(logging.DEBUG)
     mac_addr = "00:03:50:00:12:35"
     mock_send, mock_req = mock_gateway_connection
-    
+
     hass.data.setdefault(DOMAIN, {})
-    
+
     # Pre-populate hass.data completely bypassing __init__ fallback with static entities
     hass.data[DOMAIN][mac_addr] = {
         CONF_ENTITIES: {"switch": {}, "binary_sensor": {}, "climate": {}, "sensor": {}, "button": {}, "light": {}, "cover": {}, "media_player": {}},
@@ -90,7 +116,7 @@ async def test_legacy_platforms_setup_and_execution(hass: HomeAssistant, mock_ga
             "light": {}, "cover": {}, "media_player": {}
         }
     }
-    
+
     config_entry = MockConfigEntry(
         domain=DOMAIN,
         data={
@@ -137,7 +163,7 @@ async def test_legacy_platforms_setup_and_execution(hass: HomeAssistant, mock_ga
     clim_event = OWNEvent.parse("*#4*01*#14*0220*1##")
     async_dispatcher_send(hass, f"myhome_update_{mac_addr}_4", clim_event)
     await hass.async_block_till_done()
-    
+
     # Snapshot Climate
     assert hass.states.get("climate.climate_1") == snapshot(name="climate_state")
 
@@ -160,14 +186,14 @@ async def test_legacy_platforms_setup_and_execution(hass: HomeAssistant, mock_ga
     # Hit Button Press
     await hass.services.async_call("button", "press", {"entity_id": "button.button_1_lock"}, blocking=True)
     await hass.async_block_till_done()
-    
+
     # Snapshot Button
     assert hass.states.get("button.button_1_lock") == snapshot(
         name="button_state",
         matcher=path_type({"state": (str,)})
     )
-    
-    # Send Dummy Dispatch update to climate 
+
+    # Send Dummy Dispatch update to climate
     clim_event = OWNEvent.parse("*#4*01*0*0225##")
     async_dispatcher_send(hass, f"myhome_update_{mac_addr}_4", clim_event)
     await hass.async_block_till_done()
@@ -188,7 +214,7 @@ async def test_legacy_platforms_setup_and_execution(hass: HomeAssistant, mock_ga
                     _ = getattr(entity, "target_temperature", None)
                     _ = getattr(entity, "hvac_mode", None)
                     _ = getattr(entity, "hvac_modes", None)
-                    
+
                     # Update method
                     if hasattr(entity, "async_update"):
                         await entity.async_update()

@@ -1,10 +1,10 @@
 """Tests for MyHOME HA platform entities handle_event methods using lightweight mocking."""
-import pytest
-from unittest.mock import MagicMock, AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
-from custom_components.myhome.ownd.message import (
-    OWNEvent
-)
+import pytest
+
+from custom_components.myhome.ownd.message import OWNEvent
+
 
 @pytest.fixture
 def mock_hass():
@@ -37,7 +37,7 @@ class TestLightEntity:
     @pytest.fixture
     def light(self, mock_hass, mock_gateway, mock_entity_base_init):
         from custom_components.myhome.light import MyHOMELight
-        l = MyHOMELight(
+        light_entity = MyHOMELight(
             hass=mock_hass,
             name="Light 1",
             entity_name="Light 1",
@@ -52,8 +52,8 @@ class TestLightEntity:
             model="Dimmer",
             gateway=mock_gateway,
         )
-        l.async_schedule_update_ha_state = MagicMock()
-        return l
+        light_entity.async_schedule_update_ha_state = MagicMock()
+        return light_entity
 
     def test_handle_event_on(self, light):
         msg = OWNEvent.parse("*1*1*21##")
@@ -186,8 +186,8 @@ class TestSwitchEntity:
 
     @pytest.mark.asyncio
     async def test_async_setup_and_unload_entry(self, mock_hass, mock_gateway):
+        from custom_components.myhome.const import CONF_ENTITY, CONF_PLATFORMS, DOMAIN
         from custom_components.myhome.switch import async_setup_entry, async_unload_entry
-        from custom_components.myhome.const import DOMAIN, CONF_PLATFORMS, CONF_ENTITY
 
         config_entry = MagicMock()
         config_entry.data = {"mac": "00:03:50:00:12:34"}
@@ -359,8 +359,9 @@ class TestCoverEntity:
 
     @pytest.mark.asyncio
     async def test_cover_advanced_and_set_position(self, mock_hass, mock_gateway, mock_entity_base_init):
-        from custom_components.myhome.cover import MyHOMECover
         from homeassistant.components.cover import CoverEntityFeature
+
+        from custom_components.myhome.cover import MyHOMECover
         c = MyHOMECover(
             hass=mock_hass,
             name="Advanced Cover",
@@ -401,9 +402,8 @@ class TestCoverEntity:
 
     @pytest.mark.asyncio
     async def test_cover_async_setup_and_unload_entry(self, mock_hass, mock_gateway):
+        from custom_components.myhome.const import CONF_ENTITY, DOMAIN
         from custom_components.myhome.cover import async_setup_entry, async_unload_entry
-        from custom_components.myhome.const import DOMAIN, CONF_ENTITY
-        from custom_components.myhome.ownd.message import OWNAutomationEvent
 
         config_entry = MagicMock()
         config_entry.data = {"mac": "00:03:50:00:12:34"}
@@ -452,9 +452,9 @@ class TestCoverEntity:
 
     @pytest.mark.asyncio
     async def test_cover_discovery_message_branches(self, mock_hass, mock_gateway):
+        from custom_components.myhome.const import CONF_ENTITY, DOMAIN
         from custom_components.myhome.cover import async_setup_entry
-        from custom_components.myhome.const import DOMAIN, CONF_ENTITY
-        from custom_components.myhome.ownd.message import OWNEvent, OWNAutomationEvent
+        from custom_components.myhome.ownd.message import OWNAutomationEvent, OWNEvent
 
         config_entry = MagicMock()
         config_entry.data = {"mac": "00:03:50:00:12:34"}

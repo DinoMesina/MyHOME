@@ -9,19 +9,13 @@ References:
 - https://developers.home-assistant.io/docs/development_testing
 - https://github.com/MatthewFlamm/pytest-homeassistant-custom-component
 """
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import MagicMock, AsyncMock, patch
 
 from custom_components.myhome.ownd.message import (
-    OWNSoundEvent,
-    OWNSoundCommand,
-    OWNLightingEvent,
-    OWNLightingCommand,
-    OWNAutomationEvent,
-    OWNAutomationCommand,
     OWNEvent,
 )
-
 
 # ── Fixtures ───────────────────────────────────────────────────────────────
 
@@ -153,8 +147,8 @@ class TestMediaPlayerEntity:
     @pytest.fixture
     def player(self, mock_hass, mock_gateway):
         with patch("custom_components.myhome.myhome_device.Entity.__init__", return_value=None):
+
             from custom_components.myhome.media_player import MyHOMEMediaPlayer
-            from homeassistant.components.media_player import MediaPlayerState
 
             p = MyHOMEMediaPlayer(
                 hass=mock_hass,
@@ -330,6 +324,7 @@ class TestPlatformImportCleanliness:
     def test_all_platforms_import_cleanly(self):
         """Test importing each platform in PLATFORMS without ImportError or syntax issues."""
         import importlib
+
         from custom_components.myhome import PLATFORMS
 
         failed_imports = {}

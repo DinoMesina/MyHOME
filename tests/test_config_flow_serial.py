@@ -1,13 +1,12 @@
 """Tests for the USB / Serial gateway config flow."""
 import sys
-import pytest
 from unittest.mock import MagicMock, patch
 
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 
-from custom_components.myhome.const import DOMAIN
 from custom_components.myhome.config_flow import _get_serial_ports
+from custom_components.myhome.const import DOMAIN
 
 
 async def test_config_flow_select_serial_gateway(hass: HomeAssistant):

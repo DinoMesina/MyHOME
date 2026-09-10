@@ -1,7 +1,8 @@
 """Comprehensive tests for core transport abstraction (base, tcp, serial)."""
 import asyncio
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from custom_components.myhome.core.transport import (
     AsyncSerialTransport,
@@ -10,7 +11,6 @@ from custom_components.myhome.core.transport import (
 )
 from custom_components.myhome.ownd.connection import OWNGateway
 from custom_components.myhome.ownd.message import OWNEvent
-
 
 # ── 1. Base Transport ────────────────────────────────────────────────────────
 

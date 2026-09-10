@@ -1,16 +1,15 @@
 """Tests for MyHOME HA platform entities handle_event methods using lightweight mocking."""
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import MagicMock, AsyncMock, patch
-
-from custom_components.myhome.ownd.message import (
-    OWNHeatingEvent, OWNHeatingCommand,
-    OWNEvent, OWNDryContactEvent, OWNLightingEvent
-)
-
 from homeassistant.components.climate.const import (
     HVACMode,
-    HVACAction,
 )
+
+from custom_components.myhome.ownd.message import (
+    OWNEvent,
+)
+
 
 @pytest.fixture
 def mock_hass():
@@ -99,7 +98,7 @@ class TestClimateEntity:
         climate._target_temperature = 22.0
         await climate.async_set_hvac_mode(HVACMode.HEAT)
         climate._gateway_handler.send.assert_called_once()
-    
+
     @pytest.mark.asyncio
     async def test_async_update(self, climate):
         await climate.async_update()

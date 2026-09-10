@@ -1,41 +1,35 @@
 """Tests for the MyHOME cover component."""
 import asyncio
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+from homeassistant.components.cover import (
+    ATTR_CURRENT_POSITION,
+    ATTR_POSITION,
+    CoverDeviceClass,
+    CoverEntityFeature,
+)
 from homeassistant.const import (
     CONF_NAME,
 )
 from homeassistant.core import HomeAssistant, State, callback
-from homeassistant.components.cover import (
-    CoverDeviceClass,
-    CoverEntityFeature,
-    ATTR_POSITION,
-    ATTR_CURRENT_POSITION,
-)
 from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dispatcher_send
 
 from custom_components.myhome.const import (
-    DOMAIN,
-    CONF_PLATFORMS,
-    CONF_ENTITIES,
-    CONF_WHERE,
-    CONF_WHO,
-    CONF_BUS_INTERFACE,
-    CONF_ENTITY_NAME,
-    CONF_MANUFACTURER,
-    CONF_DEVICE_MODEL,
     CONF_ADVANCED_SHUTTER,
+    CONF_BUS_INTERFACE,
+    CONF_PLATFORMS,
+    CONF_WHERE,
+    DOMAIN,
 )
 from custom_components.myhome.cover import (
-    MyHOMECover,
     PLATFORM,
+    MyHOMECover,
     async_setup_entry,
     async_unload_entry,
 )
 from custom_components.myhome.ownd.message import (
     OWNAutomationEvent,
-    OWNAutomationCommand,
     OWNEvent,
 )
 
@@ -96,7 +90,7 @@ async def test_cover_setup_restores_and_discovers(hass: HomeAssistant, mock_gate
 
     with patch("homeassistant.helpers.entity_registry.async_get", return_value=mock_er), \
          patch("homeassistant.helpers.entity_registry.async_entries_for_config_entry", return_value=[reg_1, reg_2]):
-        
+
         added_entities = []
 
         def fake_add_entities(entities):
@@ -241,7 +235,7 @@ class TestMyHOMECoverEntity:
         basic_cover._gateway_handler.send.assert_not_called()
 
         # Set to 80 (open) with gateway echo resilience
-        with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+        with patch("asyncio.sleep", new_callable=AsyncMock):
             await basic_cover.async_set_cover_position(**{ATTR_POSITION: 80})
             assert basic_cover.is_opening is True
             assert basic_cover._stop_task is not None
@@ -255,7 +249,7 @@ class TestMyHOMECoverEntity:
             assert basic_cover.current_cover_position == 80
 
         # Set to 20 (close) with gateway echo resilience
-        with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+        with patch("asyncio.sleep", new_callable=AsyncMock):
             await basic_cover.async_set_cover_position(**{ATTR_POSITION: 20})
             assert basic_cover.is_closing is True
             assert basic_cover._stop_task is not None
