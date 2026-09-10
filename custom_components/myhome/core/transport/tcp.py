@@ -5,8 +5,7 @@ import asyncio
 import logging
 from typing import Any, Optional
 
-from ...ownd.connection import OWNGateway, OWNEventSession, OWNCommandSession
-from ...ownd.message import OWNMessage
+from ...ownd.connection import OWNCommandSession, OWNEventSession, OWNGateway
 from .base import OWNTransport
 
 _LOGGER = logging.getLogger(__name__)

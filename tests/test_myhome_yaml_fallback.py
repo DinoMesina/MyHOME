@@ -1,25 +1,20 @@
 """Tests for myhome.yaml backwards-compatibility fallback, WHO 14 buttons, and Lovelace registration."""
 import os
 from unittest.mock import AsyncMock, MagicMock, patch
-import pytest
-import yaml
 
-from homeassistant.components.cover import CoverEntityFeature
+import yaml
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import device_registry as dr, entity_registry as er
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.myhome.const import (
-    CONF_ADVANCED_SHUTTER,
-    CONF_DIMMABLE,
     CONF_FILE_PATH,
     CONF_PLATFORMS,
-    CONF_WHERE,
     DOMAIN,
 )
 from custom_components.myhome.validate import config_schema
-
 
 SAMPLE_YAML_CONTENT = """
 00:03:50:81:22:33:
@@ -381,9 +376,10 @@ async def test_yaml_load_error_and_device_migration_error(hass: HomeAssistant, t
 
 async def test_switch_yaml_fallback_deduplication_and_no_ghost_light(hass: HomeAssistant, tmp_path):
     """Test Issue #241: switch from myhome.yaml is not duplicated, cleans ghost lights, and updates from bus."""
-    from custom_components.myhome.ownd.message import OWNLightingEvent
     from homeassistant.components.switch import SwitchDeviceClass
     from homeassistant.helpers.dispatcher import async_dispatcher_send
+
+    from custom_components.myhome.ownd.message import OWNLightingEvent
 
     yaml_content = """
 00:03:50:81:22:33:
@@ -400,7 +396,6 @@ async def test_switch_yaml_fallback_deduplication_and_no_ghost_light(hass: HomeA
 
     mac = "00:03:50:81:22:33"
     ent_reg = er.async_get(hass)
-    dev_reg = dr.async_get(hass)
 
     config_entry = MockConfigEntry(
         domain=DOMAIN,

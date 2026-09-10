@@ -1,20 +1,22 @@
 """Tests for OWNd discovery mechanism."""
 import asyncio
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock, AsyncMock
 from aiohttp import client_exceptions
 
 from custom_components.myhome.ownd.discovery import (
-    SSDPMessage,
-    SSDPResponse,
-    SSDPRequest,
     SimpleServiceDiscoveryProtocol,
-    _get_soap_body,
-    get_port,
+    SSDPMessage,
+    SSDPRequest,
+    SSDPResponse,
     _get_scpd_details,
+    _get_soap_body,
     find_gateways,
-    get_gateway
+    get_gateway,
+    get_port,
 )
+
 
 def test_ssdp_message_base():
     msg = SSDPMessage()
@@ -34,18 +36,18 @@ def test_ssdp_response():
         "USN: uuid:upnp-Basic gateway-1_0-1234567890001::upnp:rootdevice\r\n"
         "\r\n"
     )
-    
+
     resp = SSDPResponse.parse(raw_response)
     assert resp.version == "HTTP/1.1"
     assert resp.status_code == 200
     assert resp.reason == "OK"
     assert resp.headers_dictionary["LOCATION"] == "http://192.168.1.135:49153/description.xml"
     assert resp.headers_dictionary["ST"] == "upnp:rootdevice"
-    
+
     output = str(resp)
     assert "HTTP/1.1 200 OK" in output
     assert "LOCATION: http://192.168.1.135:49153/description.xml" in output
-    
+
     encoded = bytes(resp)
     assert b"HTTP/1.1 200 OK\r\n" in encoded
 
@@ -62,7 +64,7 @@ def test_ssdp_request():
     assert req.method == "M-SEARCH"
     assert req.uri == "*"
     assert req.headers_dictionary["ST"] == "upnp:rootdevice"
-    
+
     output = str(req)
     assert "M-SEARCH * HTTP/1.1" in output
     assert "ST: upnp:rootdevice" in output
@@ -72,13 +74,13 @@ def test_ssdp_request():
 async def test_simple_service_discovery_protocol():
     recvq = asyncio.Queue()
     excq = asyncio.Queue()
-    
+
     protocol = SimpleServiceDiscoveryProtocol(recvq, excq)
-    
+
     mock_transport = MagicMock()
     protocol.connection_made(mock_transport)
     assert protocol._transport == mock_transport
-    
+
     valid_data = (
         "HTTP/1.1 200 OK\r\n"
         "LOCATION: http://192.168.1.135:49153/description.xml\r\n"
@@ -86,13 +88,13 @@ async def test_simple_service_discovery_protocol():
         "USN: uuid:upnp-Basic gateway-1_0-1234567890001::upnp:rootdevice\r\n"
         "\r\n"
     ).encode()
-    
+
     protocol.datagram_received(valid_data, ("192.168.1.135", 1900))
     result = await recvq.get()
     assert result["address"] == "192.168.1.135"
     assert result["ssdp_location"] == "http://192.168.1.135:49153/description.xml"
     assert result["ssdp_st"] == "upnp:rootdevice"
-    
+
     invalid_data = (
         "HTTP/1.1 200 OK\r\n"
         "LOCATION: http://something/else.xml\r\n"
@@ -102,15 +104,15 @@ async def test_simple_service_discovery_protocol():
     ).encode()
     protocol.datagram_received(invalid_data, ("192.168.1.136", 1900))
     assert recvq.empty()
-    
+
     exc = Exception("Test exception")
     protocol.error_received(exc)
     assert await excq.get() is exc
-    
+
     protocol.connection_lost(exc)
     assert await excq.get() is exc
     mock_transport.close.assert_called_once()
-    
+
     protocol._transport = None
     protocol.connection_lost(None) # Safe fallback test
 
@@ -124,7 +126,7 @@ def test_get_soap_body():
 class MockAioHttpResponse:
     def __init__(self, text_data):
         self._text = text_data
-    
+
     async def text(self):
         return self._text
 
@@ -132,7 +134,7 @@ class MockSessionProvider:
     def __init__(self, text_data=None, post_side_effect=None):
         self._text_data = text_data
         self.post_side_effect = post_side_effect
-        
+
     async def __aenter__(self):
         session = AsyncMock()
         if self.post_side_effect:
@@ -141,7 +143,7 @@ class MockSessionProvider:
             session.post.return_value = MockAioHttpResponse(self._text_data)
             session.get.return_value = MockAioHttpResponse(self._text_data)
         return session
-        
+
     async def __aexit__(self, exc_type, exc, tb):
         pass
 
@@ -153,10 +155,10 @@ async def test_get_port_success():
     <u:getopenserverPortResponse xmlns:u="urn:schemas-bticino-it:service:openserver:1">
     <Port>20000</Port>
     </u:getopenserverPortResponse></SOAP-ENV:Body></SOAP-ENV:Envelope>'''
-    
+
     provider = MockSessionProvider(xml_data)
 
-    with patch('aiohttp.ClientSession', return_value=provider) as mock_session_cls:
+    with patch('aiohttp.ClientSession', return_value=provider):
         port = await get_port("http://192.168.1.135:80/description.xml")
         assert port == 20000
 
@@ -166,7 +168,7 @@ async def test_get_port_exceptions():
     with patch('aiohttp.ClientSession', return_value=provider_1):
         port = await get_port("http://192.168.1.135:80/description.xml")
         assert port == 20000  # Fallback
-        
+
     provider_2 = MockSessionProvider(post_side_effect=client_exceptions.ClientOSError())
     with patch('aiohttp.ClientSession', return_value=provider_2):
         port = await get_port("http://192.168.1.135:80/description.xml")
@@ -185,14 +187,14 @@ async def test_get_scpd_details():
         <serialNumber>00:03:50:00:12:34</serialNumber>
         <UDN>uuid:upnp-Basic gateway-1_0-000350001234::upnp:rootdevice</UDN>
     </root>'''
-    
+
     provider = MockSessionProvider(xml_data)
 
     with patch('aiohttp.ClientSession', return_value=provider), \
          patch('custom_components.myhome.ownd.discovery.get_port', return_value=20000):
-        
+
         details = await _get_scpd_details("http://192.168.1.135:80/description.xml")
-        
+
         assert details["deviceType"] == "urn:schemas-upnp-org:device:Basic:1"
         assert details["friendlyName"] == "F454"
         assert details["manufacturer"] == "BTicino S.p.A."
@@ -206,7 +208,7 @@ async def test_get_scpd_details():
 @pytest.mark.asyncio
 async def test_find_gateways():
     mock_transport = MagicMock()
-    
+
     async def mock_create_datagram_endpoint(protocol_factory, family):
         protocol = protocol_factory()
         # Simulate an incoming packet!
@@ -216,15 +218,15 @@ async def test_find_gateways():
             "ssdp_st": "upnp:rootdevice"
         })
         return mock_transport, protocol
-        
+
     with patch('asyncio.get_running_loop') as mock_loop, \
-         patch('custom_components.myhome.ownd.discovery._get_scpd_details', return_value={"modelName": "F454", "port": 20000}) as mock_scpd, \
+         patch('custom_components.myhome.ownd.discovery._get_scpd_details', return_value={"modelName": "F454", "port": 20000}), \
          patch('asyncio.sleep', return_value=None):
-        
+
         mock_loop.return_value.create_datagram_endpoint = mock_create_datagram_endpoint
-        
+
         gateways = await find_gateways()
-        
+
         assert len(gateways) == 1
         assert gateways[0]["address"] == "192.168.1.135"
         assert gateways[0]["modelName"] == "F454"
@@ -243,7 +245,7 @@ async def test_get_gateway():
         gw = await get_gateway("192.168.1.136")
         assert gw is not None
         assert gw["modelName"] == "MH200N"
-        
+
         gw_none = await get_gateway("192.168.1.100")
         assert gw_none is None
 

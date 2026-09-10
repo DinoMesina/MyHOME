@@ -1,10 +1,9 @@
 """Tests for OWNAutomationEvent and OWNAutomationCommand protocol translation."""
-import pytest
 from custom_components.myhome.ownd.message import (
-    OWNEvent,
-    OWNCommand,
-    OWNAutomationEvent,
     OWNAutomationCommand,
+    OWNAutomationEvent,
+    OWNCommand,
+    OWNEvent,
 )
 
 

@@ -1,6 +1,6 @@
 """Mock OpenWebNet gateway harness for testing network and protocol interactions."""
 import asyncio
-from typing import List, Optional, Callable
+from typing import Callable, List, Optional
 
 
 class MockGatewayHarness:

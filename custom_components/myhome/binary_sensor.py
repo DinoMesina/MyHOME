@@ -1,48 +1,51 @@
-from homeassistant.core import callback
 """Support for MyHome binary sensors (dry contacts and motion sensors)."""
+
 from datetime import datetime, timedelta, timezone
+
 from homeassistant.components.binary_sensor import (
     DOMAIN as PLATFORM,
+)
+from homeassistant.components.binary_sensor import (
     BinarySensorDeviceClass,
     BinarySensorEntity,
 )
 from homeassistant.const import (
-    CONF_NAME,
-    CONF_MAC,
     CONF_ENTITIES,
+    CONF_MAC,
+    CONF_NAME,
     STATE_ON,
 )
-from homeassistant.helpers.restore_state import RestoreEntity
-from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dispatcher_send
+from homeassistant.core import callback
 from homeassistant.helpers import entity_registry as er
-
-from .ownd.message import (
-    OWNDryContactEvent,
-    OWNDryContactCommand,
-    OWNAuxEvent,
-    OWNLightingCommand,
-    MESSAGE_TYPE_MOTION,
-    MESSAGE_TYPE_PIR_SENSITIVITY,
-    MESSAGE_TYPE_MOTION_TIMEOUT,
-    OWNLightingEvent,
-)
+from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dispatcher_send
+from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import (
-    CONF_PLATFORMS,
+    CONF_DEVICE_CLASS,
+    CONF_DEVICE_MODEL,
     CONF_ENTITY,
     CONF_ENTITY_NAME,
-    CONF_WHO,
-    CONF_WHERE,
-    CONF_MANUFACTURER,
-    CONF_DEVICE_MODEL,
-    CONF_DEVICE_CLASS,
     CONF_INVERTED,
+    CONF_MANUFACTURER,
+    CONF_PLATFORMS,
+    CONF_WHERE,
+    CONF_WHO,
     DOMAIN,
     LOGGER,
     normalize_where,
 )
-from .myhome_device import MyHOMEEntity
 from .gateway import MyHOMEGatewayHandler
+from .myhome_device import MyHOMEEntity
+from .ownd.message import (
+    MESSAGE_TYPE_MOTION,
+    MESSAGE_TYPE_MOTION_TIMEOUT,
+    MESSAGE_TYPE_PIR_SENSITIVITY,
+    OWNAuxEvent,
+    OWNDryContactCommand,
+    OWNDryContactEvent,
+    OWNLightingCommand,
+    OWNLightingEvent,
+)
 
 SCAN_INTERVAL = timedelta(seconds=30)
 PIR_SENSITIVITY = ["low", "medium", "high", "very high"]

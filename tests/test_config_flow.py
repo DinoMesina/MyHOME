@@ -1,5 +1,5 @@
 """Test the MyHOME config flow."""
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 from homeassistant import config_entries
 from homeassistant.core import HomeAssistant
@@ -435,7 +435,7 @@ async def test_reauth_flow(hass: HomeAssistant) -> None:
     with patch(
         "custom_components.myhome.config_flow.MyHOMEGatewayHandler"
     ) as mock_gateway_handler:
-        # Provide the mock gateway host/serial properties 
+        # Provide the mock gateway host/serial properties
         mock_gateway_handler.return_value.gateway.host = "192.168.1.135"
         mock_gateway_handler.return_value.gateway.model = "F454"
         mock_gateway_handler.return_value.gateway.serial = "00:03:50:00:12:34"
@@ -459,7 +459,7 @@ async def test_reauth_flow(hass: HomeAssistant) -> None:
     ), patch(
         "custom_components.myhome.async_setup_entry",
         return_value=True,
-    ) as mock_setup_entry:
+    ):
         result2 = await hass.config_entries.flow.async_configure(
             result["flow_id"],
             {"password": "correct_password"},
@@ -487,7 +487,7 @@ async def test_password_required_and_error(hass: HomeAssistant) -> None:
     ), patch(
         "custom_components.myhome.async_setup_entry",
         return_value=True,
-    ) as mock_setup_entry:
+    ):
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": config_entries.SOURCE_USER}
         )
@@ -538,6 +538,7 @@ async def test_password_required_and_error(hass: HomeAssistant) -> None:
 def test_mac_address_unit():
     """Test MACAddress validation and repr."""
     import pytest
+
     from custom_components.myhome.config_flow import MACAddress
 
     mac = MACAddress("00:03:50:00:12:34")
@@ -640,7 +641,7 @@ async def test_step_port_and_ssdp_missing_port(hass: HomeAssistant) -> None:
 
     # Valid port (lines 380-382)
     with patch.object(handler, "async_step_test_connection", return_value={"type": "create_entry"}):
-        res_ok = await handler.async_step_port({"port": 20000})
+        await handler.async_step_port({"port": 20000})
         assert handler.gateway_handler.port == 20000
 
     # Test ssdp with missing port (line 465)
@@ -672,8 +673,9 @@ async def test_step_port_and_ssdp_missing_port(hass: HomeAssistant) -> None:
 
 async def test_reauth_with_config_dict(hass: HomeAssistant) -> None:
     """Test async_step_reauth when entry_id is missing and config dict is provided."""
-    from custom_components.myhome.config_flow import MyhomeFlowHandler
     from homeassistant.const import CONF_MAC
+
+    from custom_components.myhome.config_flow import MyhomeFlowHandler
 
     handler = MyhomeFlowHandler()
     handler.hass = hass
@@ -693,6 +695,7 @@ async def test_reauth_with_config_dict(hass: HomeAssistant) -> None:
 async def test_options_flow_existing_decoders_and_handler_lookup(hass: HomeAssistant) -> None:
     """Test options flow with existing decoders (line 602) and handler property (line 485)."""
     from pytest_homeassistant_custom_component.common import MockConfigEntry
+
     from custom_components.myhome.config_flow import MyhomeOptionsFlowHandler
     from custom_components.myhome.const import CONF_DECODER_ENTITY, CONF_DECODER_SOURCE
 
@@ -734,11 +737,11 @@ async def test_options_flow_existing_decoders_and_handler_lookup(hass: HomeAssis
     # 5. Options submission validation: not_a_media_player and mass_entity_not_allowed (lines 528-534)
     from custom_components.myhome.const import (
         CONF_ADDRESS,
-        CONF_OWN_PASSWORD,
-        CONF_WORKER_COUNT,
-        CONF_GENERATE_EVENTS,
-        CONF_TRANSITION_MODE,
         CONF_DECODER_PRE_GAIN,
+        CONF_GENERATE_EVENTS,
+        CONF_OWN_PASSWORD,
+        CONF_TRANSITION_MODE,
+        CONF_WORKER_COUNT,
     )
     mock_reg = MagicMock()
     mass_entry = MagicMock()

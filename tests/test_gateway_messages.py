@@ -1,29 +1,28 @@
 """Tests for Gateway, Alarm, Aux, CEN, CEN+, Scenario, Scene, Energy, DryContact, and Signaling messages."""
-import pytest
 from custom_components.myhome.ownd.message import (
-    OWNEvent,
-    OWNCommand,
-    OWNMessage,
-    OWNGatewayEvent,
-    OWNGatewayCommand,
-    OWNAlarmEvent,
-    OWNAuxEvent,
-    OWNCENEvent,
-    OWNCENPlusEvent,
-    OWNScenarioEvent,
-    OWNSceneEvent,
-    OWNEnergyEvent,
-    OWNEnergyCommand,
-    OWNDryContactEvent,
-    OWNDryContactCommand,
-    OWNSignaling,
-    OWNAVCommand,
     MESSAGE_TYPE_ACTIVE_POWER,
-    MESSAGE_TYPE_ENERGY_TOTALIZER,
     MESSAGE_TYPE_CURRENT_DAY_CONSUMPTION,
     MESSAGE_TYPE_CURRENT_MONTH_CONSUMPTION,
+    MESSAGE_TYPE_ENERGY_TOTALIZER,
+    OWNAlarmEvent,
+    OWNAuxEvent,
+    OWNAVCommand,
+    OWNCENEvent,
+    OWNCENPlusEvent,
+    OWNCommand,
+    OWNDryContactCommand,
+    OWNDryContactEvent,
+    OWNEnergyCommand,
+    OWNEnergyEvent,
+    OWNEvent,
+    OWNGatewayCommand,
+    OWNGatewayEvent,
+    OWNLightingEvent,
+    OWNMessage,
+    OWNScenarioEvent,
+    OWNSceneEvent,
+    OWNSignaling,
 )
-
 
 # ── Gateway Events ─────────────────────────────────────────────────────────
 
@@ -430,7 +429,3 @@ class TestOWNMessageBase:
     def test_dimension_request(self):
         msg = OWNMessage("*#4*1*0##")
         assert msg.is_valid is True
-
-
-# Additional imports for router tests
-from custom_components.myhome.ownd.message import OWNLightingEvent

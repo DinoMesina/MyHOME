@@ -1,14 +1,7 @@
 """Support for MyHome sensors (power/energy, temperature, illuminance)."""
 
-from datetime import timedelta
 import re
-
-from voluptuous import (
-    Optional,
-    Coerce,
-    All,
-    Range,
-)
+from datetime import timedelta
 
 from homeassistant.components.sensor import DOMAIN as PLATFORM
 from homeassistant.components.sensor import (
@@ -18,17 +11,38 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.const import (
     CONF_ENTITIES,
-    CONF_NAME,
     CONF_MAC,
+    CONF_NAME,
     LIGHT_LUX,
-    UnitOfPower,
     UnitOfEnergy,
+    UnitOfPower,
     UnitOfTemperature,
 )
+from homeassistant.core import callback
 from homeassistant.helpers import entity_platform
 from homeassistant.helpers import entity_registry as er
-from homeassistant.core import callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
+from voluptuous import (
+    All,
+    Coerce,
+    Optional,
+    Range,
+)
+
+from .const import (
+    CONF_DEVICE_CLASS,
+    CONF_DEVICE_MODEL,
+    CONF_ENTITY,
+    CONF_MANUFACTURER,
+    CONF_PLATFORMS,
+    CONF_WHERE,
+    CONF_WHO,
+    DOMAIN,
+    LOGGER,
+    normalize_where,
+)
+from .gateway import MyHOMEGatewayHandler
+from .myhome_device import MyHOMEEntity
 from .ownd.message import (
     MESSAGE_TYPE_ACTIVE_POWER,
     MESSAGE_TYPE_CURRENT_DAY_CONSUMPTION,
@@ -44,21 +58,6 @@ from .ownd.message import (
     OWNLightingCommand,
     OWNLightingEvent,
 )
-
-from .const import (
-    CONF_PLATFORMS,
-    CONF_ENTITY,
-    CONF_DEVICE_CLASS,
-    CONF_DEVICE_MODEL,
-    CONF_MANUFACTURER,
-    CONF_WHERE,
-    CONF_WHO,
-    DOMAIN,
-    LOGGER,
-    normalize_where,
-)
-from .gateway import MyHOMEGatewayHandler
-from .myhome_device import MyHOMEEntity
 
 SCAN_INTERVAL = timedelta(seconds=300)
 

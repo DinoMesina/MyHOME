@@ -1,13 +1,13 @@
 """Tests for MyHOME config entry diagnostics."""
-import pytest
 from unittest.mock import MagicMock
 
+import pytest
 from homeassistant.const import CONF_MAC, CONF_PASSWORD
 from homeassistant.core import HomeAssistant
 
+from custom_components.myhome.bus_monitor import BusMonitor
 from custom_components.myhome.const import CONF_ENTITIES, CONF_ENTITY, DOMAIN
 from custom_components.myhome.diagnostics import async_get_config_entry_diagnostics
-from custom_components.myhome.bus_monitor import BusMonitor
 
 
 @pytest.mark.asyncio

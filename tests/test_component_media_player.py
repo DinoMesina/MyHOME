@@ -1,35 +1,35 @@
 """Test the MyHOME media player platform and dynamic proxy."""
-import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from homeassistant.components.media_player import (
+    DOMAIN as PLATFORM,
+)
+from homeassistant.components.media_player import (
     MediaPlayerEntityFeature,
     MediaPlayerState,
-    DOMAIN as PLATFORM,
 )
 from homeassistant.const import CONF_MAC
 from homeassistant.core import State
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
-from custom_components.myhome.media_player import (
-    MyHOMEMediaPlayer,
-    _build_pool,
-    async_setup_entry,
-    async_unload_entry,
-)
-from custom_components.myhome.decoder_pool import DecoderPool
-from custom_components.myhome.ownd.message import (
-    OWNSoundEvent,
-    OWNSoundCommand,
-)
 from custom_components.myhome.const import (
     CONF_DECODER_ENTITY,
     CONF_DECODER_PRE_GAIN,
     CONF_DECODER_SOURCE,
     CONF_ENTITY,
     DOMAIN,
+)
+from custom_components.myhome.decoder_pool import DecoderPool
+from custom_components.myhome.media_player import (
+    MyHOMEMediaPlayer,
+    _build_pool,
+    async_setup_entry,
+    async_unload_entry,
+)
+from custom_components.myhome.ownd.message import (
+    OWNSoundEvent,
 )
 
 

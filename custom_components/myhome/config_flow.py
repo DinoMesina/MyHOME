@@ -2,19 +2,9 @@
 import asyncio
 import ipaddress
 import re
-import os
 from typing import Dict, Optional
 
 import voluptuous as vol
-from voluptuous import (
-    Schema,
-    Required,
-    Coerce,
-    All,
-    In,
-    Range,
-    IsFile,
-)
 from homeassistant.config_entries import (
     CONN_CLASS_LOCAL_PUSH,
     ConfigEntry,
@@ -31,9 +21,17 @@ from homeassistant.const import (
     CONF_PORT,
 )
 from homeassistant.core import callback
-from homeassistant.helpers import device_registry as dr, selector, config_validation as cv
-from .ownd.connection import OWNGateway, OWNSession
-from .ownd.discovery import find_gateways, get_gateway
+from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import selector
+from voluptuous import (
+    All,
+    Coerce,
+    In,
+    Range,
+    Required,
+    Schema,
+)
 
 from .const import (
     CONF_ADDRESS,
@@ -49,16 +47,16 @@ from .const import (
     CONF_OWN_PASSWORD,
     CONF_SSDP_LOCATION,
     CONF_SSDP_ST,
+    CONF_TRANSITION_MODE,
     CONF_UDN,
     CONF_WORKER_COUNT,
-    CONF_FILE_PATH,
-    CONF_TRANSITION_MODE,
     DEFAULT_TRANSITION_MODE,
-    TRANSITION_MODES,
     DOMAIN,
     LOGGER,
 )
 from .gateway import MyHOMEGatewayHandler
+from .ownd.connection import OWNGateway, OWNSession
+from .ownd.discovery import find_gateways, get_gateway
 
 
 class MACAddress:
@@ -704,7 +702,7 @@ class MyhomeOptionsFlowHandler(OptionsFlow):
             entity_key = CONF_DECODER_ENTITY.format(i)
             source_key = CONF_DECODER_SOURCE.format(i)
             gain_key = CONF_DECODER_PRE_GAIN.format(i)
-            
+
             _entity_val = self.options.get(entity_key, "")
             if _entity_val:
                 schema_dict[vol.Optional(
@@ -717,7 +715,7 @@ class MyhomeOptionsFlowHandler(OptionsFlow):
                 schema_dict[vol.Optional(entity_key)] = selector.EntitySelector(
                     selector.EntitySelectorConfig(domain=["media_player"])
                 )
-                
+
             schema_dict[vol.Optional(
                 source_key,
                 description={"suggested_value": self.options.get(source_key, i)},

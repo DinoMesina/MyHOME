@@ -1,8 +1,16 @@
 """Tests for OWNGateway, OWNSession crypto helpers, and connection infrastructure."""
-import pytest
+import asyncio
 import logging
-from custom_components.myhome.ownd.connection import OWNGateway, OWNSession
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
+from custom_components.myhome.ownd.connection import (
+    OWNCommandSession,
+    OWNEventSession,
+    OWNGateway,
+    OWNSession,
+)
 
 # ── OWNGateway ─────────────────────────────────────────────────────────────
 
@@ -281,9 +289,6 @@ class TestCryptoHelpers:
 
 # ── OWNSession IO Mocking ────────────────────────────────────────────────
 
-import asyncio
-from unittest.mock import patch, AsyncMock, MagicMock
-from custom_components.myhome.ownd.connection import OWNEventSession, OWNCommandSession
 
 class TestOWNSessionConnecting:
     @pytest.fixture
@@ -295,7 +300,7 @@ class TestOWNSessionConnecting:
     async def test_connect_success(self, session):
         mock_reader = AsyncMock()
         mock_writer = AsyncMock()
-        
+
         with patch('asyncio.open_connection', return_value=(mock_reader, mock_writer)) as mock_open:
             with patch.object(session, '_negotiate', return_value={"Success": True}) as mock_neg:
                 res = await session.connect()
@@ -309,7 +314,7 @@ class TestOWNSessionConnecting:
     async def test_connect_refused_retry_success(self, session):
         mock_reader = AsyncMock()
         mock_writer = AsyncMock()
-        
+
         with patch('asyncio.sleep', return_value=None):
             with patch('asyncio.open_connection', side_effect=[ConnectionRefusedError, (mock_reader, mock_writer)]) as mock_open:
                 with patch.object(session, '_negotiate', return_value={"Success": True}):
@@ -344,19 +349,19 @@ class TestOWNEventSession:
     async def test_get_next_success(self, session):
         session._stream_reader = AsyncMock()
         session._stream_reader.readuntil.return_value = b"*1*1*12##"
-        
+
         msg = await session.get_next()
         assert msg is not None
 
     @pytest.mark.asyncio
     async def test_get_next_heartbeat_timeout(self, session):
         session._stream_reader = AsyncMock()
-        
+
         async def mock_readuntil(*args, **kwargs):
             raise asyncio.TimeoutError()
-            
+
         session._stream_reader.readuntil.side_effect = mock_readuntil
-        
+
         with patch('asyncio.sleep', return_value=None):
             with patch.object(session, 'close', new_callable=AsyncMock) as mock_close:
                 with patch.object(session, 'connect', new_callable=AsyncMock) as mock_connect:
@@ -376,7 +381,7 @@ class TestOWNCommandSession:
         session._stream_writer = MagicMock()
         session._stream_writer.drain = AsyncMock()
         session._stream_reader = AsyncMock()
-        
+
         # Simulating ACK response
         session._stream_reader.readuntil.return_value = b"*#*1##"
 
@@ -389,9 +394,9 @@ class TestOWNCommandSession:
         session._stream_writer = MagicMock()
         session._stream_writer.drain = AsyncMock()
         session._stream_reader = AsyncMock()
-        
+
         session._stream_writer.write.side_effect = ConnectionResetError
-        
+
         with patch.object(session, 'connect', new_callable=AsyncMock) as mock_connect:
             # Need to restore writer to simulate reconnect success
             async def restore_network():

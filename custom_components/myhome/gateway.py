@@ -3,83 +3,56 @@ import asyncio
 from typing import Dict, List
 
 from homeassistant.const import (
-    CONF_ENTITIES,
-    CONF_HOST,
-    CONF_PORT,
-    CONF_PASSWORD,
-    CONF_NAME,
-    CONF_MAC,
     CONF_FRIENDLY_NAME,
+    CONF_HOST,
+    CONF_MAC,
+    CONF_NAME,
+    CONF_PASSWORD,
+    CONF_PORT,
 )
-from homeassistant.components.light import DOMAIN as LIGHT
-from homeassistant.components.switch import (
-    SwitchDeviceClass,
-    DOMAIN as SWITCH,
-)
-from homeassistant.components.button import DOMAIN as BUTTON
-from homeassistant.components.cover import DOMAIN as COVER
-from homeassistant.components.binary_sensor import (
-    BinarySensorDeviceClass,
-    DOMAIN as BINARY_SENSOR,
-)
-from homeassistant.components.sensor import (
-    SensorDeviceClass,
-    DOMAIN as SENSOR,
-)
-from homeassistant.components.climate import DOMAIN as CLIMATE
 from homeassistant.core import callback
-
-from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 
-from .ownd.connection import OWNSession, OWNEventSession, OWNCommandSession, OWNGateway
-from .ownd.message import (
-    OWNMessage,
-    OWNLightingEvent,
-    OWNLightingCommand,
-    OWNEnergyEvent,
-    OWNEnergyCommand,
-    OWNAutomationEvent,
-    OWNDryContactEvent,
-    OWNAuxEvent,
-    OWNHeatingEvent,
-    OWNHeatingCommand,
-    OWNAlarmEvent,
-    OWNAlarmCommand,
-    OWNCENPlusEvent,
-    OWNCENEvent,
-    OWNGatewayEvent,
-    OWNGatewayCommand,
-    OWNCommand,
-)
-
+from .bus_monitor import BusMonitor
 from .const import (
-    CONF_PLATFORMS,
-    CONF_FIRMWARE,
-    CONF_SSDP_LOCATION,
-    CONF_SSDP_ST,
     CONF_DEVICE_TYPE,
-    CONF_MANUFACTURER,
-    CONF_MANUFACTURER_URL,
-    CONF_UDN,
-    CONF_SHORT_PRESS,
-    CONF_SHORT_RELEASE,
+    CONF_FIRMWARE,
     CONF_LONG_PRESS,
     CONF_LONG_RELEASE,
-    CONF_ROTARY_CW_SLOW,
-    CONF_ROTARY_CW_FAST,
-    CONF_ROTARY_CCW_SLOW,
+    CONF_MANUFACTURER,
+    CONF_MANUFACTURER_URL,
     CONF_ROTARY_CCW_FAST,
+    CONF_ROTARY_CCW_SLOW,
+    CONF_ROTARY_CW_FAST,
+    CONF_ROTARY_CW_SLOW,
+    CONF_SHORT_PRESS,
+    CONF_SHORT_RELEASE,
+    CONF_SSDP_LOCATION,
+    CONF_SSDP_ST,
+    CONF_UDN,
     DOMAIN,
     LOGGER,
 )
-from .myhome_device import MyHOMEEntity
-from .bus_monitor import BusMonitor
-from .button import (
-    DisableCommandButtonEntity,
-    EnableCommandButtonEntity,
+from .ownd.connection import OWNCommandSession, OWNEventSession, OWNGateway, OWNSession
+from .ownd.message import (
+    OWNAlarmEvent,
+    OWNAutomationEvent,
+    OWNAuxEvent,
+    OWNCENEvent,
+    OWNCENPlusEvent,
+    OWNCommand,
+    OWNDryContactEvent,
+    OWNEnergyCommand,
+    OWNEnergyEvent,
+    OWNGatewayCommand,
+    OWNGatewayEvent,
+    OWNHeatingCommand,
+    OWNHeatingEvent,
+    OWNLightingCommand,
+    OWNLightingEvent,
+    OWNMessage,
 )
-
 
 EVENT_READY_TIMEOUT = 120
 COMMAND_SESSION_IDLE_TIMEOUT = 15.0

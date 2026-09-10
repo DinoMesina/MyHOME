@@ -1,16 +1,17 @@
 """Unit tests ensuring no infeasible OpenWebNet commands or addresses are generated."""
-import pytest
 from unittest.mock import AsyncMock, MagicMock
 
-from custom_components.myhome.const import is_apl_address, normalize_where, DOMAIN
-from custom_components.myhome.ownd.message import (
-    OWNCommand,
-    OWNLightingCommand,
-    OWNAutomationCommand,
-)
+import pytest
+
 from custom_components.myhome.button import (
     DisableCommandButtonEntity,
     EnableCommandButtonEntity,
+)
+from custom_components.myhome.const import is_apl_address, normalize_where
+from custom_components.myhome.ownd.message import (
+    OWNAutomationCommand,
+    OWNCommand,
+    OWNLightingCommand,
 )
 
 
@@ -241,10 +242,11 @@ class TestProbeAndStatusFeasibility:
     @pytest.mark.asyncio
     async def test_general_lighting_event_does_not_send_invalid_status_request(self, hass):
         """A general light event (*1*0*0##) must not trigger an invalid *#1*0## status request."""
-        from custom_components.myhome.gateway import MyHOMEGatewayHandler
-        from custom_components.myhome.ownd.message import OWNLightingEvent
         import asyncio
         from unittest.mock import AsyncMock, MagicMock, patch
+
+        from custom_components.myhome.gateway import MyHOMEGatewayHandler
+        from custom_components.myhome.ownd.message import OWNLightingEvent
 
         config_entry = MagicMock()
         config_entry.data = {
@@ -279,10 +281,10 @@ class TestProbeAndStatusFeasibility:
     @pytest.mark.asyncio
     async def test_status_request_nack_logged_at_debug_without_warning(self):
         """Status request NACK (e.g. *#16*0## without audio matrix) must log DEBUG and not WARN."""
-        from custom_components.myhome.ownd.connection import OWNCommandSession, OWNGateway
-        from custom_components.myhome.ownd.message import OWNCommand
-        from tests.mock_gateway_harness import MockGatewayHarness
         from unittest.mock import MagicMock
+
+        from custom_components.myhome.ownd.connection import OWNCommandSession, OWNGateway
+        from tests.mock_gateway_harness import MockGatewayHarness
 
         harness = MockGatewayHarness()
         harness.set_nack_commands(True)

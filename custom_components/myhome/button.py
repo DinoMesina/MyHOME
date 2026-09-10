@@ -1,6 +1,7 @@
 """Support for MyHome switches (light modules used for controlled outlets, relays)."""
 
 from __future__ import annotations
+
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -8,26 +9,27 @@ if TYPE_CHECKING:
 
 from homeassistant.components.button import (
     DOMAIN as PLATFORM,
+)
+from homeassistant.components.button import (
     ButtonEntity,
 )
-
 from homeassistant.const import (
-    CONF_NAME,
-    CONF_MAC,
     CONF_ENTITIES,
+    CONF_MAC,
+    CONF_NAME,
     EntityCategory,
 )
 from homeassistant.core import callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 
 from .const import (
-    CONF_PLATFORMS,
-    CONF_ENTITY,
-    CONF_WHO,
-    CONF_WHERE,
     CONF_BUS_INTERFACE,
-    CONF_MANUFACTURER,
     CONF_DEVICE_MODEL,
+    CONF_ENTITY,
+    CONF_MANUFACTURER,
+    CONF_PLATFORMS,
+    CONF_WHERE,
+    CONF_WHO,
     DOMAIN,
 )
 from .myhome_device import MyHOMEEntity

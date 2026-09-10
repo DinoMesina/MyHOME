@@ -1,5 +1,4 @@
 """Tests for BusMonitor and BusFrame in-band bus tap."""
-import pytest
 from custom_components.myhome.bus_monitor import BusFrame, BusMonitor
 from custom_components.myhome.ownd.message import OWNEvent, OWNSignaling
 

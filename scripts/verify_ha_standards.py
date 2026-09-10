@@ -17,7 +17,7 @@ import json
 import os
 import sys
 from pathlib import Path
-from typing import List, Set, Tuple
+from typing import List
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 CUSTOM_COMPONENTS_DIR = ROOT_DIR / "custom_components" / "myhome"
@@ -259,6 +259,34 @@ def check_no_blocking_calls(checker: StandardsChecker):
     checker.log_ok("No blocking calls (time.sleep, requests.*) detected in async coroutines.")
 
 
+def check_ruff_standards(checker: StandardsChecker):
+    """Rule 6: Verify codebase satisfies Ruff static analysis standards."""
+    import shutil
+    import subprocess
+
+    ruff_bin = shutil.which("ruff")
+    cmd = [ruff_bin, "check", "."] if ruff_bin else [sys.executable, "-m", "ruff", "check", "."]
+    try:
+        res = subprocess.run(cmd, capture_output=True, text=True, cwd=str(ROOT_DIR))
+    except FileNotFoundError:
+        checker.log_ok("Ruff not found in PATH; skipping static analysis check.")
+        return
+
+    if res.returncode != 0 and "No module named ruff" in res.stderr:
+        checker.log_ok("Ruff module not installed; skipping static analysis check.")
+        return
+
+    if res.returncode != 0:
+        checker.log_error(
+            "RULE_RUFF_STATIC_ANALYSIS",
+            ROOT_DIR,
+            1,
+            f"Ruff static analysis checks failed:\n{res.stdout.strip()}",
+        )
+    else:
+        checker.log_ok("Ruff static analysis checks passed with 0 violations.")
+
+
 def main():
     print("=" * 70)
     print("Running Home Assistant Architectural Standards Validator")
@@ -269,6 +297,7 @@ def main():
     check_translation_coverage(checker)
     check_deprecated_constants(checker)
     check_no_blocking_calls(checker)
+    check_ruff_standards(checker)
 
     print("=" * 70)
     if checker.errors:

@@ -1,49 +1,49 @@
 """Support for MyHome covers."""
 import asyncio
 import time
+
 from homeassistant.components.cover import (
     ATTR_CURRENT_POSITION,
     ATTR_POSITION,
-    DOMAIN as PLATFORM,
     CoverDeviceClass,
     CoverEntity,
     CoverEntityFeature,
 )
-
+from homeassistant.components.cover import (
+    DOMAIN as PLATFORM,
+)
 from homeassistant.const import (
-    CONF_NAME,
     CONF_MAC,
+    CONF_NAME,
     STATE_CLOSED,
     STATE_OPEN,
 )
 from homeassistant.core import callback
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dispatcher_send
 from homeassistant.helpers.restore_state import RestoreEntity
 
-from .ownd.message import (
-    OWNAutomationEvent,
-    OWNAutomationCommand,
-)
-
-from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dispatcher_send
-
 from .const import (
-    CONF_PLATFORMS,
+    CONF_ADVANCED_SHUTTER,
+    CONF_BUS_INTERFACE,
+    CONF_DEVICE_MODEL,
     CONF_ENTITY,
     CONF_ENTITY_NAME,
-    CONF_WHO,
-    CONF_WHERE,
-    CONF_BUS_INTERFACE,
     CONF_MANUFACTURER,
-    CONF_DEVICE_MODEL,
-    CONF_ADVANCED_SHUTTER,
+    CONF_PLATFORMS,
     CONF_TRAVEL_TIME,
+    CONF_WHERE,
+    CONF_WHO,
     DEFAULT_TRAVEL_TIME,
     DOMAIN,
     LOGGER,
 )
-from .myhome_device import MyHOMEEntity
 from .gateway import MyHOMEGatewayHandler
+from .myhome_device import MyHOMEEntity
+from .ownd.message import (
+    OWNAutomationCommand,
+    OWNAutomationEvent,
+)
 
 
 async def async_setup_entry(hass, config_entry, async_add_entities):
@@ -208,7 +208,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
                 f"myhome_new_device_{config_entry.data[CONF_MAC]}",
                 {"who": "2", "where": where, "interface": interface, "name": _name, "device_id": unique_id}
             )
-            
+
         async_dispatcher_send(hass, f"myhome_update_{config_entry.data[CONF_MAC]}_2_{unique_id}", message)
 
     @callback

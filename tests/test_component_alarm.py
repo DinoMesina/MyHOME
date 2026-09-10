@@ -1,7 +1,7 @@
 """Tests for MyHOME alarm_control_panel platform (WHO=5)."""
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from homeassistant.components.alarm_control_panel import (
     AlarmControlPanelEntityFeature,
 )
@@ -11,28 +11,24 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 
-from custom_components.myhome.const import (
-    DOMAIN,
-    CONF_PLATFORMS,
-    CONF_WHERE,
-    CONF_WHO,
-    CONF_ENTITY_NAME,
-    CONF_MANUFACTURER,
-    CONF_DEVICE_MODEL,
-)
 from custom_components.myhome.alarm_control_panel import (
-    MyHOMEAlarmControlPanel,
     PLATFORM,
-    STATE_DISARMED,
-    STATE_ARMED_HOME,
     STATE_ARMED_AWAY,
+    STATE_ARMED_HOME,
+    STATE_DISARMED,
     STATE_TRIGGERED,
+    MyHOMEAlarmControlPanel,
     async_setup_entry,
     async_unload_entry,
 )
+from custom_components.myhome.const import (
+    CONF_PLATFORMS,
+    CONF_WHERE,
+    DOMAIN,
+)
 from custom_components.myhome.ownd.message import (
-    OWNAlarmEvent,
     OWNAlarmCommand,
+    OWNAlarmEvent,
     OWNEvent,
 )
 

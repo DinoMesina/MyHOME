@@ -7,8 +7,8 @@ for diagnostics and Lovelace dashboard streaming.
 from __future__ import annotations
 
 import collections
-from datetime import datetime, timezone
 import logging
+from datetime import datetime, timezone
 from typing import Any, Callable, Optional
 
 from .ownd.message import OWNMessage, OWNSignaling

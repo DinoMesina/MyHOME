@@ -1,50 +1,41 @@
 """Tests targeting remaining uncovered branches in message.py to maximize coverage."""
-import pytest
 import datetime
 from unittest.mock import patch
-from custom_components.myhome.ownd.message import (
-    OWNMessage,
-    OWNEvent,
-    OWNCommand,
-    OWNSignaling,
-    OWNLightingEvent,
-    OWNAutomationEvent,
-    OWNHeatingEvent,
-    OWNAlarmEvent,
-    OWNAuxEvent,
-    OWNCENEvent,
-    OWNCENPlusEvent,
-    OWNScenarioEvent,
-    OWNSceneEvent,
-    OWNEnergyEvent,
-    OWNGatewayEvent,
-    OWNGatewayCommand,
-    OWNDryContactEvent,
-    OWNSoundEvent,
-    OWNSoundCommand,
-    OWNLightingCommand,
-    OWNAutomationCommand,
-    OWNHeatingCommand,
-    OWNEnergyCommand,
-    OWNDryContactCommand,
-    OWNAVCommand,
-    OWNAlarmCommand,
-    OWNStatusRequest,
-    MESSAGE_TYPE_ACTIVE_POWER,
-    MESSAGE_TYPE_ENERGY_TOTALIZER,
-    MESSAGE_TYPE_HOURLY_CONSUMPTION,
-    MESSAGE_TYPE_DAILY_CONSUMPTION,
-    MESSAGE_TYPE_MONTHLY_CONSUMPTION,
-    MESSAGE_TYPE_CURRENT_DAY_CONSUMPTION,
-    MESSAGE_TYPE_CURRENT_MONTH_CONSUMPTION,
-    MESSAGE_TYPE_MODE,
-    MESSAGE_TYPE_ACTION,
-    CLIMATE_MODE_OFF,
-    CLIMATE_MODE_HEAT,
-    CLIMATE_MODE_COOL,
-    CLIMATE_MODE_AUTO,
-)
 
+import pytest
+
+from custom_components.myhome.ownd.message import (
+    CLIMATE_MODE_AUTO,
+    CLIMATE_MODE_COOL,
+    CLIMATE_MODE_HEAT,
+    CLIMATE_MODE_OFF,
+    MESSAGE_TYPE_ACTION,
+    OWNAlarmCommand,
+    OWNAlarmEvent,
+    OWNAutomationCommand,
+    OWNAutomationEvent,
+    OWNAuxEvent,
+    OWNAVCommand,
+    OWNCENPlusEvent,
+    OWNCommand,
+    OWNDryContactCommand,
+    OWNDryContactEvent,
+    OWNEnergyCommand,
+    OWNEnergyEvent,
+    OWNEvent,
+    OWNGatewayCommand,
+    OWNGatewayEvent,
+    OWNHeatingCommand,
+    OWNHeatingEvent,
+    OWNLightingCommand,
+    OWNLightingEvent,
+    OWNMessage,
+    OWNSceneEvent,
+    OWNSignaling,
+    OWNSoundCommand,
+    OWNSoundEvent,
+    OWNStatusRequest,
+)
 
 # ── OWNMessage Base Class Parsing ──────────────────────────────────────────
 
@@ -1159,9 +1150,9 @@ class TestProtocolFixesAudit:
 
     def test_gateway_profile_constants(self):
         from custom_components.myhome.gateway_profile import (
+            DEFAULT_SUPPORTED_WHO,
             WHO_LOAD_CONTROL,
             WHO_SOUND_DIFFUSION,
-            DEFAULT_SUPPORTED_WHO,
         )
         assert WHO_LOAD_CONTROL == 3
         assert WHO_SOUND_DIFFUSION == 22

@@ -1,10 +1,17 @@
 """Fixtures for MyHOME tests using pytest-homeassistant-custom-component."""
-import pytest
-from homeassistant.core import HomeAssistant
-
-import platform
 import asyncio
+import platform
 import warnings
+
+import pytest
+from homeassistant.core import State
+from pytest_homeassistant_custom_component.syrupy import (
+    ANY,
+    HomeAssistantSnapshotExtension,
+    HomeAssistantSnapshotSerializer,
+)
+from syrupy.assertion import SnapshotAssertion
+from syrupy.types import SerializableData
 
 try:
     from aiohttp.web_exceptions import NotAppKeyWarning
@@ -80,15 +87,6 @@ def pytest_sessionstart(session):
     """Set the event loop policy to Selector on Windows to avoid _ssock AttributeError."""
     if platform.system() == "Windows":
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-
-from pytest_homeassistant_custom_component.syrupy import (
-    ANY,
-    HomeAssistantSnapshotExtension,
-    HomeAssistantSnapshotSerializer,
-)
-from syrupy.assertion import SnapshotAssertion
-from syrupy.types import SerializableData
-from homeassistant.core import State
 
 
 class PatchedHomeAssistantSnapshotSerializer(HomeAssistantSnapshotSerializer):

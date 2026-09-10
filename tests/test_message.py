@@ -1,5 +1,5 @@
-import pytest
-from custom_components.myhome.ownd.message import OWNEvent, OWNSoundEvent, OWNSoundCommand
+from custom_components.myhome.ownd.message import OWNEvent, OWNSoundCommand, OWNSoundEvent
+
 
 def test_own_sound_event_parsing_baseband():
     """Test parsing of WHO=16 Audio Events with baseband WHAT values (0/10)."""
