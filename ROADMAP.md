@@ -130,9 +130,9 @@ graph TD
     subgraph Gateways["🏛️ Gateways & Transports"]
         GW_MHS1["🟢 MyHomeServer1<br/>(Full 70+ dev plant)"]
         GW_F454["🟢 F454<br/>(High-speed IP)"]
+        GW_MH200["🟢 MH200 / MH200N<br/>(107 Frames / Physical Plant)"]
         GW_F461["🟢 F461<br/>(DIN Web Server)"]
         GW_3578["🟡 Legrand 3578<br/>(Serial/ZigBee Loopback)"]
-        GW_MH200["🔴 MH200 / MH200N<br/>(1-2 Session Legacy)"]
         GW_MH202["🔴 MH202 / MH201<br/>(Scenario Gateways)"]
         GW_F455["🔴 F455<br/>(Dual-Bus Routing)"]
     end
@@ -151,7 +151,7 @@ graph TD
         SUB_DRY["🟢 Dry Contacts (WHO 25)<br/>(Technical alarms & AUX)"]
         SUB_CEN["🟡 Physical Pushbuttons (WHO 15/25)<br/>(Rapid multi-click / held)"]
         SUB_ALARM["🟡 Burglar Alarm (WHO 5)<br/>(Partitions & central unit)"]
-        SUB_ROUTER["🟡 F422 Bus Router<br/>(Cross-bus #4# routing)"]
+        SUB_ROUTER["🟢 F422 Bus Router<br/>(Cross-bus #4#02 routing covered)"]
     end
 
     subgraph Engine["🧪 CI Test Suite"]
@@ -160,6 +160,7 @@ graph TD
 
     GW_MHS1 --> HARNESS
     GW_F454 --> HARNESS
+    GW_MH200 --> HARNESS
     GW_F461 --> HARNESS
     SUB_LIGHT --> HARNESS
     SUB_DALI --> HARNESS
@@ -168,14 +169,15 @@ graph TD
     SUB_CU3550 --> HARNESS
     SUB_ENERGY --> HARNESS
     SUB_DRY --> HARNESS
+    SUB_ROUTER --> HARNESS
 
     classDef covered fill:#2e7d32,stroke:#1b5e20,color:#ffffff;
     classDef partial fill:#f57f17,stroke:#e65100,color:#ffffff;
     classDef needed fill:#c62828,stroke:#b71c1c,color:#ffffff;
 
-    class GW_MHS1,GW_F454,GW_F461,SUB_LIGHT,SUB_DALI,SUB_COV_V,SUB_COV_H,SUB_CU3550,SUB_ENERGY,SUB_DRY covered;
-    class GW_3578,SUB_TIMER,SUB_CEN,SUB_ALARM,SUB_ROUTER partial;
-    class GW_MH200,GW_MH202,GW_F455,SUB_GRP,SUB_COV_CAL,SUB_CU4695 needed;
+    class GW_MHS1,GW_F454,GW_MH200,GW_F461,SUB_LIGHT,SUB_DALI,SUB_COV_V,SUB_COV_H,SUB_CU3550,SUB_ENERGY,SUB_DRY,SUB_ROUTER covered;
+    class GW_3578,SUB_TIMER,SUB_CEN,SUB_ALARM partial;
+    class GW_MH202,GW_F455,SUB_GRP,SUB_COV_CAL,SUB_CU4695 needed;
 ```
 
 ---
@@ -186,9 +188,9 @@ graph TD
 |---|---|---|---|
 | **MyHomeServer1 (MHS1)** | 🟢 **Covered** | `tests/fixtures/plants/issue_247_nicolacavallo84/` (100 on-wire frames from @nicolacavallo84) | *None needed — full production plant active in CI.* |
 | **F454** | 🟢 **Covered** | `tests/fixtures/plants/issue_247_nicolacavallo84/` | *None needed — full high-speed IP session active in CI.* |
+| **MH200 / MH200N** | 🟢 **Covered** | `tests/fixtures/plants/mh200_physical_plant/` (107 on-wire frames from physical MH200) | *None needed — full physical plant active in CI (62 lights, 7 switches, 11 covers across F422 interfaces).* |
 | **F461 Web Server** | 🟢 **Covered** | Issue #273 capture (@lyubomirtraykov) | *None needed — DALI DT8 ballasts verified.* |
 | **Legrand 3578 USB/Serial** | 🟡 **Partial** | Unit test loopback in `tests/test_gateway.py` | **Real-world USB serial stream**: Raw byte capture from physical OpenZigBee installation (`WHERE=<id>#9`). |
-| **MH200 / MH200N** | 🔴 **Needed** | Synthetic gateway profile tests only | **Heavy scenario burst trace**: Bus capture while MH200 executes complex scenarios under strict 1–2 session socket limits. |
 | **MH202 / MH201** | 🔴 **Needed** | Synthetic gateway profile tests only | **Production plant trace**: General residential traffic through an MH201/MH202 scenario programmer. |
 | **F455** | 🔴 **Needed** | Synthetic dual-bus profile tests only | **Dual-bus cross-routing trace**: Simultaneous traffic routing between Bus 1 and Bus 2. |
 | **F452 / F453AV / AM4890** | 🟡 **Synthetic** | Factory golden frames from `openwebnet4j` | **General trace**: Normal residential bus captures welcomed to expand gateway diversity. |
@@ -199,7 +201,7 @@ graph TD
 
 | Subsystem & Domain | Status | Current Evidence / Fixture | Community Trace Needed / Target Scenario |
 |---|---|---|---|
-| **Lighting (WHO = 1) — Relays & Dimmers** | 🟢 **Covered** | Nicola Cavallo capture (F411U2, F418, 4-digit addressing `1000`, `0910`) | *Baseline covered.* |
+| **Lighting (WHO = 1) — Relays & Dimmers** | 🟢 **Covered** | Nicola Cavallo capture (F411U2, F418, 4-digit addressing `1000`, `0910`) + MH200 plant (62 lights) | *Baseline covered.* |
 | **Lighting (WHO = 1) — DALI Tunable White** | 🟢 **Covered** | Lyubomir Traykov capture (Dimension 14, Kelvin 2000K–6535K / mireds) | *Baseline covered.* |
 | **Lighting (WHO = 1) — Native DIN Timers** | 🟡 **Synthetic** | Unit tests in `tests/test_timed_lighting.py` | **Actuator countdown trace**: Capture of physical F411 relay executing Dim 2 (`*#1*WHERE*#2*H*M*S##`) or preset temporization. |
 | **Lighting (WHO = 1) — Groups & General (P7)** | 🔴 **CRITICAL** | None (deferred in RFC #248) | **Group actuation trace**: Capture of physical bus frames when sending `#group` (`*1*1*#1##`) or all-off (`*1*0*0##`), showing whether your gateway emits individual status replies! |
@@ -214,7 +216,7 @@ graph TD
 | **CEN / CEN+ (WHO = 15 / 25) — Pushbuttons** | 🟡 **Synthetic** | Unit tests in `tests/test_device_trigger.py` | **Physical wall switch bursts**: Rapid multi-click, held, and release events from physical pushbuttons under normal usage. |
 | **Sound System (WHO = 16) — Matrix & Proxy** | 🟢 **Covered** | Nicola Cavallo capture + mock F441 tests | *Baseline covered.* |
 | **Energy Management (WHO = 18)** | 🟢 **Covered** | Nicola Cavallo capture (30 frames of active power, 602 W) | *Baseline covered.* |
-| **F422 Cross-Bus Router** | 🟡 **Synthetic** | Unit tests with interface routing | **Routed multi-bus trace**: Frames routed across physical F422 interface routers (`WHERE#4#interface`). |
+| **F422 Cross-Bus Router** | 🟢 **Covered** | Physical MH200 plant trace (`tests/fixtures/plants/mh200_physical_plant/`, 11 covers routed via `#4#02`) | *None needed — physical F422 cross-bus addressing active in CI.* |
 
 ---
 

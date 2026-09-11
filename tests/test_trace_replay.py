@@ -214,6 +214,110 @@ class TestTraceReplayHarness:
         await hass.config_entries.async_unload(entry.entry_id)
 
     @pytest.mark.asyncio
+    async def test_real_world_trace_replay_mh200_physical_plant(
+        self, hass: HomeAssistant
+    ) -> None:
+        """Replay on-wire frames from the physical BTicino MH200 gateway plant.
+
+        Verifies that all 107 frames captured from the physical MH200
+        (controlling 62 lights, 7 switches, and 11 covers across F422 bus-bus
+        interfaces) replay cleanly against the integration state machine without
+        exceptions, verifying entity discovery and state synchronization.
+        """
+        plant_dir = FIXTURES_PLANTS_DIR / "mh200_physical_plant"
+        plant_yaml = plant_dir / "myhome.yaml"
+        diag_json = plant_dir / "diagnostic_summary.json"
+
+        assert plant_yaml.is_file()
+        assert diag_json.is_file()
+
+        with open(diag_json, "r", encoding="utf-8") as f:
+            diag_data = json.load(f)
+
+        raw_frames = diag_data["data"]["bus_monitor"]["recent_frames"]
+        assert len(raw_frames) >= 100, f"Expected at least 100 frames, found {len(raw_frames)}"
+
+        mac = "00:03:50:20:00:01"
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            data={
+                CONF_HOST: "192.168.1.50",
+                CONF_PORT: 20000,
+                CONF_PASSWORD: "pass",
+                CONF_MAC: mac,
+                CONF_NAME: "MH200",
+                CONF_DEVICE_TYPE: "urn:schemas-upnp-org:device:Basic:1",
+                CONF_FRIENDLY_NAME: "MH200 Gateway",
+                CONF_MANUFACTURER: "BTicino",
+                CONF_FIRMWARE: "2.0.0",
+            },
+            options={
+                CONF_FILE_PATH: str(plant_yaml),
+            },
+            unique_id=mac,
+        )
+        entry.add_to_hass(hass)
+
+        with (
+            patch(
+                "custom_components.myhome.gateway.OWNSession.test_connection",
+                return_value={"Success": True, "Message": None},
+            ),
+            patch("custom_components.myhome.gateway.MyHOMEGatewayHandler.listening_loop"),
+            patch("custom_components.myhome.gateway.MyHOMEGatewayHandler.sending_loop"),
+        ):
+            assert await hass.config_entries.async_setup(entry.entry_id)
+            await hass.async_block_till_done()
+
+        handler = hass.data[DOMAIN][mac][CONF_ENTITY]
+        handler._on_event_connection_state_change(True)
+
+        replayed_count = 0
+        for item in raw_frames:
+            raw = item.get("raw")
+            if not raw or raw in ("*#*1##", "*#*0##"):
+                continue
+
+            try:
+                msg = OWNMessage.parse(raw)
+            except Exception as exc:
+                pytest.fail(f"Trace replay failed to parse MH200 frame {raw!r}: {exc}")
+
+            async_dispatcher_send(hass, f"myhome_message_{mac}", msg)
+            replayed_count += 1
+
+        await hass.async_block_till_done()
+        assert replayed_count >= 80
+
+        # Verify active states from the real physical MH200 plant
+        # 1. Keuken Wasbak (where: 57) -> ON (*1*1*57##)
+        light_wasbak = hass.states.get("light.keuken_wasbak")
+        assert light_wasbak is not None
+        assert light_wasbak.state == "on"
+
+        # 2. Keuken Tafel (where: 69, dimmable) -> ON (*1*9*69##)
+        light_tafel = hass.states.get("light.keuken_tafel")
+        assert light_tafel is not None
+        assert light_tafel.state == "on"
+
+        # 3. Keuken Plafond (where: 67) -> ON (*1*10*67##)
+        light_plafond = hass.states.get("light.keuken_plafond")
+        assert light_plafond is not None
+        assert light_plafond.state == "on"
+
+        # 4. Stopcontact Bed (where: 84) -> ON (*1*1*84##)
+        switch_bed = hass.states.get("switch.stopcontact_bed")
+        assert switch_bed is not None
+        assert switch_bed.state == "on"
+
+        # 5. Covers with F422 interface (e.g. Gordijn Woonkamer West: 11#4#02)
+        cover_west = hass.states.get("cover.gordijn_woonkamer_west")
+        assert cover_west is not None
+
+        # Unload cleanly
+        await hass.config_entries.async_unload(entry.entry_id)
+
+    @pytest.mark.asyncio
     async def test_trace_replay_resilience_to_malformed_and_unknown_frames(
         self, hass: HomeAssistant
     ) -> None:
