@@ -8,7 +8,7 @@ DOMAIN = "myhome"
 ATTR_GATEWAY = "gateway"
 ATTR_MESSAGE = "message"
 INTEGRATION_VERSION = "2.0.0b11"
-REQUIRED_OWND_VERSION = "2.0.0b5"
+REQUIRED_OWND_VERSION = "2.0.0b6"
 
 
 @lru_cache(maxsize=1)
