@@ -2,7 +2,7 @@ name: test-coverage
 
 on:
   push:
-    branches: [main, master, v2-phase1-architecture, v2-phase2-architecture]
+    branches: [main, master, v2-phase1-architecture]
   pull_request:
 
 permissions:
