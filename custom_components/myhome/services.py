@@ -127,11 +127,12 @@ async def async_setup_services(hass: HomeAssistant) -> None:
                     "Could not parse message `%s`, not sending it.", message
                 )
                 return False
-        else:
-            _LOGGER.error(
-                "Gateway `%s` not found, could not send message `%s`.", gateway, message
-            )
+            _LOGGER.error("No message specified to send.")
             return False
+
+        _LOGGER.error(
+            "Gateway `%s` not found, could not send message `%s`.", gateway, message
+        )
         return False
 
     async def handle_sweep_bus(call: ServiceCall) -> bool:
