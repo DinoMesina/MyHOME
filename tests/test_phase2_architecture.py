@@ -588,7 +588,7 @@ async def test_p4_climate_central_unit_bus_events_and_auto_mode(hass: HomeAssist
     cu.handle_event(event_mode)
 
     # 2. Incoming MESSAGE_TYPE_MODE_TARGET on Central Unit -> triggers lines 787-792
-    event_mode_target = OWNHeatingEvent.parse("*#4*#0*14*0210*1##")  # Heating target
+    event_mode_target = OWNHeatingEvent.parse("*4*1#0215*#0##")  # Heating target
     cu.handle_event(event_mode_target)
 
     # 3. Subordinate zone receiving master_mode = HVACMode.AUTO -> triggers lines 514-516
@@ -658,7 +658,7 @@ async def test_p2_device_trigger_edge_cases(hass: HomeAssistant):
         "object": "beta",
         "where": "gamma",
     }
-    hass.bus.async_fire(DOMAIN, event_non_numeric.data)
+    hass.bus.async_fire(f"{DOMAIN}_cen_event", event_non_numeric.data)
     await hass.async_block_till_done()
     action_cb.assert_not_called()
     unsub2()
@@ -678,8 +678,17 @@ async def test_p6_gateway_cen_registration_and_mac_edges(hass: HomeAssistant):
     handler.config_entry = None
     handler._ensure_cen_device(15, "11")
 
-    # 3. _ensure_cen_device exception handling when dr.async_get raises (lines 129-130)
+    # 3. _ensure_cen_device already registered return (line 106)
     handler.config_entry = MagicMock()
     handler.config_entry.entry_id = "test_entry"
+    handler._ensure_cen_device(15, "11")
+
+    # 4. _ensure_cen_device non-integer object_id (lines 112-113)
+    handler._ensure_cen_device(15, "non_int_obj")
+
+    # 5. _ensure_cen_device who == 25 for CEN+ (lines 120-121)
+    handler._ensure_cen_device(25, "1")
+
+    # 6. _ensure_cen_device exception handling when dr.async_get raises (lines 129-130)
     with patch("homeassistant.helpers.device_registry.async_get", side_effect=RuntimeError("Registry error")):
         handler._ensure_cen_device(15, "12")
