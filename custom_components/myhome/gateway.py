@@ -53,6 +53,7 @@ from .const import (
     CONF_SSDP_ST,
     CONF_UDN,
     DOMAIN,
+    GATEWAY_DEVICE_TYPE_MAP,
     LOGGER,
 )
 
@@ -526,17 +527,7 @@ class MyHOMEGatewayHandler:
         # ── Dimension 15: Hardware Device Type ───────────────────────────
         if dim == 15 and dim_val:
             raw_type = str(dim_val[0])
-            mapped_model: str | None = None
-            if raw_type in ("2", "11"):
-                mapped_model = "MyHomeServer1"
-            elif raw_type == "200":
-                mapped_model = "F454"
-            elif raw_type == "4":
-                mapped_model = "MH200N"
-            elif raw_type in ("6", "7"):
-                mapped_model = "F452"
-            elif raw_type == "13":
-                mapped_model = "H4684"
+            mapped_model = GATEWAY_DEVICE_TYPE_MAP.get(raw_type)
 
             if mapped_model and mapped_model.lower() != str(self.gateway.model_name).lower():
                 LOGGER.info(
@@ -566,8 +557,6 @@ class MyHOMEGatewayHandler:
         # ── Dimension 16: Firmware Version ───────────────────────────────
         elif dim == 16:
             fw = getattr(message, "firmware_version", getattr(message, "_firmware_version", None))
-            if not fw and dim_val and len(dim_val) >= 3:
-                fw = f"{dim_val[0]}.{dim_val[1]}.{dim_val[2]}"
             if fw and fw != self.gateway.firmware:
                 LOGGER.info(
                     "%s Auto-detected gateway firmware `%s` via WHO=13 Dimension 16.",

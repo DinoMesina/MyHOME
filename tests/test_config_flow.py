@@ -793,7 +793,7 @@ async def test_custom_manual_invalid_address(hass: HomeAssistant) -> None:
     handler._custom_address = "999.999.999.999"  # Invalid IP triggers lines 222-223
     handler._custom_port = 20000
 
-    res = await handler.async_step_custom_manual(user_input={"serialNumber": "00:03:50:00:12:34", "modelName": "F454"})
+    res = await handler.async_step_custom_manual(user_input={"serialNumber": "00:03:50:00:12:34", "modelName": "CustomUnlistedModel"})
     assert res["type"] == FlowResultType.FORM
     assert res["errors"]["address"] == "invalid_ip"
 
@@ -861,9 +861,9 @@ async def test_options_flow_update_gateway_model(hass: HomeAssistant) -> None:
             CONF_HOST: "192.168.1.135",
             CONF_PORT: 20000,
             CONF_MAC: "00:03:50:00:12:34",
-            CONF_NAME: "F454",
+            CONF_NAME: "CustomUnlistedModel",
         },
-        title="F454 Gateway",
+        title="CustomUnlistedModel Gateway",
         unique_id="00:03:50:00:12:34",
     )
     entry.add_to_hass(hass)

@@ -138,5 +138,13 @@ def test_bus_monitor_deduplication():
     assert monitor.total_tx == 1
     assert len(monitor.get_recent_frames()) == 3
 
+    # An entry beyond the dedup window breaks loop and allows re-recording
+    monitor._recent_signatures.clear()
+    monitor._recent_signatures.append((0.0, "rx", "*1*1*12##"))
+    f5 = monitor.record_frame(direction="rx", raw="*1*1*12##")
+    assert f5.raw == "*1*1*12##"
+    assert monitor.total_rx == 3
+
+
 
 

@@ -1107,6 +1107,22 @@ def test_handle_gateway_diagnostics_dimension_15_and_16(gateway_handler, mock_co
         assert gateway_handler.firmware == "2.60.46"
         assert mock_dev_reg.async_update_device.call_args[1]["sw_version"] == "2.60.46"
 
+        # 3. Dimension 15: Same model again (no duplicate update)
+        mock_dev_reg.reset_mock()
+        gateway_handler._handle_gateway_diagnostics(msg_dim15)
+        assert not mock_dev_reg.async_update_device.called
+
+        # 4. Dimension 15: Unknown type (999) -> None
+        msg_dim15_unknown = OWNEvent.parse("*#13**15*999##")
+        gateway_handler._handle_gateway_diagnostics(msg_dim15_unknown)
+        assert not mock_dev_reg.async_update_device.called
+
+        # 5. Dimension 16: Same firmware again (no duplicate update)
+        mock_dev_reg.reset_mock()
+        gateway_handler._handle_gateway_diagnostics(msg_dim16)
+        assert not mock_dev_reg.async_update_device.called
+
+
 
 
 

@@ -175,6 +175,17 @@ SUPPORTED_GATEWAY_MODELS = [
     "Generic",
 ]
 
+GATEWAY_DEVICE_TYPE_MAP = {
+    "2": "MyHomeServer1",
+    "11": "MyHomeServer1",
+    "200": "F454",
+    "4": "MH200N",
+    "6": "F452",
+    "7": "F452",
+    "13": "H4684",
+}
+
+
 
 
 def build_timed_turn_on_command(
