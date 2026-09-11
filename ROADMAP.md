@@ -117,9 +117,123 @@ Modern installations stream digital music from **Music Assistant**, **Spotify Co
 
 ---
 
+## 📊 Real-World Trace Coverage Schematic (What We Have vs. What We Need)
+
+To eliminate regression risks and verify complex timing constraints, our **Trace Replay Engine** (`tests/test_trace_replay.py`) replays authentic on-wire captures against the Home Assistant integration. 
+
+Below is the definitive schematic of which gateways and subsystems are **already covered by real-world captures in CI**, and where we **still need community recordings**.
+
+### 🗺️ System Coverage Overview
+
+```mermaid
+graph TD
+    subgraph Gateways["🏛️ Gateways & Transports"]
+        GW_MHS1["🟢 MyHomeServer1<br/>(Full 70+ dev plant)"]
+        GW_F454["🟢 F454<br/>(High-speed IP)"]
+        GW_F461["🟢 F461<br/>(DIN Web Server)"]
+        GW_3578["🟡 Legrand 3578<br/>(Serial/ZigBee Loopback)"]
+        GW_MH200["🔴 MH200 / MH200N<br/>(1-2 Session Legacy)"]
+        GW_MH202["🔴 MH202 / MH201<br/>(Scenario Gateways)"]
+        GW_F455["🔴 F455<br/>(Dual-Bus Routing)"]
+    end
+
+    subgraph Subsystems["⚙️ Protocol Subsystems & Scenarios"]
+        SUB_LIGHT["🟢 Lighting / Relays (WHO 1)<br/>(4-digit & on/off covered)"]
+        SUB_DALI["🟢 DALI DT8 / RGB (WHO 1)<br/>(Dim 14 Tunable White)"]
+        SUB_TIMER["🟡 DIN Bus Timers (WHO 1)<br/>(Synthetic test covered)"]
+        SUB_GRP["🔴 Lighting Groups (P7)<br/>(#group / WHERE=0 sweeps)"]
+        SUB_COV_V["🟢 Covers Virtual (WHO 2)<br/>(Travel-time positioning)"]
+        SUB_COV_H["🟢 Covers Hardware (WHO 2)<br/>(Dim 10 status covered)"]
+        SUB_COV_CAL["🔴 Cover Calibration (P3)<br/>(shutterRun=AUTO traces)"]
+        SUB_CU3550["🟢 Central Unit 3550 (WHO 4)<br/>(99-zone master mode)"]
+        SUB_CU4695["🔴 Central Unit 4695 (WHO 4)<br/>(4-zone master mode)"]
+        SUB_ENERGY["🟢 Energy Management (WHO 18)<br/>(W, V, mA live frames)"]
+        SUB_DRY["🟢 Dry Contacts (WHO 25)<br/>(Technical alarms & AUX)"]
+        SUB_CEN["🟡 Physical Pushbuttons (WHO 15/25)<br/>(Rapid multi-click / held)"]
+        SUB_ALARM["🟡 Burglar Alarm (WHO 5)<br/>(Partitions & central unit)"]
+        SUB_ROUTER["🟡 F422 Bus Router<br/>(Cross-bus #4# routing)"]
+    end
+
+    subgraph Engine["🧪 CI Test Suite"]
+        HARNESS["tests/test_trace_replay.py<br/>(100% Deterministic Replay)"]
+    end
+
+    GW_MHS1 --> HARNESS
+    GW_F454 --> HARNESS
+    GW_F461 --> HARNESS
+    SUB_LIGHT --> HARNESS
+    SUB_DALI --> HARNESS
+    SUB_COV_V --> HARNESS
+    SUB_COV_H --> HARNESS
+    SUB_CU3550 --> HARNESS
+    SUB_ENERGY --> HARNESS
+    SUB_DRY --> HARNESS
+
+    classDef covered fill:#2e7d32,stroke:#1b5e20,color:#ffffff;
+    classDef partial fill:#f57f17,stroke:#e65100,color:#ffffff;
+    classDef needed fill:#c62828,stroke:#b71c1c,color:#ffffff;
+
+    class GW_MHS1,GW_F454,GW_F461,SUB_LIGHT,SUB_DALI,SUB_COV_V,SUB_COV_H,SUB_CU3550,SUB_ENERGY,SUB_DRY covered;
+    class GW_3578,SUB_TIMER,SUB_CEN,SUB_ALARM,SUB_ROUTER partial;
+    class GW_MH200,GW_MH202,GW_F455,SUB_GRP,SUB_COV_CAL,SUB_CU4695 needed;
+```
+
+---
+
+### 🏛️ Table 1: Gateway Models & Hardware Transports
+
+| Gateway Model | Status | Current Evidence / Fixture | Community Trace Needed / Target Scenario |
+|---|---|---|---|
+| **MyHomeServer1 (MHS1)** | 🟢 **Covered** | `tests/fixtures/plants/issue_247_nicolacavallo84/` (100 on-wire frames from @nicolacavallo84) | *None needed — full production plant active in CI.* |
+| **F454** | 🟢 **Covered** | `tests/fixtures/plants/issue_247_nicolacavallo84/` | *None needed — full high-speed IP session active in CI.* |
+| **F461 Web Server** | 🟢 **Covered** | Issue #273 capture (@lyubomirtraykov) | *None needed — DALI DT8 ballasts verified.* |
+| **Legrand 3578 USB/Serial** | 🟡 **Partial** | Unit test loopback in `tests/test_gateway.py` | **Real-world USB serial stream**: Raw byte capture from physical OpenZigBee installation (`WHERE=<id>#9`). |
+| **MH200 / MH200N** | 🔴 **Needed** | Synthetic gateway profile tests only | **Heavy scenario burst trace**: Bus capture while MH200 executes complex scenarios under strict 1–2 session socket limits. |
+| **MH202 / MH201** | 🔴 **Needed** | Synthetic gateway profile tests only | **Production plant trace**: General residential traffic through an MH201/MH202 scenario programmer. |
+| **F455** | 🔴 **Needed** | Synthetic dual-bus profile tests only | **Dual-bus cross-routing trace**: Simultaneous traffic routing between Bus 1 and Bus 2. |
+| **F452 / F453AV / AM4890** | 🟡 **Synthetic** | Factory golden frames from `openwebnet4j` | **General trace**: Normal residential bus captures welcomed to expand gateway diversity. |
+
+---
+
+### ⚙️ Table 2: Subsystems, Dimensions & Edge Scenarios
+
+| Subsystem & Domain | Status | Current Evidence / Fixture | Community Trace Needed / Target Scenario |
+|---|---|---|---|
+| **Lighting (WHO = 1) — Relays & Dimmers** | 🟢 **Covered** | Nicola Cavallo capture (F411U2, F418, 4-digit addressing `1000`, `0910`) | *Baseline covered.* |
+| **Lighting (WHO = 1) — DALI Tunable White** | 🟢 **Covered** | Lyubomir Traykov capture (Dimension 14, Kelvin 2000K–6535K / mireds) | *Baseline covered.* |
+| **Lighting (WHO = 1) — Native DIN Timers** | 🟡 **Synthetic** | Unit tests in `tests/test_timed_lighting.py` | **Actuator countdown trace**: Capture of physical F411 relay executing Dim 2 (`*#1*WHERE*#2*H*M*S##`) or preset temporization. |
+| **Lighting (WHO = 1) — Groups & General (P7)** | 🔴 **CRITICAL** | None (deferred in RFC #248) | **Group actuation trace**: Capture of physical bus frames when sending `#group` (`*1*1*#1##`) or all-off (`*1*0*0##`), showing whether your gateway emits individual status replies! |
+| **Covers (WHO = 2) — Travel-Time Positioning** | 🟢 **Covered** | Nicola Cavallo capture (`*2*0*42##`, LN4661M2) | *Baseline covered.* |
+| **Covers (WHO = 2) — Hardware Feedback** | 🟢 **Covered** | Nicola Cavallo capture (`*#2*73*10*10*0*001*0##`) | *Baseline covered.* |
+| **Covers (WHO = 2) — Calibration (P3)** | 🔴 **Needed** | Synthetic dimension 10 tests only | **Hardware calibration trace**: Bus recording during physical calibration (`shutterRun=AUTO`) on Legrand 67557, LN4672M2, or F401. |
+| **Thermoregulation (WHO = 4) — 99-Zone CU 3550** | 🟢 **Covered** | Nicola Cavallo capture (`#0` central unit + zone thermostats) | *Baseline covered.* |
+| **Thermoregulation (WHO = 4) — 4-Zone CU 4695** | 🔴 **Needed** | Synthetic unit tests in `tests/test_climate.py` | **4-zone central unit trace**: Physical capture from a plant running a 4-zone 4695 / HD4695 (`#0#1`) central unit. |
+| **Thermoregulation (WHO = 4) — 4-Pipe Fancoil** | 🟡 **Synthetic** | Unit tests with dimension 11 | **4-pipe heating/cooling trace**: Physical speed toggles on 4-pipe fancoil systems. |
+| **Burglar Alarm (WHO = 5)** | 🟡 **Synthetic** | Golden frames from `openwebnet4j` | **Central unit alarm trace**: Arm/disarm/alarm frames from physical 3485 / 3486 central units. |
+| **CEN / CEN+ (WHO = 15 / 25) — Dry Contacts** | 🟢 **Covered** | Nicola Cavallo capture (F482V12 / 3477 binary sensors) | *Baseline covered.* |
+| **CEN / CEN+ (WHO = 15 / 25) — Pushbuttons** | 🟡 **Synthetic** | Unit tests in `tests/test_device_trigger.py` | **Physical wall switch bursts**: Rapid multi-click, held, and release events from physical pushbuttons under normal usage. |
+| **Sound System (WHO = 16) — Matrix & Proxy** | 🟢 **Covered** | Nicola Cavallo capture + mock F441 tests | *Baseline covered.* |
+| **Energy Management (WHO = 18)** | 🟢 **Covered** | Nicola Cavallo capture (30 frames of active power, 602 W) | *Baseline covered.* |
+| **F422 Cross-Bus Router** | 🟡 **Synthetic** | Unit tests with interface routing | **Routed multi-bus trace**: Frames routed across physical F422 interface routers (`WHERE#4#interface`). |
+
+---
+
+### 📋 How Community Testers Can Record & Submit a Missing Trace
+
+Providing a trace takes **less than 1 minute** and requires zero command-line expertise:
+
+1. Open your Home Assistant dashboard with the **MyHOME Bus Monitor Card** (`<myhome-bus-card>`).
+2. Perform the action on your physical installation (e.g. press a group switch, run a scenario on an MH200, or operate your 4695 central unit).
+3. Click the **`📋 Report Issue / Copy Trace`** button on the card.
+4. Paste the clipboard contents directly into [**RFC Discussion #248**](https://github.com/orgs/OpenWebNet-HA/discussions/248) or open an issue on GitHub.
+5. Our automated test harness will turn your real-world installation into a permanent CI regression fixture!
+
+---
+
 ## 💬 How to Participate
 
 Please share your feedback, real-world bus captures, and advice in our GitHub discussions:
 
 👉 **[Join the Community Discussion on RFC #248](https://github.com/orgs/OpenWebNet-HA/discussions/248)**  
 👉 **[Report Beta Issues or Submit Bus Traces](https://github.com/OpenWebNet-HA/MyHOME/issues)**
+
