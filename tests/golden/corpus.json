@@ -536,6 +536,90 @@
     "_file": "who01_lighting.yaml"
   },
   {
+    "id": "light.dim.reply.color_temp.170",
+    "frame": "*#1*25#4#02*14*170##",
+    "direction": "dimension_response",
+    "who": 1,
+    "what": null,
+    "where": "25",
+    "interface": "02",
+    "dimension": 14,
+    "dimension_values": [
+      "170"
+    ],
+    "source": "community-plant-capture",
+    "mcp_valid": true,
+    "mcp_notes": "Lighting: Color temperature reading 170 mireds (~5882 K) verified on BTicino F461 + DALI DT8",
+    "roundtrip": true,
+    "_file": "who01_lighting.yaml"
+  },
+  {
+    "id": "light.dim.write.color_temp.170",
+    "frame": "*#1*25#4#02*#14*170##",
+    "direction": "dimension_write",
+    "who": 1,
+    "what": null,
+    "where": "25",
+    "interface": "02",
+    "dimension": 14,
+    "dimension_values": [
+      "170"
+    ],
+    "source": "community-plant-capture",
+    "mcp_valid": true,
+    "mcp_notes": "Lighting: Set color temperature to 170 mireds (~5882 K) verified on BTicino F461 + DALI DT8",
+    "roundtrip": true,
+    "builder": {
+      "class": "OWNLightingCommand",
+      "method": "set_color_temperature",
+      "args": [
+        "25#4#02",
+        170
+      ]
+    },
+    "_file": "who01_lighting.yaml"
+  },
+  {
+    "id": "light.dim.reply.level.dali.100",
+    "frame": "*#1*25#4#02*1*200*5##",
+    "direction": "dimension_response",
+    "who": 1,
+    "what": null,
+    "where": "25",
+    "interface": "02",
+    "dimension": 1,
+    "dimension_values": [
+      "200",
+      "5"
+    ],
+    "source": "community-plant-capture",
+    "mcp_valid": true,
+    "mcp_notes": "Lighting: Dimension 1 level reading (100% at speed 5) on private DALI bus 02",
+    "roundtrip": true,
+    "_file": "who01_lighting.yaml"
+  },
+  {
+    "id": "light.cmd.off.bus.25",
+    "frame": "*1*0*25#4#02##",
+    "direction": "command",
+    "who": 1,
+    "what": 0,
+    "where": "25",
+    "interface": "02",
+    "source": "community-plant-capture",
+    "mcp_valid": true,
+    "mcp_notes": "Lighting: Turn OFF at address '25' on private DALI bus 02",
+    "roundtrip": true,
+    "builder": {
+      "class": "OWNLightingCommand",
+      "method": "switch_off",
+      "args": [
+        "25#4#02"
+      ]
+    },
+    "_file": "who01_lighting.yaml"
+  },
+  {
     "id": "cover.cmd.up.ptp.93",
     "frame": "*2*1*93##",
     "direction": "command",
