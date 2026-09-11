@@ -35,15 +35,19 @@ jobs:
         run: |
           PYTHONPATH=. pytest tests/ --snapshot-update --cov=custom_components.myhome --cov-report=xml --cov-report=html --cov-report=term --junitxml=junit.xml
           python scripts/update_readme_coverage.py
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add "tests/**/__snapshots__/*" || true
-          git add "tests/__snapshots__/*" || true
-          git add "tests/snapshots/*" || true
-          git add coverage.svg || true
-          git add README.md || true
-          git commit -m "chore: auto-generate coverage badge & README table [skip ci]" || echo "No files changed"
-          git push || echo "No files pushed"
+          if [ "${{ github.event_name }}" = "push" ] && ([ "${{ github.ref }}" = "refs/heads/main" ] || [ "${{ github.ref }}" = "refs/heads/master" ] || [ "${{ github.ref }}" = "refs/heads/v2-phase1-architecture" ]); then
+            git config --global user.name "github-actions[bot]"
+            git config --global user.email "github-actions[bot]@users.noreply.github.com"
+            git add "tests/**/__snapshots__/*" || true
+            git add "tests/__snapshots__/*" || true
+            git add "tests/snapshots/*" || true
+            git add coverage.svg || true
+            git add README.md || true
+            if ! git diff --staged --quiet; then
+              git commit -m "chore: auto-generate coverage badge & README table [skip ci]"
+              git push || echo "No files pushed"
+            fi
+          fi
 
       - name: Enforce 100% test coverage on ownd core
         run: |

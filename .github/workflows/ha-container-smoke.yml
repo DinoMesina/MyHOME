@@ -7,15 +7,11 @@ on:
       - master
       - "v2-*"
       - "feat/*"
-    paths:
-      - "custom_components/**"
-      - "scripts/run_ha_container_smoke.py"
-      - ".github/workflows/ha-container-smoke.yml"
   pull_request:
-    paths:
-      - "custom_components/**"
-      - "scripts/run_ha_container_smoke.py"
-      - ".github/workflows/ha-container-smoke.yml"
+    branches:
+      - main
+      - master
+      - "v2-*"
   schedule:
     - cron: "0 4 * * 1"  # Weekly run every Monday at 04:00 UTC
   workflow_dispatch:
