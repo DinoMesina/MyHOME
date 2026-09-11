@@ -524,15 +524,75 @@ class MyHOMELight(MyHOMEEntity, LightEntity):
 
     async def async_added_to_hass(self):
         """Run when entity about to be added to hass."""
-        self._register_availability_listener()
-        self.async_on_remove(
-            async_dispatcher_connect(
-                self.hass,
-                f"myhome_update_{self._gateway_handler.mac}_1_{self._full_where}",
-                self.handle_event,
+        target_hass = self.hass or self._hass
+        if target_hass is not None:
+            self.async_on_remove(
+                async_dispatcher_connect(
+                    target_hass,
+                    f"myhome_update_{self._gateway_handler.mac}_1_{self._full_where}",
+                    self.handle_event,
+                )
             )
-        )
-        await self.async_update()
+        await super().async_added_to_hass()
+
+    async def async_restore_last_state(self, last_state) -> None:
+        """Restore previous state attributes and color modes."""
+        # 1. Restore color modes and features
+        last_modes = last_state.attributes.get("supported_color_modes")
+        if last_modes:
+            if ColorMode.RGB in last_modes or "rgb" in last_modes:
+                self._attr_supported_color_modes = {ColorMode.RGB}
+                self._attr_color_mode = ColorMode.RGB
+                self._attr_supported_features |= LightEntityFeature.TRANSITION
+                self._attr_supported_features &= ~LightEntityFeature.FLASH
+            elif ColorMode.COLOR_TEMP in last_modes or "color_temp" in last_modes:
+                self._attr_supported_color_modes = {ColorMode.COLOR_TEMP}
+                self._attr_color_mode = ColorMode.COLOR_TEMP
+                self._attr_supported_features |= LightEntityFeature.TRANSITION
+                self._attr_supported_features &= ~LightEntityFeature.FLASH
+            elif ColorMode.BRIGHTNESS in last_modes or "brightness" in last_modes:
+                self._attr_supported_color_modes = {ColorMode.BRIGHTNESS}
+                self._attr_color_mode = ColorMode.BRIGHTNESS
+                self._attr_supported_features |= LightEntityFeature.TRANSITION
+                self._attr_supported_features &= ~LightEntityFeature.FLASH
+
+        # 2. Restore brightness
+        last_brightness = last_state.attributes.get(ATTR_BRIGHTNESS)
+        if last_brightness is not None:
+            try:
+                self._attr_brightness = int(last_brightness)
+                self._attr_brightness_pct = eight_bits_to_percent(self._attr_brightness)
+                if self._attr_brightness_pct > 0:
+                    self._last_brightness_pct = self._attr_brightness_pct
+            except (ValueError, TypeError):
+                pass
+
+        # 3. Restore color temperature (Kelvin / mireds)
+        if last_state.attributes.get(ATTR_COLOR_TEMP_KELVIN) is not None:
+            try:
+                self._attr_color_temp_kelvin = int(last_state.attributes[ATTR_COLOR_TEMP_KELVIN])
+                self._attr_color_temp = color_temperature_kelvin_to_mired(self._attr_color_temp_kelvin)
+            except (ValueError, TypeError):
+                pass
+        elif last_state.attributes.get(ATTR_COLOR_TEMP) is not None:
+            try:
+                self._attr_color_temp = int(last_state.attributes[ATTR_COLOR_TEMP])
+                self._attr_color_temp_kelvin = color_temperature_mired_to_kelvin(self._attr_color_temp)
+            except (ValueError, TypeError):
+                pass
+
+        # 4. Restore RGB color
+        if last_state.attributes.get(ATTR_RGB_COLOR) is not None:
+            try:
+                self._attr_rgb_color = tuple(last_state.attributes[ATTR_RGB_COLOR])
+            except (ValueError, TypeError):
+                pass
+
+        # 5. Restore power state
+        if last_state.state == "on":
+            self._attr_is_on = True
+        elif last_state.state == "off":
+            self._attr_is_on = False
 
     async def async_update(self):
         """Update the entity.
@@ -700,6 +760,8 @@ class MyHOMELight(MyHOMEEntity, LightEntity):
 
             if ATTR_BRIGHTNESS not in kwargs and ATTR_BRIGHTNESS_PCT not in kwargs:
                 self._attr_is_on = True
+                if self._attr_brightness is None and self._last_brightness_pct:
+                    self._apply_brightness_state(self._last_brightness_pct, is_on=True)
                 self.async_schedule_update_ha_state()
                 return
 
@@ -723,6 +785,8 @@ class MyHOMELight(MyHOMEEntity, LightEntity):
 
             if ATTR_BRIGHTNESS not in kwargs and ATTR_BRIGHTNESS_PCT not in kwargs:
                 self._attr_is_on = True
+                if self._attr_brightness is None and self._last_brightness_pct:
+                    self._apply_brightness_state(self._last_brightness_pct, is_on=True)
                 self.async_schedule_update_ha_state()
                 return
 
@@ -780,7 +844,11 @@ class MyHOMELight(MyHOMEEntity, LightEntity):
         else:
             # plain on path (preserved)
             await self._gateway_handler.send(OWNLightingCommand.switch_on(self._full_where))
-            if ColorMode.BRIGHTNESS in self._attr_supported_color_modes:
+            if (
+                ColorMode.BRIGHTNESS in self._attr_supported_color_modes
+                or ColorMode.COLOR_TEMP in self._attr_supported_color_modes
+                or ColorMode.RGB in self._attr_supported_color_modes
+            ):
                 await self.async_update()
 
     async def async_turn_off(self, **kwargs):
@@ -827,7 +895,10 @@ class MyHOMELight(MyHOMEEntity, LightEntity):
             self._gateway_handler.log_id,
             message.human_readable_log,
         )
-        self._attr_is_on = message.is_on
+        if message.is_on is not None:
+            self._attr_is_on = message.is_on
+        elif message.brightness is not None:
+            self._attr_is_on = message.brightness > 0
 
         is_fading = bool(self._fade_task and not self._fade_task.done())
 
