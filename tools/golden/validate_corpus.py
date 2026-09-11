@@ -6,7 +6,6 @@ against tests/golden/schema.json, ensuring ID uniqueness,
 raw frame uniqueness, and schema conformity.
 """
 import json
-import os
 import sys
 from pathlib import Path
 
