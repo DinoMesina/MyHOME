@@ -121,6 +121,7 @@ async def test_p2_gateway_cen_string_preservation_and_event_enrichment(hass: Hom
 
     with patch.object(gateway, "_ensure_cen_device") as mock_ensure:
         await gateway._process_message(cen_msg)
+        await hass.async_block_till_done()
 
         mock_ensure.assert_called_once_with(15, "0001")
         assert len(fired_events) == 1

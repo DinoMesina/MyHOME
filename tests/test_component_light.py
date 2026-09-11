@@ -1182,6 +1182,19 @@ def test_dali_rgb_detection(hass):
     assert light.supported_features & LightEntityFeature.TRANSITION
     assert not (light.supported_features & LightEntityFeature.FLASH)
 
+    # Receive DALI HSV event where rgb attribute is None (covers HS to RGB conversion)
+    mock_hs_event = MagicMock()
+    mock_hs_event.hs = (180, 50)
+    mock_hs_event.hue = 180
+    mock_hs_event.saturation = 50
+    mock_hs_event.rgb = None
+    mock_hs_event.value = 80
+    mock_hs_event.brightness = None
+    mock_hs_event.brightness_preset = None
+    light.handle_event(mock_hs_event)
+    assert light.hs_color == (180.0, 50.0)
+    assert light.rgb_color == (127, 255, 255)
+
 
 def test_dali_rgb_unsupported_sentinel(hass):
     """Test that sentinel dimension 12 values (511, 127, 255) do NOT promote light to HS."""
@@ -1274,6 +1287,22 @@ async def test_dali_rgb_turn_on_commands(hass):
     mock_gateway.send.assert_called_once()
     sent_cmd = mock_gateway.send.call_args[0][0]
     assert sent_cmd._raw == "*#1*25#4#02*#12*120*100*100##"
+
+    # Turn on with brightness_pct
+    mock_gateway.send.reset_mock()
+    await light.async_turn_on(hs_color=(200.0, 50.0), brightness_pct=75)
+    mock_gateway.send.assert_called_once()
+    sent_cmd = mock_gateway.send.call_args[0][0]
+    assert sent_cmd._raw == "*#1*25#4#02*#12*200*50*75##"
+
+    # Turn on when neither brightness nor last_brightness exists (defaults to 100)
+    light._attr_brightness_pct = None
+    light._last_brightness_pct = None
+    mock_gateway.send.reset_mock()
+    await light.async_turn_on(hs_color=(100.0, 40.0))
+    mock_gateway.send.assert_called_once()
+    sent_cmd = mock_gateway.send.call_args[0][0]
+    assert sent_cmd._raw == "*#1*25#4#02*#12*100*40*100##"
 
     # Test async_update queries both brightness and HSV color
     mock_gateway.send_status_request.reset_mock()
@@ -1559,6 +1588,54 @@ async def test_dali_rgb_reboot_state_restoration(hass):
     assert light.is_on is True
     assert light.brightness == 180
     assert light.rgb_color == (255, 128, 64)
+
+
+async def test_dali_hs_native_reboot_state_restoration(hass):
+    """Test restoring native HS color attributes and power state across reboots."""
+    from homeassistant.core import State
+
+    mock_gateway = MagicMock()
+    mock_gateway.mac = "AA:BB:CC:DD:EE:FF"
+    mock_gateway.send = AsyncMock()
+    mock_gateway.send_status_request = AsyncMock()
+    mock_gateway.availability_signal = "myhome_avail"
+
+    light = MyHOMELight(
+        hass=hass,
+        name="DALI HS",
+        entity_name=None,
+        icon=None,
+        icon_on=None,
+        device_id="25#4#02",
+        who="1",
+        where="25",
+        interface="02",
+        dimmable=False,
+        manufacturer="BTicino",
+        model="DALI Gateway",
+        gateway=mock_gateway,
+    )
+
+    last_state = State(
+        "light.dali_hs",
+        "on",
+        {
+            "supported_color_modes": ["hs"],
+            "brightness": 200,
+            "hs_color": [120.0, 100.0],
+        },
+    )
+    light.async_get_last_state = AsyncMock(return_value=last_state)
+    light.async_schedule_update_ha_state = MagicMock()
+
+    await light.async_added_to_hass()
+
+    assert ColorMode.HS in light.supported_color_modes
+    assert light.color_mode == ColorMode.HS
+    assert light.is_on is True
+    assert light.brightness == 200
+    assert light.hs_color == (120.0, 100.0)
+    assert light.rgb_color == (0, 255, 0)
 
 
 async def test_dali_tunable_white_mired_only_reboot_restoration(hass):
