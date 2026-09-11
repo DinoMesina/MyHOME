@@ -50,7 +50,7 @@ def get_pinned_version() -> str:
 def run_cmd(cmd: List[str], check: bool = True) -> subprocess.CompletedProcess:
     """Execute command with formatted logging."""
     print(f"[EXEC] {' '.join(cmd)}")
-    env = {**os.environ, "PYTHONPATH": str(REPO_ROOT)}
+    env = {**os.environ, "PYTHONPATH": str(REPO_ROOT), "OWND_SMOKE_TEST": "1"}
     return subprocess.run(cmd, check=check, text=True, cwd=str(REPO_ROOT), env=env)
 
 
