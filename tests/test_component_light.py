@@ -981,7 +981,7 @@ async def test_light_async_added_to_hass_requests_initial_state(hass):
 
     with patch.object(light, "async_on_remove") as mock_on_remove:
         await light.async_added_to_hass()
-        mock_on_remove.assert_called_once()
+        assert mock_on_remove.call_count == 2
         mock_gateway.send_status_request.assert_called_once()
 
     # Verify dimmable light requests brightness status
