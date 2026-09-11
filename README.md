@@ -29,6 +29,7 @@ Maintained by the **[OpenWebNet-HA](https://github.com/OpenWebNet-HA)** communit
 
 - **Strongly Typed CEN / CEN+ Device Triggers & Addressing (P2)**: Native Home Assistant UI device triggers for scenario buttons with string-preserved addressing (`"0001"`, `"01"`, `"15"`), enriched event payloads (`where`, `gateway_mac`, `entry_id`), and all 8 press/release/held actions without requiring external YAML blueprints.
 - **Native Hardware Bus Light & Switch Timers (`WHO=1`)**: Hardware-offloaded countdown timers executed directly on Legrand DIN actuators (F411, etc.) via `myhome.turn_on_timed` or native `timer`/`duration` parameters in `light.turn_on` and `switch.turn_on`. Supports standard Legrand preset codes (0.5s, 30s, 1m, 2m, 3m, 4m, 5m, 15m) and custom Dimension 2 (`*#1*WHERE*#2*H*M*S##`) durations that turn off automatically even if Home Assistant restarts.
+- **Real-World Gateway Trace Replay Fixtures in CI (P5)**: Automated pytest fixture engine (`tests/test_trace_replay.py`) replaying frozen on-wire bus captures from production gateways directly against the integration state machine, enabling deterministic bug reproduction and permanent regression defense for community beta testers without requiring physical hardware.
 - **Thermoregulation Central Unit Coordination (P4)**: Dedicated master coordination for 99-zone Central Unit (`#0`, model `Central Unit (3550)`) and 4-zone Central Unit (`#0#1`, model `Central Unit (4695)`). Master Heating/Cooling switches (`*4*3xx*#0##`) propagate across internal dispatchers to subordinate zones (`standalone=False`), automatically synchronizing whole-home climate operations with physical central units.
 - **Multi-Gateway Routing & Plant Isolation (P6)**: Namespaced event dispatchers (`f"myhome_cen_event_{mac}"`, `f"myhome_central_mode_{mac}"`) and device trigger filtering by parent gateway MAC (`via_device`), eliminating cross-talk and phantom triggers across physical plants combining multiple gateways (e.g. F454 + MH200N / MH201).
 - **DALI Tunable White & Color Temperature**: Native support for DALI DT8 ballasts (F429 / F461 gateways) with auto-detection of color temperature (`ColorMode.COLOR_TEMP`, 2000K–6535K / mireds), seamless Kelvin/mireds conversion, and sentinel filtering.
@@ -362,6 +363,41 @@ To download a sanitized diagnostic bundle:
 1. Navigate to **Settings → Devices & Services → MyHOME**.
 2. Click the **three dots (`⋮`)** next to your gateway and select **Download diagnostics**.
 3. All sensitive credentials, IP addresses, and tokens are automatically redacted via `CONF_PASSWORD` and `CONF_HOST` anonymizers before being saved to JSON.
+
+### 🧪 Real-World Gateway Trace Replay & Community Issue Reproduction (P5)
+
+A major CI infrastructure enhancement introduced for beta testing is the **Trace Replay Engine** (`tests/test_trace_replay.py`), enabling deterministic bug reproduction and permanent regression defense:
+
+```
+┌──────────────────────────────────────┐
+│  Beta Tester's Real Plant            │
+│  (F454, MyHomeServer1, MH202, etc.)  │
+└──────────────────┬───────────────────┘
+                   │
+                   │ 1-Click "📋 Report Issue / Copy Trace" in Bus Monitor Card
+                   ▼
+┌──────────────────────────────────────┐
+│  diagnostic_summary.json             │
+│  (100 frozen on-wire frames + config)│
+└──────────────────┬───────────────────┘
+                   │
+                   │ Saved to tests/fixtures/plants/<issue_id>/
+                   ▼
+┌──────────────────────────────────────┐
+│  Automated Pytest Replay Engine      │
+│  - Replays 100% of frames in order   │
+│  - Reproduces bug deterministically  │
+│  - Permanent regression protection   │
+└──────────────────────────────────────┘
+```
+
+#### How it Works:
+1. **Zero Hardware Needed for Bug Triage**: Legrand and BTicino manufacture dozens of gateway models (F454, MyHomeServer1, MH200N, MH202, 3578 USB) and modular DIN actuators with subtle firmware timing variations. When a beta tester reports unexpected behavior, clicking **"📋 Report Issue / Copy Trace"** on the Bus Monitor card (or downloading HA Diagnostics) packages the last 100 on-wire OpenWebNet frames with precise microsecond timestamps.
+2. **Automated Discovery & Plant Setup**: Pytest automatically scans `tests/fixtures/plants/*/` for any directory containing `diagnostic_summary.json` and `myhome.yaml`.
+3. **Sequential On-Wire Replay**: The harness initializes a simulated gateway session and streams the frozen frames sequentially into Home Assistant's internal event dispatcher (`f"myhome_message_{mac}"`), exercising the exact same message routing path as physical hardware.
+4. **End-to-End State Verification**: Verifies that every single frame across Lighting (`WHO=1`), Automation (`WHO=2`), Thermoregulation (`WHO=4`), Audio (`WHO=16`), Energy (`WHO=18`), Dry Contacts (`WHO=25`), and ACK/NACK control signals updates entity states accurately with zero unhandled exceptions.
+5. **High-Frequency Stress Testing**: Simulates event storms (e.g. 50 rapid toggle frames) to prove that the integration's async event queue and state machines never drop messages or trigger race conditions.
+6. **Permanent CI Regression Protection**: Once a tester's trace is committed, it runs automatically on every pull request and push to master, ensuring that a fix for one community member's installation never regresses in future updates.
 
 ---
 

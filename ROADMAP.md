@@ -128,9 +128,9 @@ Closing remaining protocol fidelity gaps identified in the openHAB / openwebnet4
 - **🪟 Cover Calibration & Dynamic Hardware Position Promotion (P3)**:
   - Dynamically promote discovered covers to advanced positioning when dimension 10 frames arrive from Legrand 67557 / LN4672M2 / F401 actuators.
   - Implement a calibration service (`shutterRun=AUTO`) to measure actual physical run times directly from the bus rather than relying on manual travel time estimation.
-- **🧪 Real-World Gateway Trace Replay Fixtures in CI (P5)**:
-  - Build an automated pytest fixture harness replaying frozen bus captures recorded from real-world gateways (MH200, F454, MyHomeServer1, 3578 USB) via `<myhome-bus-card>`.
-  - Prevent subtle gateway-specific timing and framing regressions from ever reaching master.
+- **🧪 Real-World Gateway Trace Replay Fixtures in CI (P5)** *(✅ Promoted to Beta v2.0.0b11)*:
+  - Automated pytest fixture harness (`tests/test_trace_replay.py`) replaying frozen bus captures recorded from real-world gateways (F454, MyHomeServer1, MH202, 3578 USB) via `<myhome-bus-card>` and Home Assistant Diagnostics.
+  - Empowers community beta testing with instant, deterministic bug reproduction without physical hardware and prevents regressions across PRs.
 
 ---
 
