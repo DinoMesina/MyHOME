@@ -36,8 +36,6 @@ class MyHOMEEntity(Entity):
         clean_dev_id = str(self._device_id)
         if clean_dev_id.startswith(f"{self._who}-"):
             clean_dev_id = clean_dev_id[len(f"{self._who}-") :]
-        elif clean_dev_id.startswith(f"{self._who}_"):
-            clean_dev_id = clean_dev_id[len(f"{self._who}_") :]
 
         self._attr_unique_id = f"{gateway.mac}-{self._who}-{clean_dev_id}"
         self._manufacturer = manufacturer or "BTicino S.p.A."

@@ -7,7 +7,6 @@ from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_MAC, CONF_PASSWORD
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import entity_registry as er
 
 from .const import (
     CONF_ENTITIES,
@@ -80,15 +79,6 @@ async def async_get_config_entry_diagnostics(
     entities_dict = domain_data.get(CONF_ENTITIES, {})
     for platform_name, entities in entities_dict.items():
         platforms_info[platform_name] = len(entities)
-
-    # Fallback to entity registry if domain_data entities dict was empty
-    if not any(platforms_info.values()):
-        try:
-            entity_registry = er.async_get(hass)
-            for ent in er.async_entries_for_config_entry(entity_registry, entry.entry_id):
-                platforms_info[ent.domain] = platforms_info.get(ent.domain, 0) + 1
-        except Exception:
-            pass
 
     return {
         "integration_version": INTEGRATION_VERSION,

@@ -551,16 +551,7 @@ class MyHOMEDryContact(MyHOMEEntity, BinarySensorEntity):
         self._attr_device_class = device_class
         self._attr_name = entity_name if entity_name else self._attr_device_class.replace("_", " ").capitalize()
 
-        clean_dev_id = str(self._device_id)
-        if clean_dev_id.startswith(f"{self._who}-"):
-            clean_dev_id = clean_dev_id[len(f"{self._who}-") :]
-        elif clean_dev_id.startswith(f"{self._who}_"):
-            clean_dev_id = clean_dev_id[len(f"{self._who}_") :]
-
-        if self._attr_device_class:
-            self._attr_unique_id = f"{gateway.mac}-{self._who}-{clean_dev_id}-{self._attr_device_class}"
-        else:
-            self._attr_unique_id = f"{gateway.mac}-{self._who}-{clean_dev_id}"
+        self._attr_unique_id = f"{gateway.mac}-{self._device_id}-{self._attr_device_class}"
 
         self._attr_is_on = False
         sensor_attr = f"({self._where[0]}){self._where[1:]}" if self._where else ""
@@ -660,16 +651,10 @@ class MyHOMEAuxiliary(MyHOMEEntity, BinarySensorEntity):
         else:
             self._attr_name = name
 
-        clean_dev_id = str(self._device_id)
-        if clean_dev_id.startswith(f"{self._who}-"):
-            clean_dev_id = clean_dev_id[len(f"{self._who}-") :]
-        elif clean_dev_id.startswith(f"{self._who}_"):
-            clean_dev_id = clean_dev_id[len(f"{self._who}_") :]
-
         if self._attr_device_class:
-            self._attr_unique_id = f"{gateway.mac}-{self._who}-{clean_dev_id}-{self._attr_device_class}"
+            self._attr_unique_id = f"{gateway.mac}-{self._device_id}-{self._attr_device_class}"
         else:
-            self._attr_unique_id = f"{gateway.mac}-{self._who}-{clean_dev_id}"
+            self._attr_unique_id = f"{gateway.mac}-{self._device_id}"
 
         self._attr_is_on = False
         self._attr_extra_state_attributes = {"Auxiliary channel": self._where}
@@ -755,16 +740,7 @@ class MyHOMEMotionSensor(MyHOMEEntity, BinarySensorEntity, RestoreEntity):
         self._attr_device_class = device_class
         self._attr_name = entity_name if entity_name else self._attr_device_class.replace("_", " ").capitalize()
 
-        clean_dev_id = str(self._device_id)
-        if clean_dev_id.startswith(f"{self._who}-"):
-            clean_dev_id = clean_dev_id[len(f"{self._who}-") :]
-        elif clean_dev_id.startswith(f"{self._who}_"):
-            clean_dev_id = clean_dev_id[len(f"{self._who}_") :]
-
-        if self._attr_device_class:
-            self._attr_unique_id = f"{gateway.mac}-{self._who}-{clean_dev_id}-{self._attr_device_class}"
-        else:
-            self._attr_unique_id = f"{gateway.mac}-{self._who}-{clean_dev_id}"
+        self._attr_unique_id = f"{gateway.mac}-{self._device_id}-{self._attr_device_class}"
         self._attr_should_poll = True
         self._attr_is_on = False
         where_str = str(self._where)
