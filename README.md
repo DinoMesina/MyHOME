@@ -379,6 +379,10 @@ pytest --cov=custom_components.myhome --cov-report=term-missing tests/
 python scripts/run_ha_container_smoke.py --channel stable
 python scripts/run_ha_container_smoke.py --channel all
 
+# Run OWNd protocol engine smoke test (pinned, latest, dev, or all)
+python scripts/run_ownd_smoke.py --target pinned
+python scripts/run_ownd_smoke.py --target all
+
 # Validate PyPI packaging and PEP 517 compliance
 python -m build
 twine check --strict dist/*
@@ -407,6 +411,30 @@ This runner:
 4. Validates clean import of all 14 integration platform modules.
 5. Boots Home Assistant in daemon mode and verifies zero exceptions and zero asyncio loop-blocking warnings.
 
+### ⚡ OWNd Protocol Engine Smoke Testing
+
+To verify protocol engine compatibility and prevent regressions across upstream library distributions:
+
+```bash
+# Run against pinned PyPI version (manifest.json lockstep)
+python scripts/run_ownd_smoke.py --target pinned
+
+# Run against latest PyPI pre-release
+python scripts/run_ownd_smoke.py --target latest
+
+# Run against upstream development branch (OWNd@master)
+python scripts/run_ownd_smoke.py --target dev
+
+# Test all distribution targets across the matrix
+python scripts/run_ownd_smoke.py --target all
+```
+
+This runner executes 4 validation gates:
+1. **Metadata Lockstep**: Verifies that `manifest.json` and `const.py` (`REQUIRED_OWND_VERSION`) match the installed package.
+2. **Golden Corpus Conformance**: Runs 191 OpenWebNet frame fixtures (`tests/test_golden_conformance.py`) verifying parser extraction and builder parity.
+3. **Platform Clean Imports**: Verifies all 14 integration platform modules import cleanly without missing symbols or deprecation errors.
+4. **Mock Gateway TCP Loopback**: Boots a mock OpenWebNet TCP server, negotiates session handshake (`*99*0##`), dispatches commands, and verifies frame parsing end-to-end.
+
 See the [F454 regression checks](docs/f454-regression-checks.md) for the fixes,
 automated coverage and physical gateway verification steps.
 
@@ -415,6 +443,7 @@ automated coverage and physical gateway verification steps.
 - **`validate`**: Official HACS compliance checks.
 - **`test-coverage`**: 1207 automated unit tests with snapshot matching and 100% line coverage enforcement on the `ownd` core package.
 - **`ha-container-smoke`**: Automated containerized smoke testing against official Home Assistant Docker images (`stable`, `beta`, `dev`) verifying `check_config`, clean platform module imports, and zero asyncio loop-blocking calls.
+- **`ownd-smoke`**: Automated smoke testing of the `OWNd` protocol engine across `pinned`, `latest`, and `upstream-dev` distributions on Python 3.12 and 3.13.
 - **`ha-upstream-compat`**: Continuous integration testing against upstream Home Assistant Stable, Beta, and Dev channels.
 - **`ha_standards`**: Automated architectural standards enforcement (`verify_ha_standards.py` / `test_ha_standards.py`) ensuring user-confirmed discovery flows, complete step translations, no deprecated constants, and no blocking calls in async coroutines.
 - **`pypi_standards`**: Strict wheel hygiene, metadata verification, and packaging checks.
