@@ -2,6 +2,12 @@
   <img src="https://raw.githubusercontent.com/mantovanellimatteo/MyHOME/master/images/logo.png" alt="BTicino MyHOME SCS" width="600">
 </p>
 
+<p align="center">
+  <a href="https://buymeacoffee.com/mantovanellimatteo" target="_blank">
+    <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="60">
+  </a>
+</p>
+
 # MyHOME (Modernized Fork)
 **Version: v1.4.1**
 
