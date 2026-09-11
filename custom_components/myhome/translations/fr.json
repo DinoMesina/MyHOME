@@ -156,6 +156,16 @@
           "description": "Pourcentage de luminosité optionnel (1-100%) pour les lumières."
         }
       }
+    },
+    "sweep_bus": {
+      "name": "Balayage de l'état du bus",
+      "description": "Déclenche une interrogation en lecture seule de tous les sous-systèmes du bus (éclairage, volets, régulation thermique, horloge et diagnostic de la passerelle) pour alimenter le tampon circulaire de diagnostic.",
+      "fields": {
+        "gateway": {
+          "name": "Passerelle",
+          "description": "Adresse MAC de la passerelle (facultatif ; par défaut pour toutes les passerelles actives)."
+        }
+      }
     }
   }
 }

@@ -156,6 +156,16 @@
           "description": "Percentuale di luminosità opzionale (1-100%) per le luci."
         }
       }
+    },
+    "sweep_bus": {
+      "name": "Scansione stato bus",
+      "description": "Esegue una richiesta di stato in sola lettura su tutti i sottosistemi del bus (luci, tapparelle, termoregolazione, orologio e diagnostica del gateway) per popolare il buffer circolare di diagnostica.",
+      "fields": {
+        "gateway": {
+          "name": "Gateway",
+          "description": "Indirizzo MAC del gateway (opzionale; predefinito per tutti i gateway attivi)."
+        }
+      }
     }
   }
 }

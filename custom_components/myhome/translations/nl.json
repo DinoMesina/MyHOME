@@ -156,6 +156,16 @@
           "description": "Optioneel helderheidspercentage (1-100%) voor lampen."
         }
       }
+    },
+    "sweep_bus": {
+      "name": "Busstatus scannen",
+      "description": "Voert een alleen-lezen statusverzoek uit over alle bussubsystemen (verlichting, rolluiken, klimaatregeling, klok en gatewaydiagnostiek) om de diagnostische ringbuffer te vullen.",
+      "fields": {
+        "gateway": {
+          "name": "Gateway",
+          "description": "MAC-adres van de gateway (optioneel; standaard voor alle actieve gateways)."
+        }
+      }
     }
   }
 }

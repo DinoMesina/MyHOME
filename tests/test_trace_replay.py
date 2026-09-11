@@ -317,6 +317,87 @@ class TestTraceReplayHarness:
         # Unload cleanly
         await hass.config_entries.async_unload(entry.entry_id)
 
+    @pytest.mark.parametrize(
+        "plant_dir",
+        get_plant_fixture_dirs(),
+        ids=lambda p: p.name,
+    )
+    @pytest.mark.asyncio
+    async def test_dynamic_plant_trace_replay_matrix(
+        self, hass: HomeAssistant, plant_dir: Path
+    ) -> None:
+        """Dynamically replay every discovered plant fixture without custom test code.
+
+        Ensures that any community-submitted gateway trace added to tests/fixtures/plants/
+        is automatically loaded, setup in Home Assistant, and replayed through the event bus
+        with zero unhandled exceptions or state loss.
+        """
+        plant_yaml = plant_dir / "myhome.yaml"
+        diag_json = plant_dir / "diagnostic_summary.json"
+
+        assert diag_json.is_file(), f"Missing diagnostic_summary.json in {plant_dir}"
+
+        with open(diag_json, "r", encoding="utf-8") as f:
+            diag_data = json.load(f)
+
+        raw_frames = diag_data["data"]["bus_monitor"]["recent_frames"]
+        assert len(raw_frames) > 0, f"No frames in {diag_json}"
+
+        config_entry_data = diag_data["data"].get("config_entry", {})
+        entry_dict = dict(config_entry_data.get("data", {}))
+
+        mac = entry_dict.get(CONF_MAC) or "00:03:50:99:99:99"
+        entry_dict[CONF_HOST] = entry_dict.get(CONF_HOST, "192.168.1.50")
+        entry_dict[CONF_PORT] = entry_dict.get(CONF_PORT, 20000)
+        entry_dict[CONF_PASSWORD] = "pass"
+        entry_dict[CONF_MAC] = mac
+
+        options = {}
+        if plant_yaml.is_file():
+            options[CONF_FILE_PATH] = str(plant_yaml)
+
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            data=entry_dict,
+            options=options,
+            unique_id=mac,
+        )
+        entry.add_to_hass(hass)
+
+        with (
+            patch(
+                "custom_components.myhome.gateway.OWNSession.test_connection",
+                return_value={"Success": True, "Message": None},
+            ),
+            patch("custom_components.myhome.gateway.MyHOMEGatewayHandler.listening_loop"),
+            patch("custom_components.myhome.gateway.MyHOMEGatewayHandler.sending_loop"),
+        ):
+            assert await hass.config_entries.async_setup(entry.entry_id)
+            await hass.async_block_till_done()
+
+        handler = hass.data[DOMAIN][mac][CONF_ENTITY]
+        handler._on_event_connection_state_change(True)
+
+        replayed_count = 0
+        for item in raw_frames:
+            raw = item.get("raw")
+            if not raw or raw in ("*#*1##", "*#*0##"):
+                continue
+
+            try:
+                msg = OWNMessage.parse(raw)
+            except Exception as exc:
+                pytest.fail(f"Plant {plant_dir.name} failed to parse on-wire frame {raw!r}: {exc}")
+
+            async_dispatcher_send(hass, f"myhome_message_{mac}", msg)
+            replayed_count += 1
+
+        await hass.async_block_till_done()
+        assert replayed_count > 0, f"No valid frames replayed for {plant_dir.name}"
+
+        # Clean unload
+        await hass.config_entries.async_unload(entry.entry_id)
+
     @pytest.mark.asyncio
     async def test_trace_replay_resilience_to_malformed_and_unknown_frames(
         self, hass: HomeAssistant

@@ -100,3 +100,14 @@ turn_on_timed:
           max: 100
           mode: slider
 
+sweep_bus:
+  name: Sweep bus status
+  description: Triggers an active read-only status query across all bus subsystems (lighting, covers, thermoregulation, clock, and gateway diagnostics) to populate the diagnostic bus monitor ring buffer.
+  fields:
+    gateway:
+      name: Gateway
+      description: The gateway's MAC address (optional; defaults to all active gateways).
+      example: "00:03:50:20:00:01"
+      selector:
+        text:
+

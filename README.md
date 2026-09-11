@@ -399,6 +399,10 @@ A major CI infrastructure enhancement introduced for beta testing is the **Trace
 5. **High-Frequency Stress Testing**: Simulates event storms (e.g. 50 rapid toggle frames) to prove that the integration's async event queue and state machines never drop messages or trigger race conditions.
 6. **Permanent CI Regression Protection**: Once a tester's trace is committed, it runs automatically on every pull request and push to master, ensuring that a fix for one community member's installation never regresses in future updates.
 
+#### Capturing Traces:
+- **In Home Assistant**: Call service `myhome.sweep_bus` -> Download Diagnostics (or copy trace from Bus Card).
+- **Standalone CLI**: Run `python scripts/record_gateway_trace.py --host <IP> --password <PASS> --model <MODEL>` to record an isolated gateway on a test bench directly into a ready-to-test fixture.
+
 ---
 
 ## 🛠️ Development & Quality Standards

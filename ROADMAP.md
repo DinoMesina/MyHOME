@@ -220,15 +220,26 @@ graph TD
 
 ---
 
-### 📋 How Community Testers Can Record & Submit a Missing Trace
+### 📋 Dual-Track Guide: How Community Testers Can Submit a Trace
 
-Providing a trace takes **less than 1 minute** and requires zero command-line expertise:
+We offer **two simple ways** to contribute real-world bus traces, tailored to your technical setup:
 
-1. Open your Home Assistant dashboard with the **MyHOME Bus Monitor Card** (`<myhome-bus-card>`).
-2. Perform the action on your physical installation (e.g. press a group switch, run a scenario on an MH200, or operate your 4695 central unit).
-3. Click the **`📋 Report Issue / Copy Trace`** button on the card.
-4. Paste the clipboard contents directly into [**RFC Discussion #248**](https://github.com/orgs/OpenWebNet-HA/discussions/248) or open an issue on GitHub.
-5. Our automated test harness will turn your real-world installation into a permanent CI regression fixture!
+#### 🏷️ Track A: Zero-CLI via Home Assistant UI (Fastest & Easiest)
+Ideal for standard users running Home Assistant with the MyHOME integration:
+1. **Sweep the Bus**: In Home Assistant, go to **Developer Tools** > **Services** and call `myhome.sweep_bus` (or trigger it from the Lovelace Bus Monitor Card). This actively queries all lighting, cover, HVAC, and gateway diagnostic states in under 3 seconds.
+2. **Download Diagnostics**: Navigate to **Settings** > **Devices & Services** > **MyHOME** > click the three dots (`⋮`) > **Download diagnostics** (or click **`📋 Export Trace`** on the `<myhome-bus-card>`).
+3. **Submit**: Attach the downloaded `.json` file to [**RFC Discussion #248**](https://github.com/orgs/OpenWebNet-HA/discussions/248) or open a GitHub Issue.
+4. *Privacy Guarantee*: Home Assistant and MyHOME automatically redact all passwords, authentication tokens, and private credentials before exporting.
+
+#### 💻 Track B: Standalone Python Tool (Test Benches & Integrators)
+Ideal for installers, bench testers, and developers testing isolated gateways without Home Assistant installed:
+1. **Run the Trace Recorder**:
+   ```bash
+   python scripts/record_gateway_trace.py --host 192.168.1.35 --password 12345 --model MH202
+   ```
+2. **Active Sweep & Listen**: The script automatically executes the diagnostic status sweep, listens for ambient button presses or scenario bursts, and scrubs sensitive credentials.
+3. **Drop & Commit**: The tool writes a complete ready-to-test fixture folder in `tests/fixtures/plants/<model>_plant/`.
+4. **Instant CI Verification**: Run `pytest tests/test_trace_replay.py` — our parameterized test runner automatically discovers and tests your plant with zero additional test code required! Submit a Pull Request.
 
 ---
 
