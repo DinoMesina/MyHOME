@@ -375,11 +375,37 @@ pytest tests/
 # Run with coverage report
 pytest --cov=custom_components.myhome --cov-report=term-missing tests/
 
+# Run containerized Home Assistant smoke test (stable, beta, dev, or all)
+python scripts/run_ha_container_smoke.py --channel stable
+python scripts/run_ha_container_smoke.py --channel all
+
 # Validate PyPI packaging and PEP 517 compliance
 python -m build
 twine check --strict dist/*
 check-wheel-contents dist/*.whl
 ```
+
+### 🐳 Containerized Smoke Testing
+
+To verify integration installation and runtime cleanliness against official upstream Home Assistant Docker environments before deployment:
+
+```bash
+# Test against stable Home Assistant container image
+python scripts/run_ha_container_smoke.py --channel stable
+
+# Test against upcoming beta container image
+python scripts/run_ha_container_smoke.py --channel beta
+
+# Test across all channels (stable, beta, and dev)
+python scripts/run_ha_container_smoke.py --channel all
+```
+
+This runner:
+1. Pulls the official container (`ghcr.io/home-assistant/home-assistant:<channel>`).
+2. Runs `hass --script check_config` to validate schemas and component manifests.
+3. Automatically installs all integration dependencies (`manifest.json`).
+4. Validates clean import of all 14 integration platform modules.
+5. Boots Home Assistant in daemon mode and verifies zero exceptions and zero asyncio loop-blocking warnings.
 
 See the [F454 regression checks](docs/f454-regression-checks.md) for the fixes,
 automated coverage and physical gateway verification steps.
@@ -388,8 +414,9 @@ automated coverage and physical gateway verification steps.
 - **`hassfest`**: Official Home Assistant manifest, translation, and metadata validation.
 - **`validate`**: Official HACS compliance checks.
 - **`test-coverage`**: 1207 automated unit tests with snapshot matching and 100% line coverage enforcement on the `ownd` core package.
-- **`ha_standards`**: Automated architectural standards enforcement (`verify_ha_standards.py` / `test_ha_standards.py`) ensuring user-confirmed discovery flows, complete step translations, no deprecated constants, and no blocking calls in async coroutines.
+- **`ha-container-smoke`**: Automated containerized smoke testing against official Home Assistant Docker images (`stable`, `beta`, `dev`) verifying `check_config`, clean platform module imports, and zero asyncio loop-blocking calls.
 - **`ha-upstream-compat`**: Continuous integration testing against upstream Home Assistant Stable, Beta, and Dev channels.
+- **`ha_standards`**: Automated architectural standards enforcement (`verify_ha_standards.py` / `test_ha_standards.py`) ensuring user-confirmed discovery flows, complete step translations, no deprecated constants, and no blocking calls in async coroutines.
 - **`pypi_standards`**: Strict wheel hygiene, metadata verification, and packaging checks.
 
 ### 📊 Code Coverage & Quality Assurance
