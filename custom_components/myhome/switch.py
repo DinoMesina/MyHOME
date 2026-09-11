@@ -234,23 +234,24 @@ class MyHOMESwitch(MyHOMEEntity, SwitchEntity):
 
     async def async_added_to_hass(self):
         """Run when entity about to be added to hass."""
-        self._register_availability_listener()
-        self.async_on_remove(
-            async_dispatcher_connect(
-                self.hass,
-                f"myhome_update_{self._gateway_handler.mac}_1_{self._full_where}",
-                self.handle_event,
-            )
-        )
-        if self._full_where != self._where:
+        target_hass = self.hass or self._hass
+        if target_hass is not None:
             self.async_on_remove(
                 async_dispatcher_connect(
-                    self.hass,
-                    f"myhome_update_{self._gateway_handler.mac}_1_{self._where}",
+                    target_hass,
+                    f"myhome_update_{self._gateway_handler.mac}_1_{self._full_where}",
                     self.handle_event,
                 )
             )
-        await self.async_update()
+            if self._full_where != self._where:
+                self.async_on_remove(
+                    async_dispatcher_connect(
+                        target_hass,
+                        f"myhome_update_{self._gateway_handler.mac}_1_{self._where}",
+                        self.handle_event,
+                    )
+                )
+        await super().async_added_to_hass()
 
     async def async_update(self):
         """Update the entity.

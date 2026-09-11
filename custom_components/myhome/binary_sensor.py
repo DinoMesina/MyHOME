@@ -18,7 +18,6 @@ from homeassistant.const import (
 from homeassistant.core import callback
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dispatcher_send
-from homeassistant.helpers.restore_state import RestoreEntity
 from OWNd.message import (
     MESSAGE_TYPE_MOTION,
     MESSAGE_TYPE_MOTION_TIMEOUT,
@@ -440,9 +439,13 @@ class MyHOMEDryContact(MyHOMEEntity, BinarySensorEntity):
         sensor_attr = f"({self._where[0]}){self._where[1:]}" if self._where else ""
         self._attr_extra_state_attributes = {"Sensor": sensor_attr}
 
+    async def async_restore_last_state(self, last_state) -> None:
+        """Restore dry contact state."""
+        if last_state is not None and last_state.state not in ("unknown", "unavailable"):
+            self._attr_is_on = last_state.state == "on"
+
     async def async_added_to_hass(self):
         """When entity is added to hass."""
-        self._register_availability_listener()
         try:
             device_dict = self._hass.data[DOMAIN][self._gateway_handler.mac][CONF_PLATFORMS][self._platform][self._device_id]
             if CONF_ENTITIES not in device_dict or not isinstance(device_dict[CONF_ENTITIES], dict):
@@ -466,7 +469,7 @@ class MyHOMEDryContact(MyHOMEEntity, BinarySensorEntity):
                     self.handle_event,
                 )
                 self.async_on_remove(unsub2)
-        await self.async_update()
+        await super().async_added_to_hass()
 
     async def async_will_remove_from_hass(self):
         """When entity is removed from hass."""
@@ -542,9 +545,13 @@ class MyHOMEAuxiliary(MyHOMEEntity, BinarySensorEntity):
         self._attr_is_on = False
         self._attr_extra_state_attributes = {"Auxiliary channel": self._where}
 
+    async def async_restore_last_state(self, last_state) -> None:
+        """Restore auxiliary state."""
+        if last_state is not None and last_state.state not in ("unknown", "unavailable"):
+            self._attr_is_on = last_state.state == "on"
+
     async def async_added_to_hass(self):
         """When entity is added to hass."""
-        self._register_availability_listener()
         try:
             device_dict = self._hass.data[DOMAIN][self._gateway_handler.mac][CONF_PLATFORMS][self._platform][self._device_id]
             if CONF_ENTITIES not in device_dict or not isinstance(device_dict[CONF_ENTITIES], dict):
@@ -560,7 +567,7 @@ class MyHOMEAuxiliary(MyHOMEEntity, BinarySensorEntity):
                 self.handle_event,
             )
             self.async_on_remove(unsub)
-        await self.async_update()
+        await super().async_added_to_hass()
 
     async def async_will_remove_from_hass(self):
         """When entity is removed from hass."""
@@ -587,7 +594,7 @@ class MyHOMEAuxiliary(MyHOMEEntity, BinarySensorEntity):
             self.async_schedule_update_ha_state()
 
 
-class MyHOMEMotionSensor(MyHOMEEntity, BinarySensorEntity, RestoreEntity):
+class MyHOMEMotionSensor(MyHOMEEntity, BinarySensorEntity):
     def __init__(
         self,
         hass,
@@ -637,9 +644,14 @@ class MyHOMEMotionSensor(MyHOMEEntity, BinarySensorEntity, RestoreEntity):
             "Sensitivity": PIR_SENSITIVITY[1],
         }
 
+    async def async_restore_last_state(self, last_state) -> None:
+        """Restore motion sensor state."""
+        if last_state is not None and last_state.state not in ("unknown", "unavailable"):
+            self._attr_is_on = last_state.state == STATE_ON
+            self._last_updated = last_state.last_updated
+
     async def async_added_to_hass(self):
         """When entity is added to hass."""
-        self._register_availability_listener()
         try:
             device_dict = self._hass.data[DOMAIN][self._gateway_handler.mac][CONF_PLATFORMS][self._platform][self._device_id]
             if CONF_ENTITIES not in device_dict or not isinstance(device_dict[CONF_ENTITIES], dict):
@@ -665,14 +677,7 @@ class MyHOMEMotionSensor(MyHOMEEntity, BinarySensorEntity, RestoreEntity):
                 self.async_on_remove(unsub2)
         await self._gateway_handler.send_status_request(OWNLightingCommand.get_pir_sensitivity(self._where))
         await self._gateway_handler.send_status_request(OWNLightingCommand.get_motion_timeout(self._where))
-        try:
-            state = await self.async_get_last_state()
-            if state:
-                self._attr_is_on = state.state == STATE_ON
-                self._last_updated = state.last_updated
-        except Exception:
-            pass
-        await self.async_update()
+        await super().async_added_to_hass()
 
     async def async_will_remove_from_hass(self):
         """When entity is removed from hass."""

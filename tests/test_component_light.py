@@ -1327,3 +1327,316 @@ def test_attr_color_temp_import_fallback():
 
     assert hasattr(light_mod, "ATTR_COLOR_TEMP")
     assert light_mod.ATTR_COLOR_TEMP == "color_temp"
+
+
+async def test_dali_tunable_white_reboot_state_restoration(hass):
+    """Test that DALI tunable white light restores color mode, kelvin, and brightness across reboot (Issue #273)."""
+    from homeassistant.core import State
+
+    from custom_components.myhome.light import MyHOMELight
+
+    mock_gateway = MagicMock()
+    mock_gateway.mac = "AA:BB:CC:DD:EE:FF"
+    mock_gateway.send = AsyncMock()
+    mock_gateway.send_status_request = AsyncMock()
+    mock_gateway.availability_signal = "myhome_avail"
+
+    light = MyHOMELight(
+        hass=hass,
+        name="DALI Tunable White",
+        entity_name=None,
+        icon=None,
+        icon_on=None,
+        device_id="25#4#02",
+        who="1",
+        where="25",
+        interface="02",
+        dimmable=False,
+        manufacturer="BTicino",
+        model="DALI Gateway",
+        gateway=mock_gateway,
+    )
+
+    # Mock HA restoring state from previous session
+    last_state = State(
+        "light.dali_tunable_white",
+        "on",
+        {
+            "supported_color_modes": ["color_temp"],
+            "brightness": 128,
+            "color_temp_kelvin": 3000,
+        },
+    )
+    light.async_get_last_state = AsyncMock(return_value=last_state)
+    light.async_schedule_update_ha_state = MagicMock()
+
+    await light.async_added_to_hass()
+
+    assert ColorMode.COLOR_TEMP in light.supported_color_modes
+    assert light.color_mode == ColorMode.COLOR_TEMP
+    assert light.is_on is True
+    assert light.brightness == 128
+    assert light.color_temp_kelvin == 3000
+
+    # Ensure get_brightness and get_color_temperature status requests were sent
+    assert mock_gateway.send_status_request.call_count == 2
+
+    # Simulate gateway replying with brightness first: *1*10*25#4#02##
+    event_dim = MagicMock(spec=OWNLightingEvent)
+    event_dim.is_translation = False
+    event_dim.is_on = True
+    event_dim.brightness = 100
+    event_dim.brightness_preset = None
+    event_dim.color_temp = None
+    event_dim.rgb = None
+    event_dim.human_readable_log = "Brightness 100%"
+
+    light.handle_event(event_dim)
+
+    # Must NOT downgrade to plain BRIGHTNESS mode
+    assert ColorMode.COLOR_TEMP in light.supported_color_modes
+    assert light.color_mode == ColorMode.COLOR_TEMP
+    assert light.is_on is True
+
+
+async def test_dali_tunable_white_preserves_is_on_and_brightness_on_dim14_event(hass):
+    """Test that dimension 14 color temp frame does not wipe is_on or brightness to None (Issue #273)."""
+    from custom_components.myhome.light import MyHOMELight
+
+    mock_gateway = MagicMock()
+    mock_gateway.mac = "AA:BB:CC:DD:EE:FF"
+    mock_gateway.send = AsyncMock()
+    mock_gateway.send_status_request = AsyncMock()
+
+    light = MyHOMELight(
+        hass=hass,
+        name="DALI Tunable White",
+        entity_name=None,
+        icon=None,
+        icon_on=None,
+        device_id="25#4#02",
+        who="1",
+        where="25",
+        interface="02",
+        dimmable=True,
+        manufacturer="BTicino",
+        model="DALI Gateway",
+        gateway=mock_gateway,
+    )
+    light._attr_supported_color_modes = {ColorMode.COLOR_TEMP}
+    light._attr_color_mode = ColorMode.COLOR_TEMP
+    light._attr_is_on = True
+    light._attr_brightness = 200
+    light._attr_brightness_pct = 78
+    light._last_brightness_pct = 78
+    light.async_schedule_update_ha_state = MagicMock()
+
+    # Dimension 14 event: *#1*25#4#02*14*333##
+    event_dim14 = MagicMock(spec=OWNLightingEvent)
+    event_dim14.is_translation = False
+    event_dim14.is_on = None
+    event_dim14.brightness = None
+    event_dim14.brightness_preset = None
+    event_dim14.color_temp = 333
+    event_dim14.rgb = None
+    event_dim14.human_readable_log = "Color temp 333 mireds"
+
+    light.handle_event(event_dim14)
+
+    assert light.is_on is True
+    assert light.brightness == 200
+    assert light._attr_brightness_pct == 78
+    assert light.color_temp == 333
+    assert light.color_temp_kelvin == 3003
+
+
+async def test_dali_rgb_preserves_is_on_and_brightness_on_dim12_event(hass):
+    """Test that dimension 12 RGB frame does not wipe is_on or brightness to None."""
+    from custom_components.myhome.light import MyHOMELight
+
+    mock_gateway = MagicMock()
+    mock_gateway.mac = "AA:BB:CC:DD:EE:FF"
+    mock_gateway.send = AsyncMock()
+    mock_gateway.send_status_request = AsyncMock()
+
+    light = MyHOMELight(
+        hass=hass,
+        name="DALI RGB",
+        entity_name=None,
+        icon=None,
+        icon_on=None,
+        device_id="25#4#02",
+        who="1",
+        where="25",
+        interface="02",
+        dimmable=True,
+        manufacturer="BTicino",
+        model="DALI Gateway",
+        gateway=mock_gateway,
+    )
+    light._attr_supported_color_modes = {ColorMode.RGB}
+    light._attr_color_mode = ColorMode.RGB
+    light._attr_is_on = True
+    light._attr_brightness = 150
+    light._attr_brightness_pct = 59
+    light._last_brightness_pct = 59
+    light.async_schedule_update_ha_state = MagicMock()
+
+    # Dimension 12 event: *#1*25#4#02*12*255*128*64##
+    event_dim12 = MagicMock(spec=OWNLightingEvent)
+    event_dim12.is_translation = False
+    event_dim12.is_on = None
+    event_dim12.brightness = None
+    event_dim12.brightness_preset = None
+    event_dim12.color_temp = None
+    event_dim12.rgb = (255, 128, 64)
+    event_dim12.human_readable_log = "RGB (255, 128, 64)"
+
+    light.handle_event(event_dim12)
+
+    assert light.is_on is True
+    assert light.brightness == 150
+    assert light._attr_brightness_pct == 59
+    assert light.rgb_color == (255, 128, 64)
+
+
+async def test_dali_rgb_reboot_state_restoration(hass):
+    """Test that DALI RGB light restores RGB color mode and RGB attributes across reboot."""
+    from homeassistant.core import State
+
+    mock_gateway = MagicMock()
+    mock_gateway.mac = "AA:BB:CC:DD:EE:FF"
+    mock_gateway.send = AsyncMock()
+    mock_gateway.send_status_request = AsyncMock()
+    mock_gateway.availability_signal = "myhome_avail"
+
+    light = MyHOMELight(
+        hass=hass,
+        name="DALI RGB",
+        entity_name=None,
+        icon=None,
+        icon_on=None,
+        device_id="25#4#02",
+        who="1",
+        where="25",
+        interface="02",
+        dimmable=False,
+        manufacturer="BTicino",
+        model="DALI Gateway",
+        gateway=mock_gateway,
+    )
+
+    last_state = State(
+        "light.dali_rgb",
+        "on",
+        {
+            "supported_color_modes": ["rgb"],
+            "brightness": 180,
+            "rgb_color": [255, 128, 64],
+        },
+    )
+    light.async_get_last_state = AsyncMock(return_value=last_state)
+    light.async_schedule_update_ha_state = MagicMock()
+
+    await light.async_added_to_hass()
+
+    assert ColorMode.RGB in light.supported_color_modes
+    assert light.color_mode == ColorMode.RGB
+    assert light.is_on is True
+    assert light.brightness == 180
+    assert light.rgb_color == (255, 128, 64)
+
+
+async def test_dali_tunable_white_mired_only_reboot_restoration(hass):
+    """Test restoring color temp from legacy mired-only attribute and off power state."""
+    from homeassistant.core import State
+
+    mock_gateway = MagicMock()
+    mock_gateway.mac = "AA:BB:CC:DD:EE:FF"
+    mock_gateway.send = AsyncMock()
+    mock_gateway.send_status_request = AsyncMock()
+    mock_gateway.availability_signal = "myhome_avail"
+
+    light = MyHOMELight(
+        hass=hass,
+        name="DALI TW Mired",
+        entity_name=None,
+        icon=None,
+        icon_on=None,
+        device_id="25#4#02",
+        who="1",
+        where="25",
+        interface="02",
+        dimmable=False,
+        manufacturer="BTicino",
+        model="DALI Gateway",
+        gateway=mock_gateway,
+    )
+
+    last_state = State(
+        "light.dali_tw_mired",
+        "off",
+        {
+            "supported_color_modes": ["color_temp"],
+            "brightness": 100,
+            "color_temp": 250,
+        },
+    )
+    light.async_get_last_state = AsyncMock(return_value=last_state)
+    light.async_schedule_update_ha_state = MagicMock()
+
+    await light.async_added_to_hass()
+
+    assert ColorMode.COLOR_TEMP in light.supported_color_modes
+    assert light.color_mode == ColorMode.COLOR_TEMP
+    assert light.is_on is False
+    assert light.brightness == 100
+    assert light.color_temp == 250
+    assert light.color_temp_kelvin == 4000
+
+
+async def test_dimmer_reboot_state_restoration(hass):
+    """Test that dimmer light restores BRIGHTNESS mode across reboot."""
+    from homeassistant.core import State
+
+    mock_gateway = MagicMock()
+    mock_gateway.mac = "AA:BB:CC:DD:EE:FF"
+    mock_gateway.send = AsyncMock()
+    mock_gateway.send_status_request = AsyncMock()
+    mock_gateway.availability_signal = "myhome_avail"
+
+    light = MyHOMELight(
+        hass=hass,
+        name="Test Dimmer",
+        entity_name=None,
+        icon=None,
+        icon_on=None,
+        device_id="12",
+        who="1",
+        where="12",
+        interface=None,
+        dimmable=True,
+        manufacturer="BTicino",
+        model="Dimmer",
+        gateway=mock_gateway,
+    )
+
+    last_state = State(
+        "light.test_dimmer",
+        "on",
+        {
+            "supported_color_modes": ["brightness"],
+            "brightness": 75,
+        },
+    )
+    light.async_get_last_state = AsyncMock(return_value=last_state)
+    light.async_schedule_update_ha_state = MagicMock()
+
+    await light.async_added_to_hass()
+
+    assert ColorMode.BRIGHTNESS in light.supported_color_modes
+    assert light.color_mode == ColorMode.BRIGHTNESS
+    assert light.is_on is True
+    assert light.brightness == 75
+
+

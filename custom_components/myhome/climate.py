@@ -19,7 +19,6 @@ from homeassistant.const import (
 from homeassistant.core import callback
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dispatcher_send
-from homeassistant.helpers.restore_state import RestoreEntity
 from OWNd.message import (
     CLIMATE_MODE_AUTO,
     CLIMATE_MODE_COOL,
@@ -365,7 +364,7 @@ async def async_unload_entry(hass, config_entry):
     return True
 
 
-class MyHOMEClimate(MyHOMEEntity, ClimateEntity, RestoreEntity):
+class MyHOMEClimate(MyHOMEEntity, ClimateEntity):
     def __init__(
         self,
         hass,
@@ -450,29 +449,33 @@ class MyHOMEClimate(MyHOMEEntity, ClimateEntity, RestoreEntity):
             attrs["Int"] = self._interface
         return attrs
 
+    async def async_restore_last_state(self, last_state) -> None:
+        """Restore climate state from HA storage."""
+        if last_state is not None and last_state.state is not None:
+            try:
+                restored_mode = HVACMode(last_state.state)
+                if restored_mode in self._attr_hvac_modes:
+                    self._attr_hvac_mode = restored_mode
+                else:
+                    self._attr_hvac_mode = HVACMode.OFF
+            except (ValueError, TypeError):
+                self._attr_hvac_mode = HVACMode.OFF
+            target_temp = last_state.attributes.get("temperature")
+            if target_temp is not None:
+                try:
+                    self._target_temperature = float(target_temp)
+                except (ValueError, TypeError):
+                    pass
+
+    async def async_update(self) -> None:
+        """Request status update from gateway."""
+        if self._central:
+            await self._gateway_handler.send_status_request(OWNHeatingCommand.central_status(self._where))
+        else:
+            await self._gateway_handler.send_status_request(OWNHeatingCommand.status(self._full_where))
+
     async def async_added_to_hass(self):
         """Run when entity about to be added to hass."""
-        self._register_availability_listener()
-        try:
-            state = await self.async_get_last_state()
-            if state is not None and state.state is not None:
-                try:
-                    restored_mode = HVACMode(state.state)
-                    if restored_mode in self._attr_hvac_modes:
-                        self._attr_hvac_mode = restored_mode
-                    else:
-                        self._attr_hvac_mode = HVACMode.OFF
-                except (ValueError, TypeError):
-                    self._attr_hvac_mode = HVACMode.OFF
-                target_temp = state.attributes.get("temperature")
-                if target_temp is not None:
-                    try:
-                        self._target_temperature = float(target_temp)
-                    except (ValueError, TypeError):
-                        pass
-        except Exception:
-            pass
-
         target_hass = self.hass or self._hass
         if target_hass is not None:
             self.async_on_remove(
@@ -498,10 +501,7 @@ class MyHOMEClimate(MyHOMEEntity, ClimateEntity, RestoreEntity):
                         self._handle_central_mode_update,
                     )
                 )
-        if self._central:
-            await self._gateway_handler.send_status_request(OWNHeatingCommand.central_status(self._where))
-        else:
-            await self._gateway_handler.send_status_request(OWNHeatingCommand.status(self._full_where))
+        await super().async_added_to_hass()
 
     @callback
     def _handle_central_mode_update(self, master_mode: HVACMode) -> None:
@@ -538,13 +538,6 @@ class MyHOMEClimate(MyHOMEEntity, ClimateEntity, RestoreEntity):
             )
             if self.hass is not None:
                 self.async_write_ha_state()
-
-    async def async_update(self):
-        """Update the entity.
-
-        Only used by the generic entity update service.
-        """
-        await self._gateway_handler.send_status_request(OWNHeatingCommand.status(self._full_where))
 
     @property
     def target_temperature(self) -> float:
