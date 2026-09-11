@@ -234,6 +234,7 @@ class MyHOMESwitch(MyHOMEEntity, SwitchEntity):
 
     async def async_added_to_hass(self):
         """Run when entity about to be added to hass."""
+        self._register_availability_listener()
         self.async_on_remove(
             async_dispatcher_connect(
                 self.hass,

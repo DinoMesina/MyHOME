@@ -10,6 +10,7 @@ from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.myhome.const import (
+    CONF_ENTITY,
     CONF_FILE_PATH,
     CONF_PLATFORMS,
     DOMAIN,
@@ -439,6 +440,8 @@ async def test_switch_yaml_fallback_deduplication_and_no_ghost_light(hass: HomeA
         with patch("custom_components.myhome.gateway.MyHOMEGatewayHandler.send", mock_send):
             assert await hass.config_entries.async_setup(config_entry.entry_id)
             await hass.async_block_till_done()
+            hass.data[DOMAIN][mac][CONF_ENTITY]._on_event_connection_state_change(True)
+            await hass.async_block_till_done()
 
             # Verify ghost light and corrupted duplicate switch were purged
             assert ent_reg.async_get(ghost_light.entity_id) is None
@@ -557,4 +560,3 @@ switch:
         assert await hass.config_entries.async_unload(entry1.entry_id)
         assert await hass.config_entries.async_unload(entry2.entry_id)
         await hass.async_block_till_done()
-

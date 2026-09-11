@@ -1110,14 +1110,20 @@ def test_get_ownd_version():
     """Test get_ownd_version helper returns version or fallback."""
     from custom_components.myhome.const import get_ownd_version
 
-    # Success path
-    ver = get_ownd_version()
-    assert isinstance(ver, str)
-    assert ver != ""
+    get_ownd_version.cache_clear()
+
+    # Success path is cached so later event-loop callers do not touch disk.
+    with patch("importlib.metadata.version", return_value="2.0.0b5") as mock_version:
+        assert get_ownd_version() == "2.0.0b5"
+        assert get_ownd_version() == "2.0.0b5"
+        mock_version.assert_called_once_with("OWNd")
 
     # Exception fallback
+    get_ownd_version.cache_clear()
     with patch("importlib.metadata.version", side_effect=Exception("Package not found")):
         assert get_ownd_version() == "unknown"
+
+    get_ownd_version.cache_clear()
 
 
 async def test_async_ensure_ownd_engine_fast_path(hass: HomeAssistant):
@@ -1200,7 +1206,6 @@ async def test_async_setup_entry_engine_mismatch_raises_not_ready(hass: HomeAssi
     with patch("custom_components.myhome.async_ensure_ownd_engine", return_value=False):
         with pytest.raises(ConfigEntryNotReady):
             await async_setup_entry(hass, entry)
-
 
 
 

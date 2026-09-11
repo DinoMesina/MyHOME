@@ -382,6 +382,10 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
                         self._start_position = 100
                         self._attr_is_closed = False
 
+        # Subscribe before requesting the current status so the reply cannot
+        # arrive before this entity is ready to handle it.
+        await super().async_added_to_hass()
+
     async def async_will_remove_from_hass(self):
         """Run when entity will be removed from hass."""
         self._cancel_stop_task()
@@ -432,9 +436,16 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
             return
         target_position = kwargs[ATTR_POSITION]
         if self._advanced:
-            await self._gateway_handler.send(
-                OWNAutomationCommand.set_shutter_level(self._full_where, target_position)
-            )
+            if target_position <= 0:
+                await self._gateway_handler.send(
+                    OWNAutomationCommand.lower_shutter(self._full_where)
+                )
+            else:
+                await self._gateway_handler.send(
+                    OWNAutomationCommand.set_shutter_level(
+                        self._full_where, target_position
+                    )
+                )
             return
 
         self._cancel_stop_task()
@@ -548,4 +559,3 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
                 self.async_schedule_update_ha_state()
             except RuntimeError:
                 pass
-

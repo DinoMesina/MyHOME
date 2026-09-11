@@ -309,6 +309,7 @@ class MyHOMEMediaPlayer(MyHOMEEntity, MediaPlayerEntity):
 
     async def async_added_to_hass(self) -> None:
         """Register listeners when entity is added to Home Assistant."""
+        self._register_availability_listener()
         # Existing OWN event dispatcher connections
         self.async_on_remove(
             async_dispatcher_connect(

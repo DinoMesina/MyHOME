@@ -452,6 +452,7 @@ class MyHOMEClimate(MyHOMEEntity, ClimateEntity, RestoreEntity):
 
     async def async_added_to_hass(self):
         """Run when entity about to be added to hass."""
+        self._register_availability_listener()
         try:
             state = await self.async_get_last_state()
             if state is not None and state.state is not None:

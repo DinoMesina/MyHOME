@@ -13,6 +13,7 @@ from homeassistant.const import (
 from homeassistant.core import callback
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.dispatcher import async_dispatcher_send
+from homeassistant.helpers.event import async_call_later
 from OWNd.connection import OWNCommandSession, OWNEventSession, OWNGateway, OWNSession
 from OWNd.message import (
     OWNAlarmEvent,
@@ -56,6 +57,7 @@ from .const import (
 
 EVENT_READY_TIMEOUT = 120
 COMMAND_SESSION_IDLE_TIMEOUT = 15.0
+AVAILABILITY_GRACE = 60
 
 
 class MyHOMEGatewayHandler:
@@ -84,6 +86,8 @@ class MyHOMEGatewayHandler:
         self._terminate_listener = False
         self._terminate_sender = False
         self.is_connected = False
+        self._available = False
+        self._unavailable_timer = None
         self._event_session_ready = asyncio.Event()
         self._sender_stop = asyncio.Event()
         self.listening_worker: asyncio.tasks.Task = None
@@ -173,17 +177,68 @@ class MyHOMEGatewayHandler:
     def profile(self):
         return self.gateway.profile
 
+    @property
+    def available(self) -> bool:
+        """Return the grace-filtered gateway availability."""
+        return self._available
+
+    @property
+    def availability_signal(self) -> str:
+        """Return the dispatcher signal for availability changes."""
+        return f"{DOMAIN}_{self.mac}_availability"
+
     async def test(self) -> Dict:
         return await OWNSession(gateway=self.gateway, logger=LOGGER).test_connection()
 
     @callback
     def _on_event_connection_state_change(self, connected: bool) -> None:
-        """Gate command sessions on the real event-session state."""
+        """Gate commands and publish sustained event-session availability."""
         self.is_connected = connected
         if connected:
             self._event_session_ready.set()
-        else:
-            self._event_session_ready.clear()
+            if self._unavailable_timer is not None:
+                self._unavailable_timer()
+                self._unavailable_timer = None
+            if not self._available:
+                self._available = True
+                LOGGER.info("%s Gateway available again.", self.log_id)
+                self._notify_availability()
+            return
+
+        self._event_session_ready.clear()
+        if self._terminate_listener:
+            return
+        if self._available and self._unavailable_timer is None:
+            LOGGER.warning(
+                "%s Gateway connection lost; marking unavailable in %ss "
+                "if not recovered.",
+                self.log_id,
+                AVAILABILITY_GRACE,
+            )
+            self._unavailable_timer = async_call_later(
+                self.hass,
+                AVAILABILITY_GRACE,
+                self._mark_unavailable,
+            )
+
+    @callback
+    def _mark_unavailable(self, _now) -> None:
+        """Mark the gateway unavailable after the reconnect grace period."""
+        self._unavailable_timer = None
+        if self.is_connected or not self._available:
+            return
+        self._available = False
+        LOGGER.warning(
+            "%s Gateway unavailable (outage exceeded %ss).",
+            self.log_id,
+            AVAILABILITY_GRACE,
+        )
+        self._notify_availability()
+
+    @callback
+    def _notify_availability(self) -> None:
+        """Notify all entities bound to this gateway."""
+        async_dispatcher_send(self.hass, self.availability_signal)
 
     async def listening_loop(self):
         self._terminate_listener = False
@@ -567,6 +622,11 @@ class MyHOMEGatewayHandler:
         LOGGER.info("%s Closing event listener", self.log_id)
         self._terminate_sender = True
         self._terminate_listener = True
+        if self._unavailable_timer is not None:
+            self._unavailable_timer()
+            self._unavailable_timer = None
+        self.is_connected = False
+        self._available = False
         self._event_session_ready.set()
         self._sender_stop.set()
 

@@ -290,7 +290,7 @@ class TestSwitchEntity:
         with patch("custom_components.myhome.switch.async_dispatcher_connect"):
             await sw_interface.async_added_to_hass()
         # Connected to both full_where and base where
-        assert sw_interface.async_on_remove.call_count == 2
+        assert sw_interface.async_on_remove.call_count == 3
 
         # 4. Unload
         await async_unload_entry(mock_hass, config_entry)
@@ -521,7 +521,7 @@ class TestCoverEntity:
         cover.hass = mock_hass
         cover.async_on_remove = MagicMock()
         await cover.async_added_to_hass()
-        assert cover.async_on_remove.call_count == 2
+        assert cover.async_on_remove.call_count == 3
 
 
 # ── Button Entities ────────────────────────────────────────────────────────

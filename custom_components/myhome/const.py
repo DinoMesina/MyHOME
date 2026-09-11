@@ -1,5 +1,6 @@
 """Constants for the MyHome component."""
 import logging
+from functools import lru_cache
 
 LOGGER = logging.getLogger(__package__)
 DOMAIN = "myhome"
@@ -10,6 +11,7 @@ INTEGRATION_VERSION = "2.0.0b8"
 REQUIRED_OWND_VERSION = "2.0.0b5"
 
 
+@lru_cache(maxsize=1)
 def get_ownd_version() -> str:
     """Return the installed version of the OWNd protocol engine."""
     try:
