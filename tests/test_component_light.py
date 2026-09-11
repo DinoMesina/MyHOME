@@ -1184,16 +1184,16 @@ def test_dali_rgb_detection(hass):
 
     # Receive DALI HSV event where rgb attribute is None (covers HS to RGB conversion)
     mock_hs_event = MagicMock()
-    mock_hs_event.hs = (180, 50)
-    mock_hs_event.hue = 180
-    mock_hs_event.saturation = 50
+    mock_hs_event.hs = (120, 100)
+    mock_hs_event.hue = 120
+    mock_hs_event.saturation = 100
     mock_hs_event.rgb = None
     mock_hs_event.value = 80
     mock_hs_event.brightness = None
     mock_hs_event.brightness_preset = None
     light.handle_event(mock_hs_event)
-    assert light.hs_color == (180.0, 50.0)
-    assert light.rgb_color == (127, 255, 255)
+    assert light.hs_color == (120.0, 100.0)
+    assert light.rgb_color == (0, 255, 0)
 
 
 def test_dali_rgb_unsupported_sentinel(hass):
