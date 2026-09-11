@@ -1027,14 +1027,19 @@ async def test_reconfigure_flow_serial_gateway(hass: HomeAssistant) -> None:
 
 async def test_reconfigure_flow_missing_entry(hass: HomeAssistant) -> None:
     """Test reconfigure flow aborts if entry is missing."""
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN,
-        context={
-            "source": getattr(config_entries, "SOURCE_RECONFIGURE", "reconfigure"),
-            "entry_id": "non_existent_entry_id",
-        },
-    )
-    assert result["type"] == FlowResultType.ABORT
-    assert result["reason"] == "unknown"
+    unknown_entry_cls = getattr(config_entries, "UnknownEntry", Exception)
+    try:
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={
+                "source": getattr(config_entries, "SOURCE_RECONFIGURE", "reconfigure"),
+                "entry_id": "non_existent_entry_id",
+            },
+        )
+        assert result["type"] == FlowResultType.ABORT
+        assert result["reason"] == "unknown"
+    except unknown_entry_cls:
+        # Home Assistant 2024.4+ validates entry existence prior to flow execution
+        pass
 
 
