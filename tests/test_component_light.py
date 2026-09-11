@@ -1141,3 +1141,189 @@ async def test_dali_tunable_white_turn_on_commands(hass):
     assert mock_gateway.send_status_request.call_args_list[0][0][0]._raw == "*#1*25#4#02*1##"
     assert mock_gateway.send_status_request.call_args_list[1][0][0]._raw == "*#1*25#4#02*14##"
 
+
+
+def test_dali_rgb_detection(hass):
+    """Test automatic promotion to ColorMode.RGB upon receiving dimension 12 event."""
+    mock_gateway = MagicMock()
+    mock_gateway.send = AsyncMock()
+    mock_gateway.log_id = "GATEWAY"
+
+    light = MyHOMELight(
+        hass=hass,
+        name="Standard Light",
+        entity_name="Standard Light",
+        icon="mdi:lightbulb",
+        icon_on="mdi:lightbulb-on",
+        device_id="25#4#02",
+        who="1",
+        where="25",
+        interface="02",
+        dimmable=False,
+        manufacturer="BTicino",
+        model="Standard Actuator",
+        gateway=mock_gateway,
+    )
+    light.hass = hass
+    light.async_schedule_update_ha_state = MagicMock()
+
+    # Initial state is ONOFF
+    assert light.color_mode == ColorMode.ONOFF
+
+    # Receive DALI RGB event (255, 100, 50)
+    event_rgb = OWNEvent.parse("*#1*25#4#02*12*255*100*50##")
+    light.handle_event(event_rgb)
+
+    # Should be auto-upgraded to RGB
+    assert light.color_mode == ColorMode.RGB
+    assert ColorMode.RGB in light.supported_color_modes
+    assert light._attr_rgb_color == (255, 100, 50)
+    assert light.supported_features & LightEntityFeature.TRANSITION
+    assert not (light.supported_features & LightEntityFeature.FLASH)
+
+
+def test_dali_rgb_unsupported_sentinel(hass):
+    """Test that sentinel dimension 12 values (511, 127, 255) do NOT promote light to RGB."""
+    mock_gateway = MagicMock()
+    mock_gateway.send = AsyncMock()
+    mock_gateway.log_id = "GATEWAY"
+
+    light = MyHOMELight(
+        hass=hass,
+        name="Standard Light",
+        entity_name="Standard Light",
+        icon="mdi:lightbulb",
+        icon_on="mdi:lightbulb-on",
+        device_id="25#4#02",
+        who="1",
+        where="25",
+        interface="02",
+        dimmable=False,
+        manufacturer="BTicino",
+        model="Standard Actuator",
+        gateway=mock_gateway,
+    )
+    light.hass = hass
+    light.async_schedule_update_ha_state = MagicMock()
+
+    # Receive sentinel event (unsupported)
+    event_unsupported = OWNEvent.parse("*#1*25#4#02*12*511*127*255##")
+    light.handle_event(event_unsupported)
+
+    assert light.color_mode == ColorMode.ONOFF
+    assert ColorMode.RGB not in light.supported_color_modes
+    assert light._attr_rgb_color is None
+
+
+async def test_dali_rgb_turn_on_commands(hass):
+    """Test setting RGB color via async_turn_on and querying in async_update."""
+    mock_gateway = MagicMock()
+    mock_gateway.send = AsyncMock()
+    mock_gateway.send_status_request = AsyncMock()
+    mock_gateway.config_entry = MagicMock()
+    mock_gateway.config_entry.options = {}
+
+    light = MyHOMELight(
+        hass=hass,
+        name="DALI RGB Light",
+        entity_name="DALI RGB Light",
+        icon="mdi:lightbulb",
+        icon_on="mdi:lightbulb-on",
+        device_id="25#4#02",
+        who="1",
+        where="25",
+        interface="02",
+        dimmable=True,
+        manufacturer="BTicino",
+        model="DALI Ballast",
+        gateway=mock_gateway,
+        rgb=True,
+    )
+    light.hass = hass
+    light.async_schedule_update_ha_state = MagicMock()
+
+    assert light.color_mode == ColorMode.RGB
+
+    # Turn on with RGB color
+    await light.async_turn_on(rgb_color=(255, 128, 64))
+    mock_gateway.send.assert_called_once()
+    sent_cmd = mock_gateway.send.call_args[0][0]
+    assert sent_cmd._raw == "*#1*25#4#02*#12*255*128*64##"
+    assert light._attr_rgb_color == (255, 128, 64)
+    assert light.is_on is True
+
+    # Turn on with both RGB and brightness
+    mock_gateway.send.reset_mock()
+    await light.async_turn_on(rgb_color=(100, 150, 200), brightness=180)
+    assert mock_gateway.send.call_count == 2
+    first_cmd = mock_gateway.send.call_args_list[0][0][0]
+    second_cmd = mock_gateway.send.call_args_list[1][0][0]
+    assert first_cmd._raw == "*#1*25#4#02*#12*100*150*200##"
+    assert "1" in second_cmd._raw
+
+    # Test async_update queries both brightness and RGB
+    mock_gateway.send_status_request.reset_mock()
+    await light.async_update()
+    assert mock_gateway.send_status_request.call_count == 2
+    assert mock_gateway.send_status_request.call_args_list[0][0][0]._raw == "*#1*25#4#02*1##"
+    assert mock_gateway.send_status_request.call_args_list[1][0][0]._raw == "*#1*25#4#02*12##"
+
+
+async def test_async_setup_entry_rgb_config(hass):
+    """Test light setup from config entry with rgb flag."""
+    from homeassistant.const import CONF_NAME
+
+    from custom_components.myhome.const import (
+        CONF_BUS_INTERFACE,
+        CONF_PLATFORMS,
+        CONF_RGB,
+        CONF_WHERE,
+        DOMAIN,
+    )
+    from custom_components.myhome.light import async_setup_entry
+
+    mock_gateway = MagicMock()
+    mock_gateway.send = AsyncMock()
+    mock_gateway.mac = "AA:BB:CC:DD:EE:FF"
+    config_entry = MagicMock()
+    config_entry.data = {"mac": "AA:BB:CC:DD:EE:FF"}
+    config_entry.entry_id = "test_entry"
+
+    hass.data.setdefault(DOMAIN, {})
+    hass.data[DOMAIN]["AA:BB:CC:DD:EE:FF"] = {
+        "entity": mock_gateway,
+        CONF_PLATFORMS: {
+            "light": {
+                "25#4#02": {
+                    CONF_WHERE: "25",
+                    CONF_BUS_INTERFACE: "02",
+                    CONF_NAME: "DALI RGB Light",
+                    CONF_RGB: True,
+                }
+            }
+        },
+        "entities": {"light": {}},
+    }
+
+    with patch(
+        "custom_components.myhome.light.er.async_entries_for_config_entry",
+        return_value=[],
+    ), patch(
+        "custom_components.myhome.light.er.async_get",
+        return_value=MagicMock(),
+    ):
+        added_entities = []
+        await async_setup_entry(hass, config_entry, lambda entities: added_entities.extend(entities))
+
+        assert len(added_entities) == 1
+        light_entity = added_entities[0]
+        assert ColorMode.RGB in light_entity.supported_color_modes
+        assert light_entity.color_mode == ColorMode.RGB
+
+
+def test_attr_color_temp_import_fallback():
+    """Verify that light.py safely defines ATTR_COLOR_TEMP fallback if missing in Home Assistant."""
+    import custom_components.myhome.light as light_mod
+
+    assert hasattr(light_mod, "ATTR_COLOR_TEMP")
+    assert light_mod.ATTR_COLOR_TEMP == "color_temp"
