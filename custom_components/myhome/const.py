@@ -160,6 +160,22 @@ PRESET_TIMERS: dict[float, int] = {
     900.0: 16,
 }
 
+SUPPORTED_GATEWAY_MODELS = [
+    "MyHomeServer1",
+    "F454",
+    "F455",
+    "MH202",
+    "MH200N",
+    "MH200",
+    "MH201",
+    "F453AV",
+    "F452",
+    "F461",
+    "AM4890",
+    "Generic",
+]
+
+
 
 def build_timed_turn_on_command(
     where: str,

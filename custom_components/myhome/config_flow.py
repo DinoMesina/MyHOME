@@ -55,6 +55,7 @@ from .const import (
     DEFAULT_TRANSITION_MODE,
     DOMAIN,
     LOGGER,
+    SUPPORTED_GATEWAY_MODELS,
 )
 from .gateway import MyHOMEGatewayHandler
 
@@ -317,7 +318,10 @@ class MyhomeFlowHandler(ConfigFlow, domain=DOMAIN):
         address_val = getattr(self, "_custom_address", "192.168.1.135")
         port_val = getattr(self, "_custom_port", 20000)
         serial_number_suggestion = user_input["serialNumber"] if user_input is not None and user_input.get("serialNumber") else "00:03:50:00:00:00"
-        model_name_suggestion = user_input["modelName"] if user_input is not None and user_input.get("modelName") else "F454"
+        model_name_suggestion = user_input["modelName"] if user_input is not None and user_input.get("modelName") else "MyHomeServer1"
+        model_options = [m for m in SUPPORTED_GATEWAY_MODELS]
+        if model_name_suggestion not in model_options:
+            model_options.insert(0, model_name_suggestion)
 
         return self.async_show_form(
             step_id="custom_manual",
@@ -329,8 +333,8 @@ class MyhomeFlowHandler(ConfigFlow, domain=DOMAIN):
                     ): str,
                     Required(
                         "modelName",
-                        description={"suggested_value": model_name_suggestion},
-                    ): str,
+                        default=model_name_suggestion,
+                    ): vol.Any(In(model_options), cv.string),
                 }
             ),
             description_placeholders={
@@ -643,10 +647,15 @@ class MyhomeOptionsFlowHandler(OptionsFlow):
                     self.options[source_key] = user_input.get(source_key, i)
                     self.options[gain_key] = user_input.get(gain_key, 0)
 
+                _model_update = False
+                if CONF_NAME in user_input and user_input[CONF_NAME] != self.data.get(CONF_NAME):
+                    self.data[CONF_NAME] = user_input[CONF_NAME]
+                    _model_update = True
+
                 _data_update = not (
                     self.data.get(CONF_HOST) == user_input.get(CONF_ADDRESS)
                     and self.data.get(CONF_PASSWORD) == user_input.get(CONF_OWN_PASSWORD)
-                )
+                ) or _model_update
                 self.data.update({CONF_HOST: user_input.get(CONF_ADDRESS)})
                 self.data.update({CONF_PASSWORD: user_input.get(CONF_OWN_PASSWORD)})
 
@@ -657,17 +666,29 @@ class MyhomeOptionsFlowHandler(OptionsFlow):
 
                 if not errors:
                     if _data_update:
-                        self.hass.config_entries.async_update_entry(self.config_entry, data=self.data)
+                        update_kwargs = {"data": self.data}
+                        if _model_update and self.config_entry.title.endswith("Gateway"):
+                            update_kwargs["title"] = f"{user_input[CONF_NAME]} Gateway"
+                        self.hass.config_entries.async_update_entry(self.config_entry, **update_kwargs)
                         await self.hass.config_entries.async_reload(self.config_entry.entry_id)
 
                     return self.async_create_entry(title="", data=self.options)
 
         # ── Build form schema ─────────────────────────────────────────────
+        model_options = [m for m in SUPPORTED_GATEWAY_MODELS]
+        current_model = self.data.get(CONF_NAME, "MyHomeServer1")
+        if current_model not in model_options:
+            model_options.insert(0, current_model)
+
         schema_dict = {
             Required(
                 CONF_ADDRESS,
                 description={"suggested_value": self.data.get(CONF_HOST) or ""},
             ): str,
+            vol.Optional(
+                CONF_NAME,
+                default=current_model,
+            ): vol.Any(In(model_options), cv.string),
             vol.Optional(
                 CONF_OWN_PASSWORD,
                 description={"suggested_value": self.data.get(CONF_PASSWORD) or ""},

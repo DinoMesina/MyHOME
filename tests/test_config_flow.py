@@ -835,3 +835,57 @@ async def test_custom_manual_entry_manufacturer_type(hass: HomeAssistant) -> Non
         assert isinstance(entry_data["manufacturerURL"], str)
         assert entry_data["manufacturerURL"] == "http://www.bticino.it"
 
+
+async def test_options_flow_update_gateway_model(hass: HomeAssistant) -> None:
+    """Test updating the gateway model name via Options Flow."""
+    from homeassistant.const import (
+        CONF_HOST,
+        CONF_MAC,
+        CONF_NAME,
+        CONF_PORT,
+    )
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    from custom_components.myhome.config_flow import MyhomeOptionsFlowHandler
+    from custom_components.myhome.const import (
+        CONF_ADDRESS,
+        CONF_GENERATE_EVENTS,
+        CONF_OWN_PASSWORD,
+        CONF_TRANSITION_MODE,
+        CONF_WORKER_COUNT,
+    )
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            CONF_HOST: "192.168.1.135",
+            CONF_PORT: 20000,
+            CONF_MAC: "00:03:50:00:12:34",
+            CONF_NAME: "F454",
+        },
+        title="F454 Gateway",
+        unique_id="00:03:50:00:12:34",
+    )
+    entry.add_to_hass(hass)
+
+    opt_flow = MyhomeOptionsFlowHandler(entry)
+    opt_flow.hass = hass
+    form = await opt_flow.async_step_init()
+    assert form["type"] == FlowResultType.FORM
+
+    with patch.object(hass.config_entries, "async_reload", return_value=True) as mock_reload:
+        res = await opt_flow.async_step_user({
+            CONF_ADDRESS: "192.168.1.135",
+            CONF_NAME: "MyHomeServer1",
+            CONF_OWN_PASSWORD: None,
+            CONF_WORKER_COUNT: 2,
+            CONF_GENERATE_EVENTS: False,
+            CONF_TRANSITION_MODE: "software_stepped",
+        })
+
+    assert res["type"] == FlowResultType.CREATE_ENTRY
+    assert entry.data[CONF_NAME] == "MyHomeServer1"
+    assert entry.title == "MyHomeServer1 Gateway"
+    assert mock_reload.called
+
+

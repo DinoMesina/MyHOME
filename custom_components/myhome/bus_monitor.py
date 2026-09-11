@@ -85,9 +85,11 @@ class BusFrame:
 class BusMonitor:
     """Non-blocking circular buffer tap for OpenWebNet traffic."""
 
-    def __init__(self, maxlen: int = DEFAULT_RING_BUFFER_SIZE) -> None:
+    def __init__(self, maxlen: int = DEFAULT_RING_BUFFER_SIZE, dedup_window: float = 0.2) -> None:
         self._maxlen = maxlen
+        self._dedup_window = dedup_window
         self._frames: collections.deque[BusFrame] = collections.deque(maxlen=maxlen)
+        self._recent_signatures: collections.deque[tuple[float, str, str]] = collections.deque(maxlen=50)
         self._subscribers: set[Callable[[BusFrame], Any]] = set()
         self._total_rx = 0
         self._total_tx = 0
@@ -112,6 +114,16 @@ class BusMonitor:
     ) -> BusFrame:
         """Record a frame into the circular buffer and notify subscribers."""
         frame = BusFrame(direction=direction, raw=raw, parsed=parsed)
+
+        # Sliding-window duplicate suppression (e.g. concurrent command & event session echo)
+        if self._dedup_window > 0:
+            for prev_ts, prev_dir, prev_raw in reversed(self._recent_signatures):
+                if (frame.timestamp - prev_ts) > self._dedup_window:
+                    break
+                if prev_dir == frame.direction and prev_raw == frame.raw:
+                    return frame
+
+        self._recent_signatures.append((frame.timestamp, frame.direction, frame.raw))
         self._frames.append(frame)
 
         if frame.direction == "rx":
@@ -145,6 +157,7 @@ class BusMonitor:
     def clear(self) -> None:
         """Clear all captured frames."""
         self._frames.clear()
+        self._recent_signatures.clear()
         self._total_rx = 0
         self._total_tx = 0
 
