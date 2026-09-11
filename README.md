@@ -3,9 +3,9 @@
 [![Validate with hassfest](https://github.com/OpenWebNet-HA/MyHOME/actions/workflows/hassfest.yml/badge.svg)](https://github.com/OpenWebNet-HA/MyHOME/actions/workflows/hassfest.yml)
 [![HACS Validation](https://github.com/OpenWebNet-HA/MyHOME/actions/workflows/validate.yml/badge.svg)](https://github.com/OpenWebNet-HA/MyHOME/actions/workflows/validate.yml)
 [![test-coverage](https://github.com/OpenWebNet-HA/MyHOME/actions/workflows/test-coverage.yaml/badge.svg)](https://github.com/OpenWebNet-HA/MyHOME/actions/workflows/test-coverage.yaml)
-[![Coverage](coverage.svg)](https://app.codecov.io/gh/OpenWebNet-HA/MyHOME/tree/v2-phase1-architecture)
-[![Codecov](https://codecov.io/gh/OpenWebNet-HA/MyHOME/branch/v2-phase1-architecture/graph/badge.svg)](https://app.codecov.io/gh/OpenWebNet-HA/MyHOME/tree/v2-phase1-architecture)
-[![PyPI Standards & Packaging](https://github.com/OpenWebNet-HA/MyHOME/actions/workflows/pypi_standards.yml/badge.svg?branch=v2-phase1-architecture)](https://github.com/OpenWebNet-HA/MyHOME/actions/workflows/pypi_standards.yml?query=branch%3Av2-phase1-architecture)
+[![Coverage](coverage.svg)](https://app.codecov.io/gh/OpenWebNet-HA/MyHOME/tree/v2-phase2-architecture)
+[![Codecov](https://codecov.io/gh/OpenWebNet-HA/MyHOME/branch/v2-phase2-architecture/graph/badge.svg)](https://app.codecov.io/gh/OpenWebNet-HA/MyHOME/tree/v2-phase2-architecture)
+[![PyPI Standards & Packaging](https://github.com/OpenWebNet-HA/MyHOME/actions/workflows/pypi_standards.yml/badge.svg?branch=v2-phase2-architecture)](https://github.com/OpenWebNet-HA/MyHOME/actions/workflows/pypi_standards.yml?query=branch%3Av2-phase2-architecture)
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz)
 [![Latest Release](https://img.shields.io/github/v/release/OpenWebNet-HA/MyHOME?include_prereleases&label=release&logo=github)](https://github.com/OpenWebNet-HA/MyHOME/releases)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/)
@@ -21,16 +21,17 @@ Maintained by the **[OpenWebNet-HA](https://github.com/OpenWebNet-HA)** communit
 [📦 Installation](#-installation) • [🏛️ Supported Hardware](#️-supported-hardware) • [📚 Wiki Docs](https://github.com/OpenWebNet-HA/MyHOME/wiki) • [💬 Discussions](https://github.com/OpenWebNet-HA/MyHOME/discussions) • [🤝 Contributing](CONTRIBUTING.md) • [🔒 Security](SECURITY.md)
 
 > [!TIP]
-> **🚀 V2 Phase 2 Architecture Now Live**: Phase 2 architecture is active across `OWNd` and `MyHOME`! Featuring strongly typed CEN / CEN+ scenario command builders and device triggers (P2), Thermoregulation Central Unit (3550 / 4695) master mode and zone coordination (P4), Multi-Gateway routing and plant isolation (P6), and 100.0% test coverage verified against the OpenWebNet Golden Corpus.
+> **🚀 V2 Phase 2 Architecture Now Live**: Phase 2 architecture is active across **OWNd** and **MyHOME**! Featuring strongly typed CEN / CEN+ scenario command builders and device triggers (**P2**), Thermoregulation Central Unit (3550 / 4695) master mode and zone coordination (**P4**), Multi-Gateway routing and physical plant isolation (**P6**), DALI Tunable White support, and 100.0% test coverage verified against the OpenWebNet Golden Corpus.
 
 ---
 
 ## 🌟 Key Features & Modern V2 Architecture
 
+- **Strongly Typed CEN / CEN+ Device Triggers & Addressing (P2)**: Native Home Assistant UI device triggers for scenario buttons with string-preserved addressing (`"0001"`, `"01"`, `"15"`), enriched event payloads (`where`, `gateway_mac`, `entry_id`), and all 8 press/release/held actions without requiring external YAML blueprints.
+- **Thermoregulation Central Unit Coordination (P4)**: Dedicated master coordination for 99-zone Central Unit (`#0`, model `Central Unit (3550)`) and 4-zone Central Unit (`#0#1`, model `Central Unit (4695)`). Master Heating/Cooling switches (`*4*3xx*#0##`) propagate across internal dispatchers to subordinate zones (`standalone=False`), automatically synchronizing whole-home climate operations with physical central units.
+- **Multi-Gateway Routing & Plant Isolation (P6)**: Namespaced event dispatchers (`f"myhome_cen_event_{mac}"`, `f"myhome_central_mode_{mac}"`) and device trigger filtering by parent gateway MAC (`via_device`), eliminating cross-talk and phantom triggers across physical plants combining multiple gateways (e.g. F454 + MH200N / MH201).
+- **DALI Tunable White & Color Temperature**: Native support for DALI DT8 ballasts (F429 / F461 gateways) with auto-detection of color temperature (`ColorMode.COLOR_TEMP`, 2000K–6535K / mireds), seamless Kelvin/mireds conversion, and sentinel filtering.
 - **Declarative Hardware Profiles**: Auto-detects and tunes connection limits and queue pacing specifically for your gateway model (`MH200`, `MH200N`, `MH202`, `F454`, `F455`, `AM4890`, `MyHomeServer1`, and `Legrand 3578`). Eliminates hardware session exhaustion and buffer overflows.
-- **Multi-Gateway Routing & Plant Namespacing (P6)**: Complete physical plant isolation for multi-gateway sites. Events, internal dispatchers, and device registry identifiers are namespaced by gateway MAC address (`gateway_mac`), preventing cross-gateway event collisions or state crosstalk.
-- **Thermoregulation Central Unit Coordination (P4 — WHO=4)**: Dedicated central unit coordination for BTicino 3550 (`#0`) and 4695 (`#0#1`) master units. Seamlessly propagates seasonal heating/cooling master modes, master setpoints, and conditioning states across subordinate zones.
-- **Strongly Typed CEN & CEN+ Command Builders & Device Triggers (P2 — WHO=15/25)**: Native scenario command builders in OWNd with exact OpenWebNet golden corpus frame parity. Home Assistant device triggers support all 8 push/release/held actions and rotary dials with zero-padded string address fidelity (e.g. `01`, `32`).
 - **USB / Serial Gateway & OpenZigBee Support**: Native asynchronous transport for the **Legrand 3578 USB/Serial interface** via `pyserial-asyncio` with dynamic port discovery, authentication bypass, and OpenZigBee addressing (`<8-digit id>#9`).
 - **Zero-Friction Migration**: Upgrades preserve all existing custom entity IDs (`light.keuken`, `cover.living`) and friendly names. Unique IDs migrate transparently (`MAC-WHERE` → `MAC-WHO-WHERE`) with no broken dashboards or automations.
 - **Adaptive Inter-Frame Bus Pacing**: Hardened priority command queue with model-specific inter-frame delays (e.g. 150ms for legacy MH200 vs 20ms for F454) preventing command dropping during heavy automation bursts.
@@ -38,8 +39,7 @@ Maintained by the **[OpenWebNet-HA](https://github.com/OpenWebNet-HA)** communit
 - **Sound System 2.0 & Audio Matrix (WHO=16)**: Complete multi-room audio support for F441 / F441M matrices and amplifiers, including zone power, volume normalization (0–31 scale), software mute emulation, and dynamic streaming proxy.
 - **Streaming Audio Dynamic Proxy**: Seamlessly stream from **Music Assistant**, **Spotify Connect**, or any HA media player to wired BTicino audio zones using a thread-safe `DecoderPool` with analog gain-staging.
 - **Dimmable Light Detection**: Auto-detects dimming capabilities directly from bus events with transition support.
-- **DALI Tunable White & Color Temperature**: Native support for DALI DT8 ballasts (F429 / F461 gateways) with auto-detection of color temperature (`ColorMode.COLOR_TEMP`, 2000K–6535K / mireds), seamless Kelvin/mireds conversion, and sentinel filtering.
-- **Comprehensive Test Suite**: Over 1185 automated unit tests (100% line coverage) executed across modern Python 3.12+ and Home Assistant core standards.
+- **OpenWebNet Golden Corpus Conformance**: 1,189 automated unit tests maintaining strict 100.0% line coverage across all 25 component modules, verified against multi-authority real-world captures across 11 OpenWebNet subsystems.
 
 ---
 
@@ -84,16 +84,16 @@ We now maintain a comprehensive, community-curated **[GitHub Wiki](https://githu
 
 | Domain | WHO | Capabilities |
 |---|---|---|
-| **`light`** | WHO=1 | On/Off, Dimmers with brightness control & transitions (stepped & native), DALI Tunable White (color temperature / mireds) |
+| **`light`** | WHO=1 | On/Off, Dimmers with brightness control & transitions, DALI Tunable White (Dimension 14, 2000K–6535K / mireds) |
 | **`switch`** | WHO=1 | Relays, auxiliary switches, socket actuators |
 | **`cover`** | WHO=2 | Motorized shutters, blinds, roll-ups with state tracking & virtual travel-time positioning |
-| **`climate`** | WHO=4 | Heating, cooling, 4-pipe systems, thermostats, setpoints, fancoil 3-speed modes, offset tracking, Central Unit master mode & zone coordination (3550 / 4695) |
+| **`climate`** | WHO=4 | Heating, cooling, 4-pipe systems, thermostats, setpoints, fancoil 3-speed modes, offset tracking, Central Unit 3550 (`#0`) & 4695 (`#0#1`) master coordination & seasonal propagation |
 | **`alarm_control_panel`** | WHO=5 | Central units (3485/3486), partitions, arm away/home, disarm, panic trigger, zone 0 sync |
 | **`binary_sensor`**| WHO=1 / 9 / 25 | Magnetic contacts, door/window sensors, PIR motion, AUX channels (1–9) |
 | **`sensor`** | WHO=1 / 4 / 18 | Power meters, energy counters, temperature probes (3475), illuminance / lux sensors |
 | **`button`** | WHO=13 / 14 | Hardware actuator lock/unlock for lights & shutters (WHO=14), gateway time sync ping (WHO=13) |
 | **`media_player`** | WHO=16 | F441/F441M audio zones, source tracking, volume normalization, software mute, streaming proxy |
-| **`device_trigger`** *(Automations)* | WHO=15 / 25 | Strongly typed CEN & CEN+ scenario pushbuttons (8 trigger types: short/long press, held, release, rotary dials) with zero-padded address matching & gateway namespacing |
+| **`device_trigger`** *(Automations)* | WHO=15 / 25 | Stateless CEN & CEN+ scenario pushbuttons with string-preserved addressing (`"0001"`), gateway MAC isolation, and 8 native UI trigger types (short press, long press start, held, release, rotary dials) |
 
 ---
 
@@ -387,14 +387,14 @@ automated coverage and physical gateway verification steps.
 ### CI Workflows
 - **`hassfest`**: Official Home Assistant manifest, translation, and metadata validation.
 - **`validate`**: Official HACS compliance checks.
-- **`test-coverage`**: 1185 automated unit tests with snapshot matching and 100% line coverage enforcement on the `ownd` core package.
+- **`test-coverage`**: 1189 automated unit tests with snapshot matching and 100% line coverage enforcement on the `ownd` core package.
 - **`ha_standards`**: Automated architectural standards enforcement (`verify_ha_standards.py` / `test_ha_standards.py`) ensuring user-confirmed discovery flows, complete step translations, no deprecated constants, and no blocking calls in async coroutines.
 - **`ha-upstream-compat`**: Continuous integration testing against upstream Home Assistant Stable, Beta, and Dev channels.
 - **`pypi_standards`**: Strict wheel hygiene, metadata verification, and packaging checks.
 
 ### 📊 Code Coverage & Quality Assurance
 
-The integration maintains 1185 automated unit tests (100% line coverage across all modules) covering core protocol handling, hardware profiles, discovery, state reconciliation, and error boundaries.
+The integration maintains 1189 automated unit tests (100% line coverage across all modules) covering core protocol handling, hardware profiles, discovery, state reconciliation, and error boundaries.
 
 <!-- START_COVERAGE_TABLE -->
 
@@ -426,15 +426,15 @@ The integration maintains 1185 automated unit tests (100% line coverage across a
 
 <!-- END_COVERAGE_TABLE -->
 
-> **Live Test Execution**: View the live code coverage dashboard directly on [**Codecov (v2-phase1-architecture)**](https://app.codecov.io/gh/OpenWebNet-HA/MyHOME/tree/v2-phase1-architecture) or download the interactive HTML report from the [**test-coverage GitHub Actions run**](https://github.com/OpenWebNet-HA/MyHOME/actions/workflows/test-coverage.yaml).
+> **Live Test Execution**: View the live code coverage dashboard directly on [**Codecov (v2-phase2-architecture)**](https://app.codecov.io/gh/OpenWebNet-HA/MyHOME/tree/v2-phase2-architecture) or download the interactive HTML report from the [**test-coverage GitHub Actions run**](https://github.com/OpenWebNet-HA/MyHOME/actions/workflows/test-coverage.yaml).
 
 ---
 
 ## 🗺️ Roadmap
 
-The development of the MyHOME integration is organized into five strategic release milestones. For comprehensive milestone details, technical specifications, and contributor attribution, refer to the full [**ROADMAP.md**](ROADMAP.md).
+The development of the MyHOME integration is organized into strategic release milestones aligned with community RFC #248. For comprehensive milestone details, technical specifications, and contributor attribution, refer to the full [**ROADMAP.md**](ROADMAP.md).
 
-- [x] **Phase 1: Architecture Modernization & Core Feature Parity (v2.0 — Completed)**
+- [x] **Phase 1: Architecture Modernization & Core Feature Parity (v2.0 — Complete)**
   - [x] Declarative hardware gateway profiles (`MH200` to `F454`).
   - [x] Dual asynchronous transports: Async TCP & Serial/USB (`Legrand 3578 / OpenZigBee`).
   - [x] Adaptive inter-frame bus pacing & sentinel supervisor lifecycle.
@@ -442,20 +442,22 @@ The development of the MyHOME integration is organized into five strategic relea
   - [x] Native Home Assistant Diagnostics (`diagnostics.py`) & GitHub Issue Forms.
   - [x] Full feature parity across primary subsystems: Light, Switch, Cover, Climate (Fancoil), Alarm, Binary Sensor (3477 Dry Contact / IR), Device Triggers (CEN/CEN+).
   - [x] 100% automated test coverage across all component modules.
-- [x] **Phase 2: Architectural Enhancements & Protocol Hardening (v2.1 — Current)**
-  - [x] Strongly typed CEN / CEN+ scenario command builders & device triggers with zero-padded address matching (P2).
-  - [x] Thermoregulation Central Unit (3550 / 4695) master mode and zone coordination (P4).
-  - [x] Multi-Gateway routing & plant isolation with namespaced dispatchers and event buses (P6).
-  - [x] DALI Tunable White (color temperature) & RGB lighting support with physical bus validation (F461 / DALI DT8).
-  - [x] OpenWebNet Golden Corpus integration with strict 100.0% test coverage cross-validation across OWNd and MyHOME.
+- [x] **Phase 2: CEN/CEN+ Triggers, Central Unit Coordination & Multi-Gateway Routing (v2.1 — Live)**
+  - [x] Strongly typed CEN / CEN+ scenario command builders and native device triggers with string-preserved addressing (P2).
+  - [x] Thermoregulation Central Unit (3550 / 4695) master mode toggles and whole-plant zone synchronization (P4).
+  - [x] Multi-gateway plant routing, MAC namespacing, and cross-talk isolation (P6).
+  - [x] DALI Tunable White (Dimension 14, 2000K–6535K) auto-detection and color temperature control.
+  - [x] Multi-authority OpenWebNet Golden Corpus cross-validation with 100.0% line coverage (1,189 unit tests).
 - [ ] **Phase 3: Native Bus Timers & Environmental Auto-Discovery (v2.2 — Q4 2026)**
   - [ ] Native SCS light actuator temporization / staircase timers (`WHO = 1` Dimension 2 & timed WHAT codes).
   - [ ] Dynamic discovery for illuminance & motion detectors (Legrand 048834).
+  - [ ] Passive bus sniffing & topology auto-mapping.
+- [ ] **Phase 4: Actuator Diagnostics & Endpoint Safety Locks (v2.3 — Q4 2026)**
   - [ ] Actuator hardware maintenance locks / endpoint disable (`WHO = 14`).
-- [ ] **Phase 4: Extended Lighting, Tunable White & DALI-2 (v2.3 — Q1 2027)**
-  - [ ] Tunable white (Kelvin/mireds) and RGB/RGBW color control for DALI via F429/F429G.
+  - [ ] Relay health telemetry, operating cycle counters, and diagnostic failure codes.
+- [ ] **Phase 5: Extended Lighting Management & DALI-2 (v2.4 — Q1 2027)**
   - [ ] Native support for Lighting Management Room Controllers (`WHO = 24` BMNE500 / 002645).
-- [ ] **Phase 5: Smart Energy Management & Advanced Sound Diffusion (v2.4 — Q1 2027)**
+- [ ] **Phase 6: Smart Energy Management & Advanced Sound Diffusion (v2.5 — Q1 2027)**
   - [ ] Energy management central units & multi-function power meters (`WHO = 18` F520/F521/F522/F523/3522).
   - [ ] Multi-room sound diffusion source navigation, FM tuner presets, and RDS metadata streaming (`WHO = 22`).
 
