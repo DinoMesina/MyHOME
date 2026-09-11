@@ -825,6 +825,12 @@ async def test_setup_entry_prunes_empty_devices_but_preserves_cen(hass: HomeAssi
             identifiers={(DOMAIN, "00:03:50:00:88:77-25-10")},
             name="CEN+ Unit 10",
         )
+        empty_dry_contact = dev_reg.async_get_or_create(
+            config_entry_id=config_entry.entry_id,
+            identifiers={(DOMAIN, "00:03:50:00:88:77-25-31")},
+            name="Dry Contact 31",
+            model="Dry Contact Interface",
+        )
         orphan_device = dev_reg.async_get_or_create(
             config_entry_id=config_entry.entry_id,
             identifiers={(DOMAIN, "00:03:50:00:88:77-orphan")},
@@ -834,8 +840,9 @@ async def test_setup_entry_prunes_empty_devices_but_preserves_cen(hass: HomeAssi
         assert await hass.config_entries.async_setup(config_entry.entry_id)
         await hass.async_block_till_done()
 
-        # The orphan device with 0 entities should have been pruned
+        # The orphan device and empty dry contact with 0 entities should have been pruned
         assert orphan_device.id not in dev_reg.devices
+        assert empty_dry_contact.id not in dev_reg.devices
         # The CEN and CEN+ devices must be preserved
         assert cen_device.id in dev_reg.devices
         assert cenplus_device.id in dev_reg.devices
