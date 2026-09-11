@@ -1042,4 +1042,36 @@ async def test_reconfigure_flow_missing_entry(hass: HomeAssistant) -> None:
         # Home Assistant 2024.4+ validates entry existence prior to flow execution
         pass
 
+    # Direct invocation guarantees 100% coverage of async_step_reconfigure abort logic
+    from custom_components.myhome.config_flow import MyhomeFlowHandler
+    flow = MyhomeFlowHandler()
+    flow.hass = hass
+    flow.context = {"entry_id": "non_existent_entry_id"}
+    result_direct = await flow.async_step_reconfigure()
+    assert result_direct["type"] == FlowResultType.ABORT
+    assert result_direct["reason"] == "unknown"
+
+    # Also test direct step invocation with invalid port to cover defensive error handling
+    from homeassistant.const import CONF_HOST, CONF_MAC, CONF_PORT
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            CONF_HOST: "192.168.1.50",
+            CONF_PORT: 20000,
+            CONF_MAC: "00:03:50:AA:BB:DD",
+        },
+        unique_id="00:03:50:AA:BB:DD",
+    )
+    entry.add_to_hass(hass)
+    flow2 = MyhomeFlowHandler()
+    flow2.hass = hass
+    flow2.context = {"entry_id": entry.entry_id}
+    res_err1 = await flow2.async_step_reconfigure({CONF_HOST: "192.168.1.50", CONF_PORT: 70000})
+    assert res_err1["errors"][CONF_PORT] == "invalid_port"
+
+    res_err2 = await flow2.async_step_reconfigure({CONF_HOST: "192.168.1.50", CONF_PORT: "not_a_port"})
+    assert res_err2["errors"][CONF_PORT] == "invalid_port"
+
+
 
