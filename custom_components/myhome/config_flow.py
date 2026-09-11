@@ -577,11 +577,15 @@ class MyhomeFlowHandler(ConfigFlow, domain=DOMAIN):
     async def async_step_reconfigure(self, user_input=None):
         """Handle reconfiguration of the gateway connection."""
         errors = {}
-        entry = (
-            self._get_reconfigure_entry()
-            if hasattr(self, "_get_reconfigure_entry")
-            else self.hass.config_entries.async_get_entry(self.context.get("entry_id"))
-        )
+        try:
+            entry = (
+                self._get_reconfigure_entry()
+                if hasattr(self, "_get_reconfigure_entry")
+                else self.hass.config_entries.async_get_entry(self.context.get("entry_id"))
+            )
+        except Exception:
+            entry = None
+
         if entry is None:
             return self.async_abort(reason="unknown")
 
