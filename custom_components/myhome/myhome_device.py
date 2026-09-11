@@ -36,7 +36,11 @@ class MyHOMEEntity(RestoreEntity):
         self._who = who
         self._where = where
         self._device_id = device_id
-        self._attr_unique_id = f"{gateway.mac}-{self._who}-{self._device_id}"
+        clean_dev_id = str(self._device_id)
+        if clean_dev_id.startswith(f"{self._who}-"):
+            clean_dev_id = clean_dev_id[len(f"{self._who}-") :]
+
+        self._attr_unique_id = f"{gateway.mac}-{self._who}-{clean_dev_id}"
         self._manufacturer = manufacturer or "BTicino S.p.A."
         self._model = model
         self._gateway_handler = gateway
@@ -49,7 +53,7 @@ class MyHOMEEntity(RestoreEntity):
         self._attr_should_poll = False
 
         self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, f"{gateway.mac}-{self._who}-{self._device_id}")},
+            identifiers={(DOMAIN, f"{gateway.mac}-{self._who}-{clean_dev_id}")},
             name=self._attr_name,
             manufacturer=self._manufacturer,
             model=self._model,
