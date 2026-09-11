@@ -20,6 +20,7 @@ try:
     from homeassistant.components.light import ATTR_COLOR_TEMP
 except ImportError:  # pragma: no cover
     ATTR_COLOR_TEMP = "color_temp"
+import voluptuous as vol
 from homeassistant.components.light import (
     DOMAIN as PLATFORM,
 )
@@ -28,6 +29,7 @@ from homeassistant.const import (
     CONF_NAME,
 )
 from homeassistant.core import callback
+from homeassistant.helpers import entity_platform
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dispatcher_send
 from homeassistant.util.color import (
@@ -61,12 +63,14 @@ from .const import (
     DEFAULT_TRANSITION_MODE,
     DOMAIN,
     LOGGER,
+    SERVICE_TURN_ON_TIMED,
     SOFTWARE_TRANSITION_MAX_STEPS,
     SOFTWARE_TRANSITION_MIN_STEPS,
     SOFTWARE_TRANSITION_STEP_INTERVAL,
     TRANSITION_MODE_AUTO,
     TRANSITION_MODE_NATIVE,
     TRANSITION_MODE_SOFTWARE,
+    build_timed_turn_on_command,
     normalize_where,
 )
 from .gateway import MyHOMEGatewayHandler
@@ -293,6 +297,21 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
 
     if restored_lights:
         async_add_entities(restored_lights)
+
+    platform = entity_platform.current_platform.get()
+    if platform is not None:
+        platform.async_register_entity_service(
+            SERVICE_TURN_ON_TIMED,
+            {
+                vol.Optional("duration"): vol.Coerce(float),
+                vol.Optional("hours", default=0): vol.All(vol.Coerce(int), vol.Range(min=0, max=255)),
+                vol.Optional("minutes", default=0): vol.All(vol.Coerce(int), vol.Range(min=0, max=59)),
+                vol.Optional("seconds", default=0): vol.All(vol.Coerce(float), vol.Range(min=0, max=59)),
+                vol.Optional(ATTR_BRIGHTNESS): vol.All(vol.Coerce(int), vol.Range(min=1, max=255)),
+                vol.Optional(ATTR_BRIGHTNESS_PCT): vol.All(vol.Coerce(int), vol.Range(min=1, max=100)),
+            },
+            "async_turn_on_timed",
+        )
 
     @callback
     def async_add_light(message):
@@ -751,8 +770,59 @@ class MyHOMELight(MyHOMEEntity, LightEntity):
             if fade_id == self._fade_id:
                 self._fade_task = None
 
+    async def async_turn_on_timed(
+        self,
+        duration: float | None = None,
+        hours: int = 0,
+        minutes: int = 0,
+        seconds: float = 0,
+        brightness: int | None = None,
+        brightness_pct: int | None = None,
+    ):
+        """Turn on light with a hardware-offloaded bus timer."""
+        await self._cancel_fade_robustly()
+
+        if brightness is not None or brightness_pct is not None:
+            target_pct = (
+                brightness_pct
+                if brightness_pct is not None
+                else eight_bits_to_percent(brightness)
+            )
+            if target_pct > 0 and (
+                ColorMode.BRIGHTNESS in self._attr_supported_color_modes
+                or ColorMode.COLOR_TEMP in self._attr_supported_color_modes
+                or ColorMode.HS in self._attr_supported_color_modes
+                or ColorMode.RGB in self._attr_supported_color_modes
+            ):
+                await self._gateway_handler.send(
+                    OWNLightingCommand.set_brightness(self._full_where, target_pct)
+                )
+                self._apply_brightness_state(target_pct, is_on=True)
+
+        cmd = build_timed_turn_on_command(
+            self._full_where,
+            duration=duration,
+            hours=hours,
+            minutes=minutes,
+            seconds=seconds,
+        )
+        await self._gateway_handler.send(cmd)
+        self._attr_is_on = True
+        self.async_write_ha_state()
+
     async def async_turn_on(self, **kwargs):
         """Turn the device on."""
+
+        if "timer" in kwargs or "duration" in kwargs:
+            dur = kwargs.get("timer", kwargs.get("duration"))
+            return await self.async_turn_on_timed(
+                duration=dur,
+                hours=kwargs.get("hours", 0),
+                minutes=kwargs.get("minutes", 0),
+                seconds=kwargs.get("seconds", 0),
+                brightness=kwargs.get(ATTR_BRIGHTNESS),
+                brightness_pct=kwargs.get(ATTR_BRIGHTNESS_PCT),
+            )
 
         if ATTR_FLASH in kwargs and self._attr_supported_features & LightEntityFeature.FLASH:
             if kwargs[ATTR_FLASH] == FLASH_SHORT:

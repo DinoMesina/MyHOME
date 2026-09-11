@@ -15,9 +15,9 @@ gantt
     section v2.0 Phase 1
     Architecture & Core Feature Parity (PR #232)           :done, 2026-08, 2026-09
     section v2.1 Phase 2
-    Standalone Protocol Library (P1) & CEN/CEN+ UI (P2)    :active, 2026-09, 2026-10
+    Standalone Protocol Library (P1) & CEN/CEN+ UI (P2)    :done, 2026-09, 2026-09
     section v2.2 Phase 3
-    Thermo Central Unit (P4) & Multi-Gateway (P6)         : 2026-10, 2026-11
+    Thermo Central Unit (P4) & Multi-Gateway (P6)         :active, 2026-10, 2026-11
     section v2.3 Phase 4
     Group Sync (P7), Cover Calibration (P3) & CI Traces (P5): 2026-11, 2026-12
     section v2.4 Phase 5
@@ -78,25 +78,25 @@ The foundational rebuild of the integration engine, eliminating legacy concurren
 
 ---
 
-### 📋 v2.1 — Phase 2: Standalone Protocol Library (P1) & Native CEN/CEN+ Triggers (P2)
-*Target: Q4 2026 (In Progress)*
+### ✅ v2.1 — Phase 2: Standalone Protocol Library (P1), Native CEN/CEN+ Triggers (P2) & Native Bus Timers
+*Target: v2.0.0b11 — September 2026 (Completed)*
 
 Focusing on the top two community-ranked priorities from RFC #248: decoupling the core protocol engine and providing first-class UI triggers for scenario control panels.
 
 - **📦 Extract & Type the Python OpenWebNet Protocol Engine (P1)**:
-  - Extract `custom_components/myhome/ownd/` into an independent, strongly typed Python package (`openwebnet`) published to PyPI.
-  - Provide strongly typed message models (`Lighting.request_turn_on("51")`) shared seamlessly between Home Assistant and the `myhome-gateway` MCP server.
-  - Eliminate code duplication and establish clean semantic versioning for protocol parsing.
+  - Extracted `custom_components/myhome/ownd/` into an independent, strongly typed Python package (`OWNd 2.0.0b5`) published live to PyPI.
+  - Provided strongly typed message models (`Lighting.request_turn_on("51")`) shared seamlessly between Home Assistant and the `myhome-gateway` MCP server.
+  - Eliminated code duplication and established clean semantic versioning for protocol parsing.
 - **🎛️ Native CEN / CEN+ Device Triggers & Switch Devices (P2)**:
-  - Fix `device_trigger.py` to filter directly on scenario device addresses (`object`).
-  - Register physical wall scenario control panels as distinct devices in Home Assistant's `device_registry`.
-  - Provide native Home Assistant UI automations for **Short Press**, **Long Press**, and **Release** events, making external community YAML blueprints optional.
+  - `device_trigger.py` filters directly on scenario device addresses (`object`).
+  - Registered physical wall scenario control panels as distinct devices in Home Assistant's `device_registry`.
+  - Provided native Home Assistant UI automations for **Short Press**, **Long Press**, and **Release** events, making external community YAML blueprints optional.
 - **⏱️ Native Bus Light Timers (`WHO = 1`)**:
-  - Expose a first-class `myhome.turn_on_timed` service directly in the integration (as well as an optional `timer` parameter for `light.turn_on`).
-  - Offload countdown execution directly to SCS light actuator hardware using native WHAT codes (18 = 0.5s, 17 = 30s, 11 = 1m, 12 = 2m, 13 = 3m, 14 = 4m, 15 = 5m, 16 = 15m) and custom Dimension 2 (`*#1*<WHERE>*#2*H*M*S##`).
+  - Exposed a first-class `myhome.turn_on_timed` service directly in the integration (as well as an optional `timer` / `duration` parameter for `light.turn_on` and `switch.turn_on`).
+  - Offloaded countdown execution directly to SCS light actuator hardware using native WHAT codes (18 = 0.5s, 17 = 30s, 11 = 1m, 12 = 2m, 13 = 3m, 14 = 4m, 15 = 5m, 16 = 15m) and custom Dimension 2 (`*#1*<WHERE>*#2*H*M*S##`).
   - *Attribution & Idea*: Inspired by **@GianlucaCh** ([GianlucaCh/Myhome-Timer](https://github.com/GianlucaCh/Myhome-Timer)).
 - **☀️ Dynamic Discovery for Illuminance & Motion Sensors (Legrand 048834)**:
-  - Extend dynamic bus discovery to illuminance sensors when lux frames appear (`WHO = 1` Dimension 6 and `WHO = 24` Dimension 18), eliminating manual YAML entry for light sensors.
+  - Extended dynamic bus discovery to illuminance sensors when lux frames appear (`WHO = 1` Dimension 6 and `WHO = 24` Dimension 18), eliminating manual YAML entry for light sensors.
 
 ---
 

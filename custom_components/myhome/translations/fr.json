@@ -126,6 +126,36 @@
           "description": "Pendant combien de temps la puissance instantanée va-t-elle être automatiquement envoyée."
         }
       }
+    },
+    "turn_on_timed": {
+      "name": "Allumer avec minuterie",
+      "description": "Allumer un éclairage ou un interrupteur avec une minuterie matérielle SCS sur le bus qui s'éteint automatiquement même si Home Assistant redémarre.",
+      "fields": {
+        "duration": {
+          "name": "Durée",
+          "description": "Durée en secondes avant que l'appareil ne s'éteigne automatiquement."
+        },
+        "hours": {
+          "name": "Heures",
+          "description": "Composante optionnelle des heures pour la durée personnalisée (0-255)."
+        },
+        "minutes": {
+          "name": "Minutes",
+          "description": "Composante optionnelle des minutes pour la durée personnalisée (0-59)."
+        },
+        "seconds": {
+          "name": "Secondes",
+          "description": "Composante optionnelle des secondes pour la durée personnalisée (0-59)."
+        },
+        "brightness": {
+          "name": "Luminosité",
+          "description": "Niveau de luminosité optionnel (1-255) pour les lumières."
+        },
+        "brightness_pct": {
+          "name": "Pourcentage de luminosité",
+          "description": "Pourcentage de luminosité optionnel (1-100%) pour les lumières."
+        }
+      }
     }
   }
 }
