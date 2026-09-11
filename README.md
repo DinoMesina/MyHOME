@@ -38,7 +38,8 @@ Maintained by the **[OpenWebNet-HA](https://github.com/OpenWebNet-HA)** communit
 - **Sound System 2.0 & Audio Matrix (WHO=16)**: Complete multi-room audio support for F441 / F441M matrices and amplifiers, including zone power, volume normalization (0–31 scale), software mute emulation, and dynamic streaming proxy.
 - **Streaming Audio Dynamic Proxy**: Seamlessly stream from **Music Assistant**, **Spotify Connect**, or any HA media player to wired BTicino audio zones using a thread-safe `DecoderPool` with analog gain-staging.
 - **Dimmable Light Detection**: Auto-detects dimming capabilities directly from bus events with transition support.
-- **Comprehensive Test Suite**: Over 1158 automated unit tests (100% line coverage) executed across modern Python 3.12+ and Home Assistant core standards.
+- **DALI Tunable White & Color Temperature**: Native support for DALI DT8 ballasts (F429 / F461 gateways) with auto-detection of color temperature (`ColorMode.COLOR_TEMP`, 2000K–6535K / mireds), seamless Kelvin/mireds conversion, and sentinel filtering.
+- **Comprehensive Test Suite**: Over 1185 automated unit tests (100% line coverage) executed across modern Python 3.12+ and Home Assistant core standards.
 
 ---
 
@@ -83,7 +84,7 @@ We now maintain a comprehensive, community-curated **[GitHub Wiki](https://githu
 
 | Domain | WHO | Capabilities |
 |---|---|---|
-| **`light`** | WHO=1 | On/Off, Dimmers with brightness control & transitions (stepped & native) |
+| **`light`** | WHO=1 | On/Off, Dimmers with brightness control & transitions (stepped & native), DALI Tunable White (color temperature / mireds) |
 | **`switch`** | WHO=1 | Relays, auxiliary switches, socket actuators |
 | **`cover`** | WHO=2 | Motorized shutters, blinds, roll-ups with state tracking & virtual travel-time positioning |
 | **`climate`** | WHO=4 | Heating, cooling, 4-pipe systems, thermostats, setpoints, fancoil 3-speed modes, offset tracking, Central Unit master mode & zone coordination (3550 / 4695) |
@@ -386,14 +387,14 @@ automated coverage and physical gateway verification steps.
 ### CI Workflows
 - **`hassfest`**: Official Home Assistant manifest, translation, and metadata validation.
 - **`validate`**: Official HACS compliance checks.
-- **`test-coverage`**: 1158 automated unit tests with snapshot matching and 100% line coverage enforcement on the `ownd` core package.
+- **`test-coverage`**: 1185 automated unit tests with snapshot matching and 100% line coverage enforcement on the `ownd` core package.
 - **`ha_standards`**: Automated architectural standards enforcement (`verify_ha_standards.py` / `test_ha_standards.py`) ensuring user-confirmed discovery flows, complete step translations, no deprecated constants, and no blocking calls in async coroutines.
 - **`ha-upstream-compat`**: Continuous integration testing against upstream Home Assistant Stable, Beta, and Dev channels.
 - **`pypi_standards`**: Strict wheel hygiene, metadata verification, and packaging checks.
 
 ### 📊 Code Coverage & Quality Assurance
 
-The integration maintains 1158 automated unit tests (100% line coverage across all modules) covering core protocol handling, hardware profiles, discovery, state reconciliation, and error boundaries.
+The integration maintains 1185 automated unit tests (100% line coverage across all modules) covering core protocol handling, hardware profiles, discovery, state reconciliation, and error boundaries.
 
 <!-- START_COVERAGE_TABLE -->
 
@@ -445,6 +446,7 @@ The development of the MyHOME integration is organized into five strategic relea
   - [x] Strongly typed CEN / CEN+ scenario command builders & device triggers with zero-padded address matching (P2).
   - [x] Thermoregulation Central Unit (3550 / 4695) master mode and zone coordination (P4).
   - [x] Multi-Gateway routing & plant isolation with namespaced dispatchers and event buses (P6).
+  - [x] DALI Tunable White (color temperature) & RGB lighting support with physical bus validation (F461 / DALI DT8).
   - [x] OpenWebNet Golden Corpus integration with strict 100.0% test coverage cross-validation across OWNd and MyHOME.
 - [ ] **Phase 3: Native Bus Timers & Environmental Auto-Discovery (v2.2 — Q4 2026)**
   - [ ] Native SCS light actuator temporization / staircase timers (`WHO = 1` Dimension 2 & timed WHAT codes).

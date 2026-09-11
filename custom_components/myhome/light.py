@@ -4,6 +4,8 @@ import asyncio
 from homeassistant.components.light import (
     ATTR_BRIGHTNESS,
     ATTR_BRIGHTNESS_PCT,
+    ATTR_COLOR_TEMP,
+    ATTR_COLOR_TEMP_KELVIN,
     ATTR_FLASH,
     ATTR_TRANSITION,
     FLASH_LONG,
@@ -22,6 +24,10 @@ from homeassistant.const import (
 from homeassistant.core import callback
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dispatcher_send
+from homeassistant.util.color import (
+    color_temperature_kelvin_to_mired,
+    color_temperature_mired_to_kelvin,
+)
 from OWNd.message import (
     OWNLightingCommand,
     OWNLightingEvent,
@@ -29,6 +35,7 @@ from OWNd.message import (
 
 from .const import (
     CONF_BUS_INTERFACE,
+    CONF_COLOR_TEMP,
     CONF_DEVICE_MODEL,
     CONF_DIMMABLE,
     CONF_ENTITY,
@@ -185,6 +192,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
             _predicted_id = f"light.light_{default_suffix.lower().replace(' ', '_')}"
             _custom_entry = _customs.get(entry.entity_id, {}) or _customs.get(_predicted_id, {})
             _is_dimmable = cfg.get(CONF_DIMMABLE, _custom_entry.get("dimmable", False))
+            _is_color_temp = cfg.get(CONF_COLOR_TEMP, _custom_entry.get("color_temp", False))
             _name = cfg.get(CONF_NAME, f"Light {default_suffix}")
             _entity_name = cfg.get(CONF_ENTITY_NAME)
             _icon = cfg.get(CONF_ICON)
@@ -206,6 +214,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
                 manufacturer=_manufacturer,
                 model=_model,
                 gateway=gateway,
+                color_temp=_is_color_temp,
             )
             known_lights.add(device_id)
             restored_lights.append(_light)
@@ -248,6 +257,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
             manufacturer=cfg.get(CONF_MANUFACTURER, "BTicino"),
             model=cfg.get(CONF_DEVICE_MODEL, "Lighting Device"),
             gateway=gateway,
+            color_temp=cfg.get(CONF_COLOR_TEMP, False),
         )
         known_lights.add(device_where_id)
         known_lights.add(dev_id)
@@ -431,6 +441,7 @@ class MyHOMELight(MyHOMEEntity, LightEntity):
         manufacturer: str,
         model: str,
         gateway: MyHOMEGatewayHandler,
+        color_temp: bool = False,
     ):
         super().__init__(
             hass=hass,
@@ -452,7 +463,11 @@ class MyHOMELight(MyHOMEEntity, LightEntity):
         self._attr_supported_features = 0
         self._attr_supported_color_modes: set[ColorMode] = set()
 
-        if dimmable:
+        if color_temp:
+            self._attr_supported_color_modes.add(ColorMode.COLOR_TEMP)
+            self._attr_color_mode = ColorMode.COLOR_TEMP
+            self._attr_supported_features |= LightEntityFeature.TRANSITION
+        elif dimmable:
             self._attr_supported_color_modes.add(ColorMode.BRIGHTNESS)
             self._attr_color_mode = ColorMode.BRIGHTNESS
             self._attr_supported_features |= LightEntityFeature.TRANSITION
@@ -460,6 +475,11 @@ class MyHOMELight(MyHOMEEntity, LightEntity):
             self._attr_supported_color_modes.add(ColorMode.ONOFF)
             self._attr_color_mode = ColorMode.ONOFF
             self._attr_supported_features |= LightEntityFeature.FLASH
+
+        self._attr_min_color_temp_kelvin = 2000
+        self._attr_max_color_temp_kelvin = 6535
+        self._attr_color_temp_kelvin: int | None = None
+        self._attr_color_temp: int | None = None
 
         self._attr_extra_state_attributes = {
             "A": where[: len(where) // 2],
@@ -500,7 +520,10 @@ class MyHOMELight(MyHOMEEntity, LightEntity):
 
         Only used by the generic entity update service.
         """
-        if ColorMode.BRIGHTNESS in self._attr_supported_color_modes:
+        if ColorMode.COLOR_TEMP in self._attr_supported_color_modes:
+            await self._gateway_handler.send_status_request(OWNLightingCommand.get_brightness(self._full_where))
+            await self._gateway_handler.send_status_request(OWNLightingCommand.get_color_temperature(self._full_where))
+        elif ColorMode.BRIGHTNESS in self._attr_supported_color_modes:
             await self._gateway_handler.send_status_request(OWNLightingCommand.get_brightness(self._full_where))
         else:
             await self._gateway_handler.send_status_request(OWNLightingCommand.status(self._full_where))
@@ -644,8 +667,31 @@ class MyHOMELight(MyHOMEEntity, LightEntity):
             elif kwargs[ATTR_FLASH] == FLASH_LONG:
                 return await self._gateway_handler.send(OWNLightingCommand.flash(self._full_where, 1.5))
 
+        # Color temperature control (DALI Tunable White)
+        if (
+            ATTR_COLOR_TEMP_KELVIN in kwargs or ATTR_COLOR_TEMP in kwargs
+        ) and ColorMode.COLOR_TEMP in self._attr_supported_color_modes:
+            if ATTR_COLOR_TEMP_KELVIN in kwargs:
+                target_kelvin = int(kwargs[ATTR_COLOR_TEMP_KELVIN])
+                target_mireds = color_temperature_kelvin_to_mired(target_kelvin)
+            else:
+                target_mireds = int(kwargs[ATTR_COLOR_TEMP])
+                target_kelvin = color_temperature_mired_to_kelvin(target_mireds)
+
+            await self._gateway_handler.send(
+                OWNLightingCommand.set_color_temperature(self._full_where, target_mireds)
+            )
+            self._attr_color_temp = target_mireds
+            self._attr_color_temp_kelvin = target_kelvin
+            self._attr_color_mode = ColorMode.COLOR_TEMP
+
+            if ATTR_BRIGHTNESS not in kwargs and ATTR_BRIGHTNESS_PCT not in kwargs:
+                self._attr_is_on = True
+                self.async_schedule_update_ha_state()
+                return
+
         # Original combined condition preserved for compatibility
-        if ((ATTR_BRIGHTNESS in kwargs or ATTR_BRIGHTNESS_PCT in kwargs) and ColorMode.BRIGHTNESS in self._attr_supported_color_modes) or (
+        if ((ATTR_BRIGHTNESS in kwargs or ATTR_BRIGHTNESS_PCT in kwargs) and (ColorMode.BRIGHTNESS in self._attr_supported_color_modes or ColorMode.COLOR_TEMP in self._attr_supported_color_modes)) or (
             ATTR_TRANSITION in kwargs and self._attr_supported_features & LightEntityFeature.TRANSITION
         ):
             transition = float(kwargs.get(ATTR_TRANSITION, 0.0))
@@ -750,9 +796,23 @@ class MyHOMELight(MyHOMEEntity, LightEntity):
         if is_fading and not self._attr_is_on:
             self._cancel_fade_if_active()
 
+        # Auto-promote to tunable white when color temperature data is received
+        if isinstance(getattr(message, "color_temp", None), int):
+            if ColorMode.COLOR_TEMP not in self._attr_supported_color_modes:
+                LOGGER.info(
+                    "Auto-detected tunable white for light %s, upgrading to COLOR_TEMP mode.",
+                    self._where,
+                )
+                self._attr_supported_color_modes = {ColorMode.COLOR_TEMP}
+                self._attr_color_mode = ColorMode.COLOR_TEMP
+                self._attr_supported_features |= LightEntityFeature.TRANSITION
+                self._attr_supported_features &= ~LightEntityFeature.FLASH
+            self._attr_color_temp = message.color_temp
+            self._attr_color_temp_kelvin = color_temperature_mired_to_kelvin(message.color_temp)
+
         # Auto-promote to dimmable when brightness data is received (always)
-        if (message.brightness is not None or message.brightness_preset is not None):
-            if ColorMode.BRIGHTNESS not in self._attr_supported_color_modes:
+        elif (message.brightness is not None or message.brightness_preset is not None):
+            if ColorMode.BRIGHTNESS not in self._attr_supported_color_modes and ColorMode.COLOR_TEMP not in self._attr_supported_color_modes:
                 LOGGER.info(
                     "Auto-detected dimmer for light %s, upgrading to BRIGHTNESS mode.",
                     self._where,
@@ -762,7 +822,7 @@ class MyHOMELight(MyHOMEEntity, LightEntity):
                 self._attr_supported_features |= LightEntityFeature.TRANSITION
                 self._attr_supported_features &= ~LightEntityFeature.FLASH
 
-        if ColorMode.BRIGHTNESS in self._attr_supported_color_modes and message.brightness is not None:
+        if (ColorMode.BRIGHTNESS in self._attr_supported_color_modes or ColorMode.COLOR_TEMP in self._attr_supported_color_modes) and message.brightness is not None:
             if is_fading:
                 # Precise policy during fade: only apply significant physical changes
                 current_opt = self._attr_brightness_pct or 0

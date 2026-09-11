@@ -17,6 +17,7 @@ from homeassistant.components.light import (
 from homeassistant.const import CONF_NAME
 from homeassistant.helpers.dispatcher import async_dispatcher_send
 from OWNd.message import (
+    OWNEvent,
     OWNLightingEvent,
 )
 
@@ -1006,4 +1007,137 @@ async def test_light_async_added_to_hass_requests_initial_state(hass):
         await dimmer.async_added_to_hass()
         mock_gateway.send_status_request.assert_called_once()
 
+
+async def test_dali_tunable_white_auto_promotion(hass):
+    """Test auto-promotion from on/off to COLOR_TEMP when dimension 14 reading is received."""
+    mock_gateway = MagicMock()
+    mock_gateway.send = AsyncMock()
+    mock_gateway.log_id = "GATEWAY"
+
+    light = MyHOMELight(
+        hass=hass,
+        name="DALI Light",
+        entity_name="DALI Light",
+        icon="mdi:lightbulb",
+        icon_on="mdi:lightbulb-on",
+        device_id="25#4#02",
+        who="1",
+        where="25",
+        interface="02",
+        dimmable=False,
+        manufacturer="BTicino",
+        model="DALI Ballast",
+        gateway=mock_gateway,
+    )
+    light.hass = hass
+    light.async_schedule_update_ha_state = MagicMock()
+
+    assert light.color_mode == ColorMode.ONOFF
+    assert ColorMode.COLOR_TEMP not in light.supported_color_modes
+
+    # Receive valid color temp event (153 mireds = ~6535 K)
+    event_valid = OWNEvent.parse("*#1*25#4#02*14*153##")
+    light.handle_event(event_valid)
+
+    assert light.color_mode == ColorMode.COLOR_TEMP
+    assert ColorMode.COLOR_TEMP in light.supported_color_modes
+    assert light.color_temp == 153
+    assert light.color_temp_kelvin == 6535
+    assert light.supported_features & LightEntityFeature.TRANSITION
+
+
+async def test_dali_tunable_white_unsupported_sentinel(hass):
+    """Test that sentinel dimension 14 value 1 does NOT promote light to COLOR_TEMP."""
+    mock_gateway = MagicMock()
+    mock_gateway.send = AsyncMock()
+    mock_gateway.log_id = "GATEWAY"
+
+    light = MyHOMELight(
+        hass=hass,
+        name="Standard Light",
+        entity_name="Standard Light",
+        icon="mdi:lightbulb",
+        icon_on="mdi:lightbulb-on",
+        device_id="27#4#02",
+        who="1",
+        where="27",
+        interface="02",
+        dimmable=False,
+        manufacturer="BTicino",
+        model="Standard Actuator",
+        gateway=mock_gateway,
+    )
+    light.hass = hass
+    light.async_schedule_update_ha_state = MagicMock()
+
+    # Receive sentinel 1 event (unsupported)
+    event_unsupported = OWNEvent.parse("*#1*27#4#02*14*1##")
+    light.handle_event(event_unsupported)
+
+    assert light.color_mode == ColorMode.ONOFF
+    assert ColorMode.COLOR_TEMP not in light.supported_color_modes
+    assert light.color_temp is None
+    assert light.color_temp_kelvin is None
+
+
+async def test_dali_tunable_white_turn_on_commands(hass):
+    """Test setting color temperature via kelvin and mireds."""
+    mock_gateway = MagicMock()
+    mock_gateway.send = AsyncMock()
+    mock_gateway.send_status_request = AsyncMock()
+    mock_gateway.config_entry = MagicMock()
+    mock_gateway.config_entry.options = {}
+
+    light = MyHOMELight(
+        hass=hass,
+        name="DALI Light",
+        entity_name="DALI Light",
+        icon="mdi:lightbulb",
+        icon_on="mdi:lightbulb-on",
+        device_id="25#4#02",
+        who="1",
+        where="25",
+        interface="02",
+        dimmable=True,
+        manufacturer="BTicino",
+        model="DALI Ballast",
+        gateway=mock_gateway,
+        color_temp=True,
+    )
+    light.hass = hass
+    light.async_schedule_update_ha_state = MagicMock()
+
+    assert light.color_mode == ColorMode.COLOR_TEMP
+
+    # Turn on with color_temp_kelvin = 2700 (370 mireds)
+    await light.async_turn_on(color_temp_kelvin=2700)
+    mock_gateway.send.assert_called_once()
+    sent_cmd = mock_gateway.send.call_args[0][0]
+    assert sent_cmd._raw == "*#1*25#4#02*#14*370##"
+    assert light.color_temp == 370
+    assert light.color_temp_kelvin == 2700
+
+    # Turn on with color_temp = 250 mireds (4000 K)
+    mock_gateway.send.reset_mock()
+    await light.async_turn_on(color_temp=250)
+    sent_cmd = mock_gateway.send.call_args[0][0]
+    assert sent_cmd._raw == "*#1*25#4#02*#14*250##"
+    assert light.color_temp == 250
+    assert light.color_temp_kelvin == 4000
+
+    # Turn on with both color temp and brightness
+    mock_gateway.send.reset_mock()
+    await light.async_turn_on(color_temp_kelvin=3000, brightness=200)
+    assert mock_gateway.send.call_count == 2
+    first_cmd = mock_gateway.send.call_args_list[0][0][0]
+    second_cmd = mock_gateway.send.call_args_list[1][0][0]
+    assert first_cmd._raw == "*#1*25#4#02*#14*333##"
+    assert "1" in second_cmd._raw  # brightness command
+
+    # Test async_update queries both brightness and color temp
+    mock_gateway.send_status_request.reset_mock()
+    await light.async_update()
+    assert mock_gateway.send_status_request.call_count == 2
+    assert mock_gateway.send_status_request.call_args_list[0][0][0]._raw == "*#1*25#4#02*1##"
+    assert mock_gateway.send_status_request.call_args_list[1][0][0]._raw == "*#1*25#4#02*14##"
 
