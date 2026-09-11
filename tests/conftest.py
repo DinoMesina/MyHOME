@@ -11,20 +11,46 @@ import warnings
 # Ensure required integration dependencies declared in manifest.json are available in CI
 try:
     import OWNd  # noqa: F401
-except ImportError:
-    manifest_path = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-        "custom_components",
-        "myhome",
-        "manifest.json",
-    )
-    if os.path.exists(manifest_path):
-        with open(manifest_path, encoding="utf-8") as f:
-            reqs = json.load(f).get("requirements", [])
-            for req in reqs:
-                subprocess.check_call([sys.executable, "-m", "pip", "install", req])
-    else:
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "OWNd==2.0.0b5"])
+    from OWNd.message import OWNCenCommand  # noqa: F401
+except (ImportError, AttributeError):
+    installed = False
+    if os.environ.get("GITHUB_ACTIONS"):
+        branch = os.environ.get("GITHUB_HEAD_REF") or os.environ.get("GITHUB_REF_NAME") or "v2-phase2-architecture"
+        for target in [
+            f"git+https://github.com/OpenWebNet-HA/OWNd.git@{branch}",
+            "git+https://github.com/OpenWebNet-HA/OWNd.git@v2-phase2-architecture",
+            "git+https://github.com/OpenWebNet-HA/OWNd.git@master",
+        ]:
+            try:
+                subprocess.check_call([
+                    sys.executable,
+                    "-m",
+                    "pip",
+                    "install",
+                    "--upgrade",
+                    "--force-reinstall",
+                    "--no-deps",
+                    target,
+                ])
+                installed = True
+                break
+            except subprocess.CalledProcessError:
+                continue
+
+    if not installed:
+        manifest_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "custom_components",
+            "myhome",
+            "manifest.json",
+        )
+        if os.path.exists(manifest_path):
+            with open(manifest_path, encoding="utf-8") as f:
+                reqs = json.load(f).get("requirements", [])
+                for req in reqs:
+                    subprocess.check_call([sys.executable, "-m", "pip", "install", req])
+        else:
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "OWNd==2.0.0b5"])
     importlib.invalidate_caches()
 
 # Ensure repository custom_components directory is discoverable even when

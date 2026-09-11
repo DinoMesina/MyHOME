@@ -16,11 +16,17 @@ from homeassistant.const import (
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
-from OWNd.message import (
-    OWNCenCommand,
-    OWNCenPlusCommand,
-    OWNCommand,
-)
+
+try:
+    from OWNd.message import (
+        OWNCenCommand,
+        OWNCenPlusCommand,
+        OWNCommand,
+    )
+except ImportError:
+    OWNCenCommand = None  # type: ignore[assignment]
+    OWNCenPlusCommand = None  # type: ignore[assignment]
+    from OWNd.message import OWNCommand  # type: ignore[no-redef]
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.myhome.climate import MyHOMEClimate
@@ -41,6 +47,8 @@ from custom_components.myhome.gateway import MyHOMEGatewayHandler
 
 def test_p2_cen_command_builders_exact_framing():
     """Verify strongly typed OWNCenCommand and OWNCenPlusCommand emit exact OpenWebNet frames."""
+    if OWNCenCommand is None or OWNCenPlusCommand is None:
+        pytest.skip("OWNCenCommand / OWNCenPlusCommand not available in installed OWNd")
     # CEN (WHO=15)
     press = OWNCenCommand.press("11", 2)
     assert str(press) == "*15*1*11#2##"
