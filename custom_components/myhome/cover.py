@@ -163,6 +163,9 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     @callback
     def async_add_cover(message):
         """Add a cover from a discovered message."""
+        if getattr(message, "is_translation", None) is True:
+            return
+
         # Handle general cover commands (WHERE=0, is_general=True)
         if getattr(message, "is_general", False) or str(getattr(message, "where", "")) == "0":
             async_dispatcher_send(
@@ -500,6 +503,8 @@ class MyHOMECover(MyHOMEEntity, CoverEntity, RestoreEntity):
     @callback
     def handle_event(self, message: OWNAutomationEvent):
         """Handle an event message."""
+        if getattr(message, "is_translation", None) is True:
+            return
         LOGGER.debug(
             "%s %s",
             self._gateway_handler.log_id,
