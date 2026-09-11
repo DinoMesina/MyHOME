@@ -8,11 +8,16 @@ import subprocess
 import sys
 import warnings
 
+# Python 3.13 compatibility: Ensure an event loop exists on MainThread
+try:
+    asyncio.get_event_loop_policy().get_event_loop()
+except RuntimeError:
+    asyncio.set_event_loop(asyncio.new_event_loop())
+
 # Ensure required integration dependencies declared in manifest.json are available in CI
 try:
     import OWNd  # noqa: F401
-    from OWNd.message import OWNCenCommand  # noqa: F401
-except (ImportError, AttributeError):
+except ImportError:
     installed = False
     if os.environ.get("GITHUB_ACTIONS"):
         branch = os.environ.get("GITHUB_HEAD_REF") or os.environ.get("GITHUB_REF_NAME") or "v2-phase2-architecture"
