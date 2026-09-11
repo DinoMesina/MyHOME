@@ -18,6 +18,7 @@ This directory provides comprehensive, step-by-step guides for connecting, confi
 | [**Sound System / Media Player**](media_player.md) | Diffusione Sonora | `WHO = 16` | F441/F441M hardware analog audio matrix, Dynamic Proxy for Music Assistant / Spotify, decoder pool management, gain staging (anti-hiss), and physical wall-panel routing. |
 | [**CEN & CEN+ Device Triggers**](cen_cenplus.md) | Scenario Pushbuttons | `WHO = 15`, `WHO = 25` | Native Home Assistant UI Device Triggers, physical button numbers 0–31, short press, long press, release, rotary dials, and automation blueprints. |
 | [**Lovelace Bus Monitor Card**](bus_monitor.md) | In-Band Diagnostic Monitor | All WHOs | Native Lovelace card (`custom:myhome-bus-card`), 500-frame circular ring buffer, real-time live streaming, WHO filtering, 1-click **Sweep Bus**, and 1-click **Export Trace**. |
+| [**Lovelace Dashboard Recipes**](lovelace_recipes.md) | UI & Dashboard Showcase | All WHOs | Dynamic auto-collapsing active lights, multiroom audio player cards, perimeter security status, and equipment runtime tracker. |
 | [**Integration Services Reference**](services.md) | Integration Actions | All WHOs | Reference for `myhome.send_message`, `myhome.turn_on_timed` (hardware SCS timers), `myhome.sync_time`, `myhome.start_sending_instant_power`, and `myhome.sweep_bus`. |
 
 ---
