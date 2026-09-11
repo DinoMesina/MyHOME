@@ -534,3 +534,152 @@ async def test_p6_multi_gateway_central_unit_isolation(hass: HomeAssistant):
 
     # Zone on Gateway 2 MUST NOT be affected!
     assert zone_gw2._attr_hvac_mode == HVACMode.HEAT
+
+
+async def test_p4_climate_central_unit_bus_events_and_auto_mode(hass: HomeAssistant):
+    """Test central unit incoming bus events propagating mode and AUTO mode support."""
+    from OWNd.message import OWNHeatingEvent
+
+    gw = MagicMock(spec=MyHOMEGatewayHandler)
+    gw.mac = "AA:BB:CC:DD:EE:01"
+    gw.log_id = "GW1"
+    gw.send_message = AsyncMock(return_value=True)
+
+    cu = MyHOMEClimate(
+        hass=hass,
+        device_id="cu",
+        who="4",
+        where="#0",
+        interface=None,
+        name="Central Unit",
+        heating=True,
+        cooling=True,
+        fan=False,
+        standalone=False,
+        central=True,
+        manufacturer="BTicino",
+        model="Central Unit (3550)",
+        gateway=gw,
+    )
+    zone = MyHOMEClimate(
+        hass=hass,
+        device_id="zone",
+        who="4",
+        where="1",
+        interface=None,
+        name="Subordinate Zone",
+        heating=True,
+        cooling=True,
+        fan=False,
+        standalone=False,
+        central=False,
+        manufacturer="BTicino",
+        model="Heating Zone",
+        gateway=gw,
+    )
+    await cu.async_added_to_hass()
+    await zone.async_added_to_hass()
+
+    cu._attr_hvac_modes = [HVACMode.OFF, HVACMode.HEAT, HVACMode.COOL, HVACMode.AUTO]
+    zone._attr_hvac_modes = [HVACMode.OFF, HVACMode.HEAT, HVACMode.COOL, HVACMode.AUTO]
+
+    # 1. Incoming MESSAGE_TYPE_MODE on Central Unit -> triggers lines 743-748
+    event_mode = OWNHeatingEvent.parse("*4*102*#0##")  # Heating mode
+    cu.handle_event(event_mode)
+
+    # 2. Incoming MESSAGE_TYPE_MODE_TARGET on Central Unit -> triggers lines 787-792
+    event_mode_target = OWNHeatingEvent.parse("*#4*#0*14*0210*1##")  # Heating target
+    cu.handle_event(event_mode_target)
+
+    # 3. Subordinate zone receiving master_mode = HVACMode.AUTO -> triggers lines 514-516
+    zone._attr_hvac_mode = HVACMode.HEAT
+    zone._handle_central_mode_update(HVACMode.AUTO)
+    assert zone._attr_hvac_mode == HVACMode.AUTO
+
+
+async def test_p2_device_trigger_edge_cases(hass: HomeAssistant):
+    """Test device_trigger edge cases for 100% test coverage."""
+    from custom_components.myhome.device_trigger import (
+        _get_cen_address_from_device,
+        _get_gateway_mac_from_device,
+    )
+
+    # 1. Foreign domain identifier (lines 61, 75)
+    dev_foreign = MagicMock()
+    dev_foreign.identifiers = {("other_domain", "ident1")}
+    assert _get_gateway_mac_from_device(dev_foreign) is None
+    assert _get_cen_address_from_device(dev_foreign) is None
+
+    # 2. Gateway device with single MAC identifier (lines 66-68)
+    dev_gw = MagicMock()
+    dev_gw.identifiers = {(DOMAIN, "00:11:22:33:44:55")}
+    assert _get_gateway_mac_from_device(dev_gw) == "00:11:22:33:44:55"
+
+    # 3. Legacy CEN identifier (lines 80-82)
+    dev_legacy = MagicMock()
+    dev_legacy.identifiers = {(DOMAIN, "cen_42")}
+    assert _get_cen_address_from_device(dev_legacy) == "42"
+
+    dev_legacy_plus = MagicMock()
+    dev_legacy_plus.identifiers = {(DOMAIN, "cenplus_99")}
+    assert _get_cen_address_from_device(dev_legacy_plus) == "99"
+
+    # 4. Fallback in async_attach_trigger (lines 182-184)
+    dev_info = MagicMock()
+    dev_info.id = "dev_info_id"
+    dev_info.identifiers = {(DOMAIN, "00:11:22:33:44:55-15-77")}
+    dev_reg = dr.async_get(hass)
+    dev_reg.async_get = MagicMock(return_value=dev_info)
+
+    action = AsyncMock()
+    config = {
+        CONF_DEVICE_ID: "dev_info_id",
+        CONF_TYPE: CONF_SHORT_PRESS,
+        CONF_SUBTYPE: "button_1",
+    }
+    with patch("custom_components.myhome.device_trigger._get_cen_address_from_device", return_value=None):
+        with patch("custom_components.myhome.device_trigger._get_cen_info_from_device", return_value=(False, 77)):
+            unsub = await async_attach_trigger(hass, config, action, {})
+            unsub()
+
+    # 5. Non-numeric object mismatch exception handling (lines 211-212)
+    action_cb = AsyncMock()
+    config_str = {
+        CONF_DEVICE_ID: "dev_info_id",
+        CONF_TYPE: CONF_SHORT_PRESS,
+        CONF_SUBTYPE: "button_1",
+        CONF_ADDRESS: "alpha",
+    }
+    unsub2 = await async_attach_trigger(hass, config_str, action_cb, {})
+    event_non_numeric = MagicMock()
+    event_non_numeric.data = {
+        "event": CONF_SHORT_PRESS,
+        "pushbutton": 1,
+        "object": "beta",
+        "where": "gamma",
+    }
+    hass.bus.async_fire(DOMAIN, event_non_numeric.data)
+    await hass.async_block_till_done()
+    action_cb.assert_not_called()
+    unsub2()
+
+
+async def test_p6_gateway_cen_registration_and_mac_edges(hass: HomeAssistant):
+    """Test gateway _ensure_cen_device and mac edge cases for 100% test coverage."""
+    entry = MagicMock()
+    entry.data = {}
+    handler = MyHOMEGatewayHandler(hass, entry, None)
+    handler.gateway.serial = None
+
+    # 1. mac property when serial is None (lines 139-140)
+    assert handler.mac == ""
+
+    # 2. _ensure_cen_device when config_entry is None (lines 115-117)
+    handler.config_entry = None
+    handler._ensure_cen_device(15, "11")
+
+    # 3. _ensure_cen_device exception handling when dr.async_get raises (lines 129-130)
+    handler.config_entry = MagicMock()
+    handler.config_entry.entry_id = "test_entry"
+    with patch("homeassistant.helpers.device_registry.async_get", side_effect=RuntimeError("Registry error")):
+        handler._ensure_cen_device(15, "12")
