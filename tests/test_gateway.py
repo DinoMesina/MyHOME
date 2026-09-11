@@ -1083,4 +1083,46 @@ async def test_gateway_sending_loop_timeout_and_terminate_branches(gateway_handl
     await term_task
 
 
+def test_handle_gateway_diagnostics_dimension_15_and_16(gateway_handler, mock_config_entry):
+    """Test dynamic model and firmware updates from WHO=13 diagnostics."""
+    from OWNd.message import OWNEvent
+
+    gateway_handler.device_registry_id = "dev_123"
+    mock_dev_reg = MagicMock()
+
+    with patch("homeassistant.helpers.device_registry.async_get", return_value=mock_dev_reg):
+        # 1. Dimension 15: Device Type 2 -> MyHomeServer1
+        msg_dim15 = OWNEvent.parse("*#13**15*2##")
+        gateway_handler._handle_gateway_diagnostics(msg_dim15)
+
+        assert gateway_handler.model == "MyHomeServer1"
+        assert gateway_handler.gateway.model_name == "MyHomeServer1"
+        assert mock_dev_reg.async_update_device.called
+        assert mock_dev_reg.async_update_device.call_args[1]["model"] == "MyHomeServer1"
+
+        # 2. Dimension 16: Firmware version 2.60.46
+        msg_dim16 = OWNEvent.parse("*#13**16*2*60*46##")
+        gateway_handler._handle_gateway_diagnostics(msg_dim16)
+
+        assert gateway_handler.firmware == "2.60.46"
+        assert mock_dev_reg.async_update_device.call_args[1]["sw_version"] == "2.60.46"
+
+        # 3. Dimension 15: Same model again (no duplicate update)
+        mock_dev_reg.reset_mock()
+        gateway_handler._handle_gateway_diagnostics(msg_dim15)
+        assert not mock_dev_reg.async_update_device.called
+
+        # 4. Dimension 15: Unknown type (999) -> None
+        msg_dim15_unknown = OWNEvent.parse("*#13**15*999##")
+        gateway_handler._handle_gateway_diagnostics(msg_dim15_unknown)
+        assert not mock_dev_reg.async_update_device.called
+
+        # 5. Dimension 16: Same firmware again (no duplicate update)
+        mock_dev_reg.reset_mock()
+        gateway_handler._handle_gateway_diagnostics(msg_dim16)
+        assert not mock_dev_reg.async_update_device.called
+
+
+
+
 
