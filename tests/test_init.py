@@ -1207,11 +1207,30 @@ async def test_async_setup_entry_engine_mismatch_raises_not_ready(hass: HomeAssi
         with pytest.raises(ConfigEntryNotReady):
             await async_setup_entry(hass, entry)
 
+async def test_async_setup_entry_uses_executor_for_ownd_version(hass: HomeAssistant):
+    """Test async_setup_entry offloads get_ownd_version to executor to prevent loop blocking."""
+    import asyncio
 
+    from homeassistant.exceptions import ConfigEntryNotReady
 
+    from custom_components.myhome import async_setup_entry
+    from custom_components.myhome.const import get_ownd_version
 
+    entry = MockConfigEntry(domain=DOMAIN, data={"mac": "00:03:50:00:12:99", "host": "1.2.3.4", "port": 20000}, unique_id="00:03:50:00:12:99")
 
+    executor_targets = []
+    real_executor = hass.async_add_executor_job
 
+    async def track_executor(target, *args, **kwargs):
+        executor_targets.append(target)
+        return await real_executor(target, *args, **kwargs)
 
+    with patch(
+        "custom_components.myhome.gateway.OWNSession.test_connection",
+        side_effect=asyncio.TimeoutError("Timeout"),
+    ), patch.object(hass, "async_add_executor_job", side_effect=track_executor):
+        with pytest.raises(ConfigEntryNotReady):
+            await async_setup_entry(hass, entry)
 
+    assert get_ownd_version in executor_targets
 

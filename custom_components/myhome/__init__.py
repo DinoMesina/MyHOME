@@ -271,19 +271,21 @@ async def async_setup(hass, config):
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     if not await async_ensure_ownd_engine(hass):
+        ownd_ver = await hass.async_add_executor_job(get_ownd_version)
         raise ConfigEntryNotReady(
-            f"Required OWNd engine version {REQUIRED_OWND_VERSION} is not available (found: {get_ownd_version()})"
+            f"Required OWNd engine version {REQUIRED_OWND_VERSION} is not available (found: {ownd_ver})"
         )
 
     from .websocket import async_setup_websocket_api
     async_setup_websocket_api(hass)
     await _async_register_frontend(hass)
 
+    ownd_ver = await hass.async_add_executor_job(get_ownd_version)
     LOGGER.info(
         "Setting up MyHOME gateway '%s' (v%s, OWNd v%s)",
         entry.title,
         INTEGRATION_VERSION,
-        get_ownd_version(),
+        ownd_ver,
     )
 
     if entry.data[CONF_MAC] not in hass.data[DOMAIN]:
