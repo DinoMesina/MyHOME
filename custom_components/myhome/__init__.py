@@ -779,7 +779,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
         target_gateways = []
         if gateway is not None:
             mac = dr.format_mac(gateway)
-            if mac and mac in hass.data[DOMAIN]:
+            if mac and mac in hass.data[DOMAIN] and CONF_ENTITY in hass.data[DOMAIN][mac]:
                 target_gateways.append(mac)
             else:
                 LOGGER.error("Gateway `%s` not found for sweep_bus.", gateway)
@@ -804,15 +804,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
         ]
 
         for gw_mac in target_gateways:
-            handler = hass.data[DOMAIN][gw_mac].get(CONF_ENTITY)
-            if not handler:
-                continue
+            handler = hass.data[DOMAIN][gw_mac][CONF_ENTITY]
             LOGGER.info("Executing diagnostic bus sweep on gateway %s", gw_mac)
             for query in sweep_queries:
-                msg = OWNMessage.parse(query)
-                if msg is not None:
-                    await handler.send(msg)
-                    await asyncio.sleep(0.05)
+                await handler.send(OWNMessage.parse(query))
+                await asyncio.sleep(0.05)
 
         return True
 
