@@ -13,17 +13,17 @@ Through intense community collaboration and engineering, the major architectural
 ```mermaid
 gantt
     title MyHOME Integration Status & Roadmap
-    dateFormat  YYYY-MM
+    dateFormat  YYYY-MM-DD
     section Delivered in v2.0.0b11
-    Phase 1: Dual Async Transports, Core Features & Bus Monitor    :done, 2026-08, 2026-09
-    Phase 2: Standalone OWNd Library (P1) & CEN/CEN+ Triggers (P2)  :done, 2026-09, 2026-09
-    Phase 2: Native DIN Bus Timers (WHO 1)                         :done, 2026-09, 2026-09
-    Phase 3: Central Unit 3550/4695 (P4) & Multi-Gateway (P6)      :done, 2026-09, 2026-09
-    Phase 4: Real-World Trace Replay CI Fixture Engine (P5)        :done, 2026-09, 2026-09
-    DALI Tunable White & Color Temperature (Dim 14)                :done, 2026-09, 2026-09
-    WHO 18 Energy Power/Meters & WHO 16 Audio Matrix Proxy         :done, 2026-09, 2026-09
+    Phase 1 - Dual Async Transports, Core Features & Bus Monitor    :done, 2026-08-01, 2026-09-01
+    Phase 2 - Standalone OWNd Library (P1) & CEN Triggers (P2)      :done, 2026-09-01, 2026-09-11
+    Phase 2 - Native DIN Bus Timers (WHO 1)                         :done, 2026-09-01, 2026-09-11
+    Phase 3 - Central Unit 3550/4695 (P4) & Multi-Gateway (P6)      :done, 2026-09-01, 2026-09-11
+    Phase 4 - Real-World Trace Replay CI Fixture Engine (P5)        :done, 2026-09-01, 2026-09-11
+    DALI Tunable White & Native HSV Color                           :done, 2026-09-01, 2026-09-11
+    WHO 18 Energy Power/Meters & WHO 16 Audio Matrix Proxy          :done, 2026-09-01, 2026-09-11
     section Active Community Consultation
-    RFC: P7 Group Sync, P3 Cover Calibration, WHO 14/24/22 Scope   :active, 2026-09, 2026-11
+    RFC - P7 Group Sync, P3 Cover Calibration, WHO 14/24/22 Scope   :active, 2026-09-11, 2026-11-01
 ```
 
 ---
