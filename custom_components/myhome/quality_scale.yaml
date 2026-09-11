@@ -1,0 +1,72 @@
+# Home Assistant Integration Quality Scale Audit Manifest for MyHOME
+# Reference: https://developers.home-assistant.io/docs/core/integration-quality-scale/
+
+rules:
+  # 🥉 Bronze Tier Rules
+  config-flow:
+    status: done
+    comment: Fully implemented via Home Assistant ConfigFlow with SSDP and manual entry.
+  test-before-configure:
+    status: done
+    comment: Verifies gateway connection and authentication before creating config entry.
+  unique-config-entry:
+    status: done
+    comment: Config entry unique_id is strictly bound to canonical gateway MAC address.
+  discovery:
+    status: done
+    comment: Automatically discovers F454, MyHomeServer1, and MH200 gateways via SSDP/UPnP.
+  discovery-update-info:
+    status: done
+    comment: Updates gateway host and port dynamically if IP changes on rediscovery.
+  common-modules:
+    status: done
+    comment: Utilizes standard Home Assistant core helpers, dispatchers, and device registry.
+  has-entity-name:
+    status: todo
+    comment: Scheduled for Phase 5 Part 2 entity naming migration.
+  runtime-data:
+    status: todo
+    comment: Scheduled for Phase 5 Part 2 ConfigEntry.runtime_data migration.
+  action-setup:
+    status: todo
+    comment: Service extraction to services.py scheduled for Phase 5 Part 2.
+
+  # 🥈 Silver Tier Rules
+  parallel-updates:
+    status: done
+    comment: PARALLEL_UPDATES = 0 declared across all 9 platform files for push-driven event streaming.
+  test-coverage:
+    status: done
+    comment: 100.0% statement coverage verified across all 25 integration modules.
+  log-when-unavailable:
+    status: done
+    comment: Grace period and connection supervisor log cleanly without spamming.
+  reauthentication-flow:
+    status: done
+    comment: Reauth flow allows recovering from invalid OpenWebNet passwords.
+  action-exceptions:
+    status: todo
+    comment: Migration from LOGGER.error to ServiceValidationError scheduled for Phase 5 Part 2.
+
+  # 🥇 Gold Tier Rules
+  reconfiguration-flow:
+    status: done
+    comment: async_step_reconfigure implemented allowing in-place IP, port, and password updates.
+  entity-translations:
+    status: done
+    comment: Canonical strings.json established for English master strings and translations.
+  icon-translations:
+    status: done
+    comment: icons.json established for service actions and platform icons.
+  diagnostics:
+    status: done
+    comment: Native diagnostics.py sanitizes credentials and exports gateway and bus telemetry.
+  dynamic-devices:
+    status: done
+    comment: Dynamic discovery wires bus devices to Home Assistant without static configuration.
+  devices:
+    status: done
+    comment: Full DeviceRegistry representation for gateways, actuators, probes, and scenario units.
+  repair-issues:
+    status: todo
+    comment: Repairs framework integration scheduled for Phase 5 Part 2.

@@ -889,3 +889,152 @@ async def test_options_flow_update_gateway_model(hass: HomeAssistant) -> None:
     assert mock_reload.called
 
 
+async def test_reconfigure_flow_ip_gateway_success(hass: HomeAssistant) -> None:
+    """Test reconfiguring an IP gateway successfully."""
+    from homeassistant.const import CONF_HOST, CONF_MAC, CONF_PASSWORD, CONF_PORT
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            CONF_HOST: "192.168.1.50",
+            CONF_PORT: 20000,
+            CONF_PASSWORD: "1234",
+            CONF_MAC: "00:03:50:AA:BB:CC",
+        },
+        unique_id="00:03:50:AA:BB:CC",
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={
+            "source": getattr(config_entries, "SOURCE_RECONFIGURE", "reconfigure"),
+            "entry_id": entry.entry_id,
+        },
+    )
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == "reconfigure"
+
+    with patch.object(hass.config_entries, "async_reload", return_value=True) as mock_reload:
+        result2 = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {
+                CONF_HOST: "192.168.1.100",
+                CONF_PORT: 20000,
+                CONF_PASSWORD: "5678",
+            },
+        )
+
+    assert result2["type"] == FlowResultType.ABORT
+    assert result2["reason"] == "reconfigure_successful"
+    assert entry.data[CONF_HOST] == "192.168.1.100"
+    assert entry.data[CONF_PASSWORD] == "5678"
+    assert mock_reload.called
+
+
+async def test_reconfigure_flow_ip_gateway_invalid_ip(hass: HomeAssistant) -> None:
+    """Test reconfiguring with invalid IP address."""
+    from homeassistant.const import CONF_HOST, CONF_MAC, CONF_PASSWORD, CONF_PORT
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            CONF_HOST: "192.168.1.50",
+            CONF_PORT: 20000,
+            CONF_PASSWORD: None,
+            CONF_MAC: "00:03:50:AA:BB:CC",
+        },
+        unique_id="00:03:50:AA:BB:CC",
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={
+            "source": getattr(config_entries, "SOURCE_RECONFIGURE", "reconfigure"),
+            "entry_id": entry.entry_id,
+        },
+    )
+
+    result2 = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {
+            CONF_HOST: "invalid_not_an_ip",
+            CONF_PORT: 20000,
+        },
+    )
+    assert result2["type"] == FlowResultType.FORM
+    assert result2["errors"][CONF_HOST] == "invalid_ip"
+
+
+async def test_reconfigure_flow_serial_gateway(hass: HomeAssistant) -> None:
+    """Test reconfiguring a USB/Serial gateway."""
+    from homeassistant.const import CONF_HOST, CONF_MAC, CONF_PORT
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            CONF_HOST: "/dev/ttyUSB0",
+            CONF_PORT: 19200,
+            CONF_MAC: "35:78:00:11:22:33",
+            "transport_type": "serial",
+            "baudrate": 19200,
+        },
+        unique_id="35:78:00:11:22:33",
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={
+            "source": getattr(config_entries, "SOURCE_RECONFIGURE", "reconfigure"),
+            "entry_id": entry.entry_id,
+        },
+    )
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == "reconfigure"
+
+    # Empty port validation
+    result_err = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {
+            "port": "",
+            "baudrate": 38400,
+        },
+    )
+    assert result_err["type"] == FlowResultType.FORM
+    assert result_err["errors"]["port"] == "invalid_port"
+
+    # Valid reconfigure
+    with patch.object(hass.config_entries, "async_reload", return_value=True) as mock_reload:
+        result2 = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {
+                "port": "/dev/ttyUSB1",
+                "baudrate": 38400,
+            },
+        )
+
+    assert result2["type"] == FlowResultType.ABORT
+    assert result2["reason"] == "reconfigure_successful"
+    assert entry.data[CONF_HOST] == "/dev/ttyUSB1"
+    assert entry.data["baudrate"] == 38400
+    assert mock_reload.called
+
+
+async def test_reconfigure_flow_missing_entry(hass: HomeAssistant) -> None:
+    """Test reconfigure flow aborts if entry is missing."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={
+            "source": getattr(config_entries, "SOURCE_RECONFIGURE", "reconfigure"),
+            "entry_id": "non_existent_entry_id",
+        },
+    )
+    assert result["type"] == FlowResultType.ABORT
+    assert result["reason"] == "unknown"
+
+
