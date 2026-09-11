@@ -23,13 +23,13 @@ rules:
     comment: Utilizes standard Home Assistant core helpers, dispatchers, and device registry.
   has-entity-name:
     status: todo
-    comment: Scheduled for Phase 5 Part 2 entity naming migration.
+    comment: Pending Community RFC on non-breaking entity ID preservation migration.
   runtime-data:
-    status: todo
-    comment: Scheduled for Phase 5 Part 2 ConfigEntry.runtime_data migration.
+    status: done
+    comment: entry.runtime_data implemented with backwards-compatible hass.data mapping.
   action-setup:
-    status: todo
-    comment: Service extraction to services.py scheduled for Phase 5 Part 2.
+    status: done
+    comment: Services extracted to dedicated services.py with async_setup_services and async_unload_services.
 
   # 🥈 Silver Tier Rules
   parallel-updates:
@@ -45,8 +45,8 @@ rules:
     status: done
     comment: Reauth flow allows recovering from invalid OpenWebNet passwords.
   action-exceptions:
-    status: todo
-    comment: Migration from LOGGER.error to ServiceValidationError scheduled for Phase 5 Part 2.
+    status: done
+    comment: Handled in services.py with parameter validation and robust logging.
 
   # 🥇 Gold Tier Rules
   reconfiguration-flow:
@@ -68,5 +68,16 @@ rules:
     status: done
     comment: Full DeviceRegistry representation for gateways, actuators, probes, and scenario units.
   repair-issues:
-    status: todo
-    comment: Repairs framework integration scheduled for Phase 5 Part 2.
+    status: done
+    comment: Repairs framework integration implemented in repairs.py with issue registry.
+
+  # 💎 Platinum Tier Rules
+  async-dependency:
+    status: done
+    comment: OWNd client library is 100% native non-blocking asyncio protocols and streams.
+  inject-websession:
+    status: exempt
+    comment: No HTTP is used; communication is via raw TCP OpenWebNet sockets.
+  strict-typing:
+    status: in_progress
+    comment: Comprehensive static typing annotations active across modules.
