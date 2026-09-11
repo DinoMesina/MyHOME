@@ -82,7 +82,7 @@ async def async_get_config_entry_diagnostics(
 
     return {
         "integration_version": INTEGRATION_VERSION,
-        "ownd_version": get_ownd_version(),
+        "ownd_version": await hass.async_add_executor_job(get_ownd_version),
         "config_entry": {
             "entry_id": entry.entry_id,
             "version": entry.version,
