@@ -609,7 +609,10 @@ class MyHOMELight(MyHOMEEntity, LightEntity):
         """
         if ColorMode.HS in self._attr_supported_color_modes or ColorMode.RGB in self._attr_supported_color_modes:
             await self._gateway_handler.send_status_request(OWNLightingCommand.get_brightness(self._full_where))
-            await self._gateway_handler.send_status_request(OWNLightingCommand.get_hsv_color(self._full_where))
+            if hasattr(OWNLightingCommand, "get_hsv_color"):
+                await self._gateway_handler.send_status_request(OWNLightingCommand.get_hsv_color(self._full_where))
+            elif hasattr(OWNLightingCommand, "get_rgb_color"):
+                await self._gateway_handler.send_status_request(OWNLightingCommand.get_rgb_color(self._full_where))
         elif ColorMode.COLOR_TEMP in self._attr_supported_color_modes:
             await self._gateway_handler.send_status_request(OWNLightingCommand.get_brightness(self._full_where))
             await self._gateway_handler.send_status_request(OWNLightingCommand.get_color_temperature(self._full_where))
@@ -787,9 +790,11 @@ class MyHOMELight(MyHOMEEntity, LightEntity):
             s_int = max(0, min(100, int(round(s))))
             v_int = max(0, min(100, int(round(v))))
 
-            await self._gateway_handler.send(
-                OWNLightingCommand.set_hsv_color(self._full_where, h_int, s_int, v_int)
-            )
+            if hasattr(OWNLightingCommand, "set_hsv_color"):
+                cmd = OWNLightingCommand.set_hsv_color(self._full_where, h_int, s_int, v_int)
+            else:
+                cmd = OWNLightingCommand.set_rgb_color(self._full_where, int(r), int(g), int(b))
+            await self._gateway_handler.send(cmd)
             self._attr_hs_color = (round(float(h), 1), round(float(s), 1))
             self._attr_rgb_color = (int(r), int(g), int(b))
             self._attr_color_mode = ColorMode.HS
