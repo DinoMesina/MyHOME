@@ -558,35 +558,26 @@ class MyHOMELight(MyHOMEEntity, LightEntity):
 
         # 2. Restore brightness
         last_brightness = last_state.attributes.get(ATTR_BRIGHTNESS)
-        if last_brightness is not None:
-            try:
-                self._attr_brightness = int(last_brightness)
-                self._attr_brightness_pct = eight_bits_to_percent(self._attr_brightness)
-                if self._attr_brightness_pct > 0:
-                    self._last_brightness_pct = self._attr_brightness_pct
-            except (ValueError, TypeError):
-                pass
+        if isinstance(last_brightness, (int, float)):
+            self._attr_brightness = int(last_brightness)
+            self._attr_brightness_pct = eight_bits_to_percent(self._attr_brightness)
+            if self._attr_brightness_pct > 0:
+                self._last_brightness_pct = self._attr_brightness_pct
 
         # 3. Restore color temperature (Kelvin / mireds)
-        if last_state.attributes.get(ATTR_COLOR_TEMP_KELVIN) is not None:
-            try:
-                self._attr_color_temp_kelvin = int(last_state.attributes[ATTR_COLOR_TEMP_KELVIN])
-                self._attr_color_temp = color_temperature_kelvin_to_mired(self._attr_color_temp_kelvin)
-            except (ValueError, TypeError):
-                pass
-        elif last_state.attributes.get(ATTR_COLOR_TEMP) is not None:
-            try:
-                self._attr_color_temp = int(last_state.attributes[ATTR_COLOR_TEMP])
-                self._attr_color_temp_kelvin = color_temperature_mired_to_kelvin(self._attr_color_temp)
-            except (ValueError, TypeError):
-                pass
+        last_kelvin = last_state.attributes.get(ATTR_COLOR_TEMP_KELVIN)
+        last_mired = last_state.attributes.get(ATTR_COLOR_TEMP)
+        if isinstance(last_kelvin, (int, float)):
+            self._attr_color_temp_kelvin = int(last_kelvin)
+            self._attr_color_temp = color_temperature_kelvin_to_mired(self._attr_color_temp_kelvin)
+        elif isinstance(last_mired, (int, float)):
+            self._attr_color_temp = int(last_mired)
+            self._attr_color_temp_kelvin = color_temperature_mired_to_kelvin(self._attr_color_temp)
 
         # 4. Restore RGB color
-        if last_state.attributes.get(ATTR_RGB_COLOR) is not None:
-            try:
-                self._attr_rgb_color = tuple(last_state.attributes[ATTR_RGB_COLOR])
-            except (ValueError, TypeError):
-                pass
+        last_rgb = last_state.attributes.get(ATTR_RGB_COLOR)
+        if isinstance(last_rgb, (list, tuple)) and len(last_rgb) == 3:
+            self._attr_rgb_color = tuple(last_rgb)
 
         # 5. Restore power state
         if last_state.state == "on":
@@ -897,8 +888,6 @@ class MyHOMELight(MyHOMEEntity, LightEntity):
         )
         if message.is_on is not None:
             self._attr_is_on = message.is_on
-        elif message.brightness is not None:
-            self._attr_is_on = message.brightness > 0
 
         is_fading = bool(self._fade_task and not self._fade_task.done())
 

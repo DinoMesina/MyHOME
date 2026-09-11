@@ -176,6 +176,26 @@ async def test_binary_sensor_state_restoration(hass, mock_gateway):
     await motion.async_added_to_hass()
     assert motion.is_on is True
 
+    # 4. Binary sensor off state
+    dry_off = MyHOMEDryContact(
+        hass=hass,
+        name="Window 2",
+        entity_name="Window 2",
+        device_id="25-2",
+        who="25",
+        where="2",
+        inverted=False,
+        device_class=BinarySensorDeviceClass.WINDOW,
+        manufacturer="BTicino",
+        model="Dry Contact",
+        gateway=mock_gateway,
+    )
+    dry_off.async_get_last_state = AsyncMock(
+        return_value=State("binary_sensor.window_2", STATE_OFF)
+    )
+    await dry_off.async_added_to_hass()
+    assert dry_off.is_on is False
+
 
 @pytest.mark.asyncio
 async def test_sensors_state_restoration(hass, mock_gateway):
@@ -253,3 +273,21 @@ async def test_sensors_state_restoration(hass, mock_gateway):
     )
     await lux.async_added_to_hass()
     assert lux.native_value == 350.0
+
+    # 5. Non-numeric sensor state fallback
+    str_sensor = MyHOMEIlluminanceSensor(
+        hass=hass,
+        name="Sensor Status",
+        device_id="1-16",
+        who="1",
+        where="16",
+        device_class="illuminance",
+        manufacturer="BTicino",
+        model="PIR Lux",
+        gateway=mock_gateway,
+    )
+    str_sensor.async_get_last_state = AsyncMock(
+        return_value=State("sensor.sensor_status", "calibrating")
+    )
+    await str_sensor.async_added_to_hass()
+    assert str_sensor.native_value == "calibrating"
