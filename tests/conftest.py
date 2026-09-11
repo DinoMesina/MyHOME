@@ -29,7 +29,6 @@ except (ImportError, AttributeError):
                     "install",
                     "--upgrade",
                     "--force-reinstall",
-                    "--no-deps",
                     target,
                 ])
                 installed = True
