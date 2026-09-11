@@ -100,17 +100,7 @@ def verify_metadata(target: str, pinned_version: str) -> Tuple[bool, str]:
 
 def verify_golden_corpus() -> Tuple[bool, str]:
     """Gate 2: Run Golden Corpus Conformance Suite."""
-    cmd = [
-        sys.executable,
-        "-m",
-        "pytest",
-        "tests/test_golden_conformance.py",
-        "-q",
-        "-p",
-        "no:homeassistant_custom_component",
-        "-p",
-        "no:homeassistant",
-    ]
+    cmd = [sys.executable, "-m", "pytest", "tests/test_golden_conformance.py", "-q"]
     res = run_cmd(cmd, check=False)
     if res.returncode != 0:
         return False, "test_golden_conformance.py failed against installed OWNd"

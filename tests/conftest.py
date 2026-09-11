@@ -8,11 +8,26 @@ import subprocess
 import sys
 import warnings
 
-# Python 3.13 compatibility: Ensure an event loop exists on MainThread
+# Python 3.13 compatibility for pytest-homeassistant-custom-component:
+# In Python 3.13, HassEventLoopPolicy.get_event_loop() raises RuntimeError when
+# the loop is cleared after each test while enable_event_loop_debug autouse fixture
+# calls asyncio.get_event_loop().set_debug(True).
 try:
-    asyncio.get_event_loop_policy().get_event_loop()
-except RuntimeError:
-    asyncio.set_event_loop(asyncio.new_event_loop())
+    from homeassistant.runner import HassEventLoopPolicy
+
+    _orig_get_event_loop = HassEventLoopPolicy.get_event_loop
+
+    def _safe_get_event_loop(self):
+        try:
+            return _orig_get_event_loop(self)
+        except RuntimeError:
+            loop = self.new_event_loop()
+            self.set_event_loop(loop)
+            return loop
+
+    HassEventLoopPolicy.get_event_loop = _safe_get_event_loop
+except ImportError:
+    pass
 
 # Ensure required integration dependencies declared in manifest.json are available in CI
 try:
