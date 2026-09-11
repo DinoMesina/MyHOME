@@ -19,11 +19,10 @@ import importlib.metadata
 import json
 import os
 import re
-import socket
 import subprocess
 import sys
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import List, Tuple
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
@@ -51,10 +50,11 @@ def get_pinned_version() -> str:
 def run_cmd(cmd: List[str], check: bool = True) -> subprocess.CompletedProcess:
     """Execute command with formatted logging."""
     print(f"[EXEC] {' '.join(cmd)}")
-    return subprocess.run(cmd, check=check, text=True, cwd=str(REPO_ROOT))
+    env = {**os.environ, "PYTHONPATH": str(REPO_ROOT)}
+    return subprocess.run(cmd, check=check, text=True, cwd=str(REPO_ROOT), env=env)
 
 
-def install_target(target: str, pinned_version: str) -> bool:
+def install_target(target: str, pinned_version: str, dev_ref: str = None) -> bool:
     """Install the specified OWNd target."""
     print(f"\n--- Installing OWNd target: '{target}' ---")
     if target == "pinned":
@@ -62,6 +62,14 @@ def install_target(target: str, pinned_version: str) -> bool:
     elif target == "latest":
         cmd = [sys.executable, "-m", "pip", "install", "--pre", "-U", "OWNd"]
     elif target == "dev":
+        ref = dev_ref or os.environ.get("GITHUB_HEAD_REF") or os.environ.get("GITHUB_REF_NAME") or "master"
+        # Try installing from matching branch/ref first if available
+        print(f"Attempting to install OWNd@{ref}...")
+        cmd = [sys.executable, "-m", "pip", "install", f"git+https://github.com/OpenWebNet-HA/OWNd.git@{ref}"]
+        res = run_cmd(cmd, check=False)
+        if res.returncode == 0:
+            return True
+        print(f"[WARN] Failed to install OWNd@{ref}, falling back to master branch...")
         cmd = [sys.executable, "-m", "pip", "install", "git+https://github.com/OpenWebNet-HA/OWNd.git@master"]
     else:
         raise ValueError(f"Unknown target: {target}")
@@ -119,8 +127,9 @@ def verify_platform_imports() -> Tuple[bool, str]:
 
 async def run_loopback_async() -> Tuple[bool, str]:
     """Gate 4: Test mock gateway TCP handshake and event loopback."""
+    from OWNd.message import OWNLightingCommand, OWNLightingEvent, OWNMessage
+
     from tests.mock_gateway_harness import MockGatewayHarness
-    from OWNd.message import OWNMessage, OWNLightingCommand, OWNLightingEvent
 
     harness = MockGatewayHarness()
     port = await harness.start()
@@ -163,7 +172,7 @@ async def run_loopback_async() -> Tuple[bool, str]:
         await harness.stop()
 
 
-def run_smoke_suite(target: str, skip_install: bool = False) -> bool:
+def run_smoke_suite(target: str, skip_install: bool = False, dev_ref: str = None) -> bool:
     """Execute all smoke test gates for the specified target."""
     pinned = get_pinned_version()
     print(f"\n{'='*75}")
@@ -171,7 +180,7 @@ def run_smoke_suite(target: str, skip_install: bool = False) -> bool:
     print(f"{'='*75}")
 
     if not skip_install:
-        if not install_target(target, pinned):
+        if not install_target(target, pinned, dev_ref=dev_ref):
             print(f"❌ FAILED: Unable to install OWNd target '{target}'")
             return False
 
@@ -219,6 +228,11 @@ def main():
         help="OWNd distribution target to test (default: pinned)",
     )
     parser.add_argument(
+        "--dev-ref",
+        default=None,
+        help="Git ref (branch or tag) to install for dev target (default: current branch or master)",
+    )
+    parser.add_argument(
         "--skip-install",
         action="store_true",
         help="Skip pip installation and test currently installed OWNd",
@@ -229,7 +243,7 @@ def main():
     overall_success = True
 
     for t in targets:
-        if not run_smoke_suite(t, skip_install=args.skip_install):
+        if not run_smoke_suite(t, skip_install=args.skip_install, dev_ref=args.dev_ref):
             overall_success = False
             if t != "dev":
                 break
