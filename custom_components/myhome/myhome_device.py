@@ -11,11 +11,14 @@ from homeassistant.core import callback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import Entity
+from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import DOMAIN
 
+__all__ = ["Entity", "MyHOMEEntity"]
 
-class MyHOMEEntity(Entity):
+
+class MyHOMEEntity(RestoreEntity):
     def __init__(
         self,
         hass,
@@ -95,7 +98,28 @@ class MyHOMEEntity(Entity):
     async def async_added_to_hass(self):
         """When entity is added to hass."""
         self._register_availability_listener()
+        await super().async_added_to_hass()
+        try:
+            last_state = await self.async_get_last_state()
+        except Exception:
+            last_state = None
+        if last_state is not None:
+            await self.async_restore_last_state(last_state)
         await self.async_update()
+
+    async def async_restore_last_state(self, last_state) -> None:
+        """Hook for entities to restore specific attributes and modes."""
+        if hasattr(self, "_attr_is_on") and self._attr_is_on is None:
+            if last_state.state == "on":
+                self._attr_is_on = True
+            elif last_state.state == "off":
+                self._attr_is_on = False
+        if hasattr(self, "_attr_native_value") and self._attr_native_value is None:
+            if last_state.state not in ("unknown", "unavailable"):
+                try:
+                    self._attr_native_value = float(last_state.state)
+                except (ValueError, TypeError):
+                    self._attr_native_value = last_state.state
 
     async def async_will_remove_from_hass(self):
         """When entity is removed from hass."""
