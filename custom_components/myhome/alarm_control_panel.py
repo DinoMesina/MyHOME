@@ -221,6 +221,7 @@ class MyHOMEAlarmControlPanel(MyHOMEEntity, AlarmControlPanelEntity):
 
     async def async_added_to_hass(self):
         """Register dispatcher listener when added to hass."""
+        self._register_availability_listener()
         target_hass = self.hass or self._hass
         if target_hass is not None:
             unsub = async_dispatcher_connect(

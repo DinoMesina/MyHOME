@@ -9,7 +9,7 @@ from homeassistant.helpers.dispatcher import async_dispatcher_send
 from OWNd.message import OWNEvent
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.myhome.const import DOMAIN
+from custom_components.myhome.const import CONF_ENTITY, DOMAIN
 
 # List of platforms we want to ensure get loaded
 PLATFORMS = ["light", "climate", "cover", "sensor", "binary_sensor", "switch", "media_player"]
@@ -55,6 +55,10 @@ async def test_platforms_setup_and_unload(hass: HomeAssistant, mock_gateway_conn
     # or exist in the platforms list if defined statically.
     assert await hass.config_entries.async_setup(config_entry.entry_id)
     await hass.async_block_till_done()
+    hass.data[DOMAIN][config_entry.data["mac"]][
+        CONF_ENTITY
+    ]._on_event_connection_state_change(True)
+    await hass.async_block_till_done()
 
     assert config_entry.state is ConfigEntryState.LOADED
 
@@ -89,6 +93,10 @@ async def test_platform_dynamic_discovery(hass: HomeAssistant, mock_gateway_conn
     config_entry.add_to_hass(hass)
 
     assert await hass.config_entries.async_setup(config_entry.entry_id)
+    await hass.async_block_till_done()
+    hass.data[DOMAIN][config_entry.data["mac"]][
+        CONF_ENTITY
+    ]._on_event_connection_state_change(True)
     await hass.async_block_till_done()
 
     # Dispatch a WHO=1 (Light) event
@@ -130,4 +138,3 @@ async def test_platform_dynamic_discovery(hass: HomeAssistant, mock_gateway_conn
     # Clean up entry
     assert await hass.config_entries.async_unload(config_entry.entry_id)
     await hass.async_block_till_done()
-

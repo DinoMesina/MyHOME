@@ -95,6 +95,76 @@ def test_gateway_properties(gateway_handler, mock_config_entry):
         assert gateway_handler.mac == "00:11:22:33:44:55"
 
 
+def test_gateway_availability_requires_connection(gateway_handler):
+    """Availability changes only after a real event-session transition."""
+    assert gateway_handler.available is False
+
+    with patch("custom_components.myhome.gateway.async_dispatcher_send") as send:
+        gateway_handler._on_event_connection_state_change(True)
+
+    assert gateway_handler.available is True
+    assert gateway_handler.is_connected is True
+    send.assert_called_once_with(
+        gateway_handler.hass,
+        gateway_handler.availability_signal,
+    )
+
+
+def test_gateway_transient_disconnect_stays_available(gateway_handler):
+    """A recovery inside the grace period must not flap entity availability."""
+    cancel_timer = MagicMock()
+    gateway_handler._on_event_connection_state_change(True)
+
+    with (
+        patch(
+            "custom_components.myhome.gateway.async_call_later",
+            return_value=cancel_timer,
+        ) as call_later,
+        patch("custom_components.myhome.gateway.async_dispatcher_send") as send,
+    ):
+        gateway_handler._on_event_connection_state_change(False)
+        assert gateway_handler.available is True
+        call_later.assert_called_once()
+
+        gateway_handler._on_event_connection_state_change(True)
+
+    cancel_timer.assert_called_once()
+    assert gateway_handler.available is True
+    send.assert_not_called()
+
+
+def test_gateway_sustained_disconnect_marks_unavailable(gateway_handler):
+    """A disconnect lasting beyond the grace period marks entities unavailable."""
+    gateway_handler._on_event_connection_state_change(True)
+
+    with (
+        patch("custom_components.myhome.gateway.async_call_later") as call_later,
+        patch("custom_components.myhome.gateway.async_dispatcher_send") as send,
+    ):
+        gateway_handler._on_event_connection_state_change(False)
+        mark_unavailable = call_later.call_args.args[2]
+        mark_unavailable(None)
+
+    assert gateway_handler.available is False
+    assert gateway_handler.is_connected is False
+    send.assert_called_once_with(
+        gateway_handler.hass,
+        gateway_handler.availability_signal,
+    )
+
+
+def test_gateway_stale_unavailable_callback_is_ignored(gateway_handler):
+    """A stale grace-period callback must not undo a successful reconnect."""
+    gateway_handler._on_event_connection_state_change(True)
+
+    with patch("custom_components.myhome.gateway.async_dispatcher_send") as send:
+        gateway_handler._mark_unavailable(None)
+
+    assert gateway_handler.available is True
+    assert gateway_handler.is_connected is True
+    send.assert_not_called()
+
+
 @pytest.mark.asyncio
 async def test_gateway_test_connection(gateway_handler):
     with patch("custom_components.myhome.gateway.OWNSession") as mock_session_cls:
@@ -161,10 +231,18 @@ async def test_gateway_send_and_send_status_request(gateway_handler):
 @pytest.mark.asyncio
 async def test_gateway_close_listener(gateway_handler):
     gateway_handler.sending_workers = [MagicMock(), MagicMock()]
+    cancel_timer = MagicMock()
+    gateway_handler._unavailable_timer = cancel_timer
+    gateway_handler._available = True
+    gateway_handler.is_connected = True
     res = await gateway_handler.close_listener()
     assert res is True
     assert gateway_handler._terminate_sender is True
     assert gateway_handler._terminate_listener is True
+    assert gateway_handler.available is False
+    assert gateway_handler.is_connected is False
+    assert gateway_handler._unavailable_timer is None
+    cancel_timer.assert_called_once()
 
     # Queue full handling
     with patch.object(gateway_handler.send_buffer, "put_nowait", side_effect=asyncio.QueueFull):
@@ -979,8 +1057,6 @@ async def test_gateway_sending_loop_timeout_and_terminate_branches(gateway_handl
     term_task = asyncio.create_task(terminate_during_wait())
     await gateway_handler.sending_loop(1)
     await term_task
-
-
 
 
 

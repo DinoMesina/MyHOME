@@ -442,6 +442,7 @@ class MyHOMEDryContact(MyHOMEEntity, BinarySensorEntity):
 
     async def async_added_to_hass(self):
         """When entity is added to hass."""
+        self._register_availability_listener()
         try:
             device_dict = self._hass.data[DOMAIN][self._gateway_handler.mac][CONF_PLATFORMS][self._platform][self._device_id]
             if CONF_ENTITIES not in device_dict or not isinstance(device_dict[CONF_ENTITIES], dict):
@@ -543,6 +544,7 @@ class MyHOMEAuxiliary(MyHOMEEntity, BinarySensorEntity):
 
     async def async_added_to_hass(self):
         """When entity is added to hass."""
+        self._register_availability_listener()
         try:
             device_dict = self._hass.data[DOMAIN][self._gateway_handler.mac][CONF_PLATFORMS][self._platform][self._device_id]
             if CONF_ENTITIES not in device_dict or not isinstance(device_dict[CONF_ENTITIES], dict):
@@ -637,6 +639,7 @@ class MyHOMEMotionSensor(MyHOMEEntity, BinarySensorEntity, RestoreEntity):
 
     async def async_added_to_hass(self):
         """When entity is added to hass."""
+        self._register_availability_listener()
         try:
             device_dict = self._hass.data[DOMAIN][self._gateway_handler.mac][CONF_PLATFORMS][self._platform][self._device_id]
             if CONF_ENTITIES not in device_dict or not isinstance(device_dict[CONF_ENTITIES], dict):

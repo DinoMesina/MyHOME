@@ -100,6 +100,8 @@ class TestMyHOMEEntity:
     async def test_entity_lifecycle_hooks(self, mock_hass, mock_gateway):
         with patch("custom_components.myhome.myhome_device.Entity.__init__", return_value=None):
             from custom_components.myhome.myhome_device import MyHOMEEntity
+            mock_gateway.available = True
+            mock_gateway.availability_signal = "myhome_test_availability"
             entity = MyHOMEEntity(
                 hass=mock_hass,
                 name="Test Device",
@@ -112,9 +114,49 @@ class TestMyHOMEEntity:
                 gateway=mock_gateway,
             )
             entity.async_update = AsyncMock()
-            await entity.async_added_to_hass()
+            entity.async_on_remove = MagicMock()
+            entity.async_write_ha_state = MagicMock()
+            with patch(
+                "custom_components.myhome.myhome_device.async_dispatcher_connect",
+                return_value=MagicMock(),
+            ) as connect:
+                await entity.async_added_to_hass()
+                entity._register_availability_listener()
+
             entity.async_update.assert_awaited_once()
+            assert entity.available is True
+            connect.assert_called_once_with(
+                mock_hass,
+                mock_gateway.availability_signal,
+                entity._handle_availability_update,
+            )
+            entity._handle_availability_update()
+            entity.async_write_ha_state.assert_called_once()
             await entity.async_will_remove_from_hass()
+
+    def test_availability_listener_waits_for_hass(self, mock_gateway):
+        """Do not subscribe before Home Assistant has been assigned to the entity."""
+        with patch("custom_components.myhome.myhome_device.Entity.__init__", return_value=None):
+            from custom_components.myhome.myhome_device import MyHOMEEntity
+            entity = MyHOMEEntity(
+                hass=None,
+                name="Test Device",
+                platform="light",
+                device_id="21",
+                who="1",
+                where="21",
+                manufacturer="BTicino",
+                model="Test",
+                gateway=mock_gateway,
+            )
+
+            with patch(
+                "custom_components.myhome.myhome_device.async_dispatcher_connect"
+            ) as connect:
+                entity._register_availability_listener()
+
+            connect.assert_not_called()
+            assert entity._availability_listener_registered is False
 
     async def test_entity_via_device_id_annotation(self, mock_hass, mock_gateway):
         from homeassistant.helpers.device_registry import DeviceInfo
