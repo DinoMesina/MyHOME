@@ -99,3 +99,30 @@ async def test_services_edge_cases(hass: HomeAssistant) -> None:
     hass.data[DOMAIN] = {}
     await hass.services.async_call(DOMAIN, SERVICE_SWEEP_BUS, {}, blocking=True)
 
+
+async def test_sweep_bus_queries_sent(hass: HomeAssistant) -> None:
+    """Test sweep_bus sends updated queries including firmware and excluding invalid lighting query."""
+    from unittest.mock import AsyncMock
+    await async_setup_services(hass)
+
+    mock_handler = MagicMock()
+    mock_handler.send = AsyncMock()
+    gw_mac = "00:03:50:aa:bb:cc"
+    hass.data[DOMAIN] = {gw_mac: {CONF_ENTITY: mock_handler}}
+
+    await hass.services.async_call(
+        DOMAIN,
+        SERVICE_SWEEP_BUS,
+        {ATTR_GATEWAY: gw_mac},
+        blocking=True,
+    )
+
+    sent_raw = [str(call.args[0]) for call in mock_handler.send.await_args_list]
+    assert "*#13**0##" in sent_raw
+    assert "*#13**15##" in sent_raw
+    assert "*#13**16##" in sent_raw
+    assert "*#2*0##" in sent_raw
+    assert "*#4*0##" in sent_raw
+    assert "*#1*0##" not in sent_raw
+
+

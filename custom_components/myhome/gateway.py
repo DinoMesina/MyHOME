@@ -1,7 +1,9 @@
 """Code to handle a MyHome Gateway."""
 import asyncio
+import time
 from typing import Any, Dict, List
 
+import OWNd.message as _ownd_msg
 from homeassistant.const import (
     CONF_FRIENDLY_NAME,
     CONF_HOST,
@@ -56,6 +58,18 @@ from .const import (
     GATEWAY_DEVICE_TYPE_MAP,
     LOGGER,
 )
+
+_orig_gw_tz = _ownd_msg._gateway_timezone
+
+
+def _compat_gateway_timezone(values: list[str]) -> str:
+    """Compatibility wrapper for OWNd < 2.0.0b7: accept 999 as unconfigured timezone."""
+    if len(values) > 3 and values[3] == "999":
+        return ""
+    return _orig_gw_tz(values)
+
+
+_ownd_msg._gateway_timezone = _compat_gateway_timezone
 
 EVENT_READY_TIMEOUT = 120
 COMMAND_SESSION_IDLE_TIMEOUT = 15.0
@@ -648,6 +662,7 @@ class MyHOMEGatewayHandler:
                 task["message"],
                 worker_id,
             )
+            task_start = time.time()
             self.bus_monitor.record_frame(
                 direction="tx",
                 raw=str(task["message"]),
@@ -656,12 +671,15 @@ class MyHOMEGatewayHandler:
             collected = await _command_session.send(message=task["message"], is_status_request=task["is_status_request"])
             if collected and isinstance(collected, list):
                 for resp in collected:
-                    self.bus_monitor.record_frame(
+                    raw_resp = str(resp)
+                    if self.bus_monitor.has_frame_since(task_start, direction="rx", raw=raw_resp):
+                        continue
+                    frame = self.bus_monitor.record_frame(
                         direction="rx",
-                        raw=str(resp),
+                        raw=raw_resp,
                         parsed=resp if isinstance(resp, OWNMessage) else None,
                     )
-                    if isinstance(resp, OWNMessage):
+                    if not getattr(frame, "is_duplicate", False) and isinstance(resp, OWNMessage):
                         async_dispatcher_send(self.hass, f"myhome_message_{self.mac}", resp)
             self.send_buffer.task_done()
 

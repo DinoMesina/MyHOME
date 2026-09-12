@@ -758,7 +758,13 @@ async def test_sending_loop_collected_responses_and_pacing(gateway_handler):
 
         resp_msg = MagicMock(spec=OWNMessage)
         resp_raw = "*#1*0##"
-        mock_cmd_session.send = AsyncMock(return_value=[resp_msg, resp_raw])
+        concurrent_raw = "*#1*1##"
+
+        async def mock_send_with_concurrent_event(message, is_status_request):
+            gateway_handler.bus_monitor.record_frame(direction="rx", raw=concurrent_raw, parsed=None)
+            return [resp_msg, concurrent_raw, resp_raw]
+
+        mock_cmd_session.send = AsyncMock(side_effect=mock_send_with_concurrent_event)
         mock_cmd_class.return_value = mock_cmd_session
 
         # Configure gateway profile delay
@@ -1019,6 +1025,15 @@ async def test_gateway_properties_and_cen_branches(gateway_handler):
     gateway_handler._ensure_cen_device(25, 1)
     assert (25, 1) in gateway_handler._cen_devices
 
+    # CEN device with invalid non-integer object_id (triggers ValueError branch)
+    gateway_handler._ensure_cen_device(25, "not_an_int")
+
+    # CEN device when device_registry throws exception (triggers debug log branch)
+    with patch("homeassistant.helpers.device_registry.async_get", side_effect=RuntimeError("dr_error")):
+        gateway_handler.config_entry = MagicMock()
+        gateway_handler.config_entry.entry_id = "valid_entry_id"
+        gateway_handler._ensure_cen_device(25, 99)
+
 
 async def test_gateway_listening_loop_unhandled_event_status(gateway_handler):
     """Test listening_loop when event session returns an unexpected failure dict or None."""
@@ -1121,6 +1136,21 @@ def test_handle_gateway_diagnostics_dimension_15_and_16(gateway_handler, mock_co
         mock_dev_reg.reset_mock()
         gateway_handler._handle_gateway_diagnostics(msg_dim16)
         assert not mock_dev_reg.async_update_device.called
+
+
+def test_compat_gateway_timezone():
+    """Verify OWNd compatibility timezone patch handles F454 '999' sentinel."""
+    from custom_components.myhome.gateway import _compat_gateway_timezone
+
+    # 1. Unconfigured F454 timezone sentinel '999'
+    assert _compat_gateway_timezone(["23", "06", "59", "999"]) == ""
+
+    # 2. Standard timezone offset (001 -> +01:00)
+    assert _compat_gateway_timezone(["23", "06", "59", "001"]) == "+01:00"
+
+    # 3. Short values list without timezone element
+    assert _compat_gateway_timezone(["23", "06", "59"]) == ""
+
 
 
 
