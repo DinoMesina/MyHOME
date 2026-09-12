@@ -29,62 +29,103 @@ You can migrate using either:
 
 ### Option 1: The Automated Migration CLI Tool (Recommended)
 
-The MyHOME repository includes an automated migration utility located at `scripts/migrate_from_sdomotica.py`.
+The MyHOME repository includes a multi-source automated migration utility located at `scripts/migrate_from_sdomotica.py`.
+
+#### Supported Ingestion Sources (Manual-Aligned)
+
+As documented in the official SDomotica manual, users may have configurations in multiple places:
+1. **Home Assistant Entity Registry (`.storage/core.entity_registry`)**: Your live HA registry with custom names, icons, and room/area assignments.
+2. **Sdomotica Gateway `config.json`** (`--sdomotica-json`): The Homebridge-standard config from the SDomotica Add-on WebUI containing device capabilities (`can_dim`, `WindowsAdvance`, `travel_time`, `SAThermoHC`, `Sensor3477inv`, gateway IP and credentials).
+3. **Sdomotica Package YAML (`--sdomotica-yaml`)**: The generated `packages/sdomoticabticino.yaml` package file downloaded from the SDomotica WebUI.
 
 #### Step 1: Preview Entities (Dry Run)
-Inspect your current Home Assistant installation to see all detected SDomotica entities:
+Inspect your installation and preview all discovered entities:
 ```bash
+# Auto-discover from HA config directory:
 python scripts/migrate_from_sdomotica.py --config-dir /config --dry-run
+
+# Or directly preview from Sdomotica config.json:
+python scripts/migrate_from_sdomotica.py --sdomotica-json config.json --dry-run
 ```
 *Output summary:*
 ```
 --- Discovered SDomotica Entities ---
-  • cover          :  11 devices
-  • light          :  62 devices
-  • media_player   :   6 devices
-  • switch         :   3 devices
+  • binary_sensor       :   4 devices
+  • climate             :   2 devices
+  • cover               :  11 devices
+  • light               :  62 devices
+  • media_player        :   6 devices
+  • sensor              :   3 devices
+  • switch              :   3 devices
 -------------------------------------
 ```
 
 #### Step 2: Choose Your Migration Mode
 
 ##### Mode A: Generate `myhome.yaml` (Safe Export)
-If you want to keep your device list declared in YAML:
+Outputs a clean, schema-compliant `myhome.yaml` pre-keyed to your exact entity IDs:
 ```bash
 python scripts/migrate_from_sdomotica.py --config-dir /config --generate-yaml /config/myhome.yaml --gateway-mac 00:03:50:20:00:01
 ```
-This automatically emits a complete `myhome.yaml` pre-keyed to your exact entity IDs:
+Or directly from your Sdomotica `config.json` backup:
+```bash
+python scripts/migrate_from_sdomotica.py --sdomotica-json config.json --generate-yaml /config/myhome.yaml --gateway-mac 00:03:50:20:00:01
+```
+
+Sample generated `myhome.yaml`:
 ```yaml
 myhome:
   mac: "00:03:50:20:00:01"
-  host: "192.168.1.50"
-  port: 20000
 
+  # ── LIGHT (3 devices) ──────────────────────
   light:
-    sdomoticabticino2:
-      where: "2"
-      name: "Keuken Spots"
+    sdomoticabticino_12:
+      where: "12"
+      name: "Cucina"
+    sdomoticabticino_19:
+      where: "19"
+      name: "Dimmer TV"
+      dimmable: true
+    sdomoticabticino_41_4_01:
+      where: "41"
+      interface: "01"
+      name: "Palla Balcone"
 
+  # ── COVER (2 devices) ──────────────────────
   cover:
-    sdomoticabticino68:
-      where: "18"
-      interface: "02"
-      name: "Gordijn Keuken Terras"
-      advanced: false
+    sdomoticabticino_31:
+      where: "31"
+      name: "Veranda"
+      advanced_shutter: false
+      travel_time: 20
+    sdomoticabticino_55:
+      where: "55"
+      name: "Veranda Avanzata"
+      advanced_shutter: true
 
-  switch:
-    sdomoticabticino62:
-      where: "62"
-      name: "Pomp Schakelaar"
+  # ── CLIMATE (2 devices) ──────────────────────
+  climate:
+    sdomoticabticino_4_1:
+      zone: "1"
+      heat: true
+      cool: false
+      name: "Soggiorno"
+    sdomoticabticino_4_2:
+      zone: "2"
+      heat: true
+      cool: true
+      name: "Camera Singola"
 
-  media_player:
-    audio_zone_22:
-      zone: "22"
-      name: "Keuken Audio"
+  # ── BINARY_SENSOR (2 devices) ──────────────────────
+  binary_sensor:
+    sdomoticabticino_19:
+      where: "19"
+      name: "Sensore Invertito"
+      inverted: true
 ```
 
 ##### Mode B: In-Place Entity Registry Migration (Zero-Touch)
-To seamlessly transfer your entities directly inside Home Assistant's entity registry:
+To seamlessly adopt your entities directly inside Home Assistant's entity registry without changing any YAML files:
 1. **Stop Home Assistant**:
    ```bash
    ha core stop
@@ -99,21 +140,37 @@ To seamlessly transfer your entities directly inside Home Assistant's entity reg
    ha core start
    ```
 
-When Home Assistant restarts, the native MyHOME integration connects to your gateway and binds directly to the existing entity registry records. **No `_2` suffixes, no broken dashboards, and no lost rooms.**
+When Home Assistant restarts, the native MyHOME integration binds directly to existing entity registry records. **Zero duplicate entities, no `_2` suffixes, and 100% preservation of Lovelace cards and automations.**
 
 ---
 
-### Option 2: Address Translation Cheat Sheet
+### Option 2: Complete SDomotica Device Mapping Catalog
 
-If manually configuring or adjusting devices, use this mapping table:
+Based on the official **Sdomotica Gateway Manual** (pages 18–23):
 
-| SDomotica Format | MyHOME Configuration | Example | Description |
-| :--- | :--- | :--- | :--- |
-| **Point Light** (`A=0, PL=2`) | `where: "2"` | `sdomoticabticino2` | Standard SCS lighting actuator |
-| **Area Broadcast** (`#WHERE`) | `where: "#1"` | `sdomoticabticino_area1` | Area master switch |
-| **Bus Interface Cover** (`18#4#02`) | `where: "18"`, `interface: "02"` | `sdomoticabticino68` | Shutter via F422 interface |
-| **Thermoregulation Zone** | `zone: "1"` | `climate.zone_1` | WHO 4 heating zone |
-| **Audio Zone** | `zone: "22"` | `media_player.audio_zone_22` | WHO 16 multiroom sound zone |
+| SDomotica Accessory Type | Description | MyHOME Platform | OpenWebNet WHO | Key Parameters |
+| :--- | :--- | :--- | :---: | :--- |
+| `Lightbulb` (`can_dim: false`) | Standard on/off light | `light` | 1 | `where: "<addr>"` |
+| `Lightbulb` (`can_dim: true`) | Dimmable actuator | `light` | 1 | `where: "<addr>"`, `dimmable: true` |
+| `Lightbulb` (`"41#4#01"`) | Light via F422 interface | `light` | 1 | `where: "41"`, `interface: "01"` |
+| `Outlets` | Controlled power outlet | `switch` | 1 | `where: "<addr>"`, `device_class: "outlet"` |
+| `Switch` | SCS switch relay | `switch` | 1 | `where: "<addr>"`, `device_class: "switch"` |
+| `Windows` | Standard shutter/blind | `cover` | 2 | `where: "<addr>"`, `advanced_shutter: false` |
+| `WindowsAdvance` | Position-aware shutter (%) | `cover` | 2 | `where: "<addr>"`, `advanced_shutter: true` |
+| `Sensor` | Actuator feedback sensor | `binary_sensor` | 1 / 25 | `where: "<addr>"` |
+| `Sensor3477` | 3477 Aux contact | `binary_sensor` | 25 | `where: "<addr>"` |
+| `Sensor3477inv` | Inverted 3477 Aux contact | `binary_sensor` | 25 | `where: "<addr>"`, `inverted: true` |
+| `Energy` | Central energy meter | `sensor` | 18 | `where: "<addr>"`, `class: "energy"` |
+| `F522`, `F523` | Controlled load actuator | `sensor` | 18 | `where: "<addr>"`, `class: "power"` |
+| `Thermostat` | 99-zone central heating | `climate` | 4 | `zone: "<addr>"`, `heat: true`, `cool: false` |
+| `4ZThermo` | 4-zone heating & cooling | `climate` | 4 | `zone: "<addr>"`, `heat: true`, `cool: true` |
+| `SAThermoHC` | Standalone Heating & Cooling | `climate` | 4 | `zone: "<addr>"`, `heat: true`, `cool: true` |
+| `SAThermoC` | Standalone Cooling only | `climate` | 4 | `zone: "<addr>"`, `heat: false`, `cool: true` |
+| `SAThermoH` | Standalone Heating only | `climate` | 4 | `zone: "<addr>"`, `heat: true`, `cool: false` |
+| `TemperatureSensors` | External temperature probe | `sensor` | 4 | `where: "<addr>"`, `class: "temperature"` |
+| `Audio` | Multi-channel sound amplifier | `media_player` | 16 | `zone: "<zone>"` |
+| `SecuritySystem` | Burglar alarm central (3486) | `alarm_control_panel` | 5 | `where: "<zone>"` |
+| `Door` | Garage / gate door opener | `switch` | 1 / 6 | `where: "<addr>"` |
 
 ---
 
