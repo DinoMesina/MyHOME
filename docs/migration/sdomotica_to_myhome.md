@@ -31,12 +31,12 @@ You can migrate using either:
 
 The MyHOME repository includes a multi-source automated migration utility located at `scripts/migrate_from_sdomotica.py`.
 
-#### Supported Ingestion Sources (Manual-Aligned)
+#### Supported Ingestion Sources & Add-ons
 
-As documented in the official SDomotica manual, users may have configurations in multiple places:
-1. **Home Assistant Entity Registry (`.storage/core.entity_registry`)**: Your live HA registry with custom names, icons, and room/area assignments.
-2. **Sdomotica Gateway `config.json`** (`--sdomotica-json`): The Homebridge-standard config from the SDomotica Add-on WebUI containing device capabilities (`can_dim`, `WindowsAdvance`, `travel_time`, `SAThermoHC`, `Sensor3477inv`, gateway IP and credentials).
-3. **Sdomotica Package YAML (`--sdomotica-yaml`)**: The generated `packages/sdomoticabticino.yaml` package file downloaded from the SDomotica WebUI.
+The migration engine automatically scans and discovers all configurations across SDomotica add-ons:
+1. **Home Assistant Entity Registry (`.storage/core.entity_registry`)**: Your live HA registry with custom names, icons, and room/area assignments. Automatically recognizes `sdomoticabticino*`, `sdomoticabticino2*` (secondary gateway), `sdomoticabtalarm*` (burglar alarm), and `platform: MyHomeAudio`.
+2. **Sdomotica Gateway `config.json`** (`--sdomotica-json`): The Homebridge-standard config from the SDomotica Add-on WebUI containing device capabilities (`can_dim`, `WindowsAdvance`, `travel_time`, `SAThermoHC`, `Sensor3477inv`, gateway IP and credentials). Discovered automatically in `/config`, `/config/sdomotica/`, or `/share/sdomotica/`.
+3. **Sdomotica Package YAMLs (`--sdomotica-yaml`)**: Discovers and loads all package files in `/config/packages/` (e.g. `sdomoticabticino.yaml`, `sdomoticabticino2.yaml`, and `sdomoticabtalarm.yaml`), parsing lights, covers, switches, climates, media players, power/energy sensors, binary contacts, and burglar alarms simultaneously.
 
 #### Step 1: Preview Entities (Dry Run)
 Inspect your installation and preview all discovered entities:

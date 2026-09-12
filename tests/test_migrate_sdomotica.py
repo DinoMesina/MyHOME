@@ -76,6 +76,46 @@ def mock_registry_data():
                     "unique_id": "sdomotica_climate_1",
                 },
                 {
+                    "area_id": "boven",
+                    "config_entry_id": "sdomotica_entry",
+                    "device_id": "dev_7",
+                    "entity_id": "light.sdomoticabticino2_12",
+                    "name": "Slaapkamer Spots",
+                    "original_name": "sdomoticabticino2_12",
+                    "platform": "mqtt",
+                    "unique_id": "sdomotica_light_2_12",
+                },
+                {
+                    "area_id": "hal",
+                    "config_entry_id": "sdomotica_entry",
+                    "device_id": "dev_8",
+                    "entity_id": "alarm_control_panel.sdomoticabtalarm",
+                    "name": "Centrale Antifurto",
+                    "original_name": "sdomoticabtalarm",
+                    "platform": "mqtt",
+                    "unique_id": "sdomotica_alarm_main",
+                },
+                {
+                    "area_id": "hal",
+                    "config_entry_id": "sdomotica_entry",
+                    "device_id": "dev_9",
+                    "entity_id": "binary_sensor.sdomoticabtalarm_zone_1",
+                    "name": "Zone 1 Hal Contact",
+                    "original_name": "zone_1",
+                    "platform": "mqtt",
+                    "unique_id": "sdomotica_alarm_zone_1",
+                },
+                {
+                    "area_id": "badkamer",
+                    "config_entry_id": "sdomotica_entry",
+                    "device_id": "dev_10",
+                    "entity_id": "media_player.bticino_sound_ampli_11",
+                    "name": "Badkamer Audio",
+                    "original_name": "bticino_sound_ampli_11",
+                    "platform": "MyHomeAudio",
+                    "unique_id": "myhomeaudio_zone_1",
+                },
+                {
                     "area_id": "woonkamer",
                     "config_entry_id": "hue_entry",
                     "device_id": "dev_6",
@@ -133,7 +173,7 @@ def mock_sdomotica_config_json():
 def test_extract_sdomotica_entities(mock_registry_data):
     """Test extracting only SDomotica, climate, and audio zone entities."""
     entities = extract_sdomotica_entities(mock_registry_data)
-    assert len(entities) == 5
+    assert len(entities) == 9
 
     by_id = {e.entity_id: e for e in entities}
     assert "light.sdomoticabticino2" in by_id
@@ -141,6 +181,10 @@ def test_extract_sdomotica_entities(mock_registry_data):
     assert "switch.sdomoticabticino62" in by_id
     assert "media_player.audio_zone_2" in by_id
     assert "climate.sdomoticabticino_4_1" in by_id
+    assert "light.sdomoticabticino2_12" in by_id
+    assert "alarm_control_panel.sdomoticabtalarm" in by_id
+    assert "binary_sensor.sdomoticabtalarm_zone_1" in by_id
+    assert "media_player.bticino_sound_ampli_11" in by_id
     assert "light.hue_bloom" not in by_id
 
     # Verify light properties
@@ -151,6 +195,30 @@ def test_extract_sdomotica_entities(mock_registry_data):
     assert light.name == "Keuken Spots"
     assert light.area_id == "keuken"
     assert light.compute_myhome_unique_id("00:03:50:AA:BB:CC") == "00:03:50:aa:bb:cc-1-2"
+
+    # Verify second gateway light (bticino20212)
+    light2 = by_id["light.sdomoticabticino2_12"]
+    assert light2.domain == "light"
+    assert light2.where == "12"
+    assert light2.who == "1"
+
+    # Verify burglar alarm (bticinoalarm)
+    alarm = by_id["alarm_control_panel.sdomoticabtalarm"]
+    assert alarm.domain == "alarm_control_panel"
+    assert alarm.who == "5"
+    assert alarm.where == "0"
+    assert alarm.compute_myhome_unique_id("00:03:50:AA:BB:CC") == "00:03:50:aa:bb:cc-5-0"
+
+    alarm_zone = by_id["binary_sensor.sdomoticabtalarm_zone_1"]
+    assert alarm_zone.domain == "binary_sensor"
+    assert alarm_zone.where == "1"
+
+    # Verify MyHomeAudio custom component
+    audio_custom = by_id["media_player.bticino_sound_ampli_11"]
+    assert audio_custom.domain == "media_player"
+    assert audio_custom.who == "16"
+    assert audio_custom.zone == "1"
+    assert audio_custom.compute_myhome_unique_id("00:03:50:AA:BB:CC") == "00:03:50:aa:bb:cc-16-1"
 
     # Verify cover with sanitized interface (_4_)
     cover = by_id["cover.sdomoticabticino18_4_02"]
@@ -248,15 +316,35 @@ media_player:
   - platform: MyHomeAudio
     name: "Ampli Cucina"
     address: "11"
+sensor:
+  - platform: mqtt
+    name: "Consumo Generale"
+    state_topic: "sdomotica/energy/1"
+    unit_of_measurement: "W"
+binary_sensor:
+  - platform: mqtt
+    name: "Finestra Studio"
+    state_topic: "sdomotica/sensor/21"
+    payload_on: "1"
+    payload_off: "0"
+alarm_control_panel:
+  - platform: mqtt
+    name: "Centrale Allarme"
+    state_topic: "sdomotica/alarm/status"
+    command_topic: "sdomotica/alarm/0/set"
 """
     entities = extract_sdomotica_package_yaml(sample_yaml)
-    assert len(entities) == 5
+    assert len(entities) == 8
 
     by_domain = {e.domain: e for e in entities}
     assert by_domain["light"].where in ["12", "19"]
     assert by_domain["cover"].advanced_shutter is True
     assert by_domain["climate"].zone == "1"
     assert by_domain["media_player"].zone == "1"
+    assert by_domain["sensor"].where == "1"
+    assert by_domain["sensor"].device_class == "power"
+    assert by_domain["binary_sensor"].where == "21"
+    assert by_domain["alarm_control_panel"].who == "5"
 
 
 def test_merge_entity_sources(mock_registry_data, mock_sdomotica_config_json):
@@ -314,7 +402,7 @@ def test_migrate_registry_in_place(tmp_path, mock_registry_data):
         dry_run=False,
     )
 
-    assert updated == 5
+    assert updated == 9
     assert backup_path is not None
     assert backup_path.is_file()
 
@@ -334,8 +422,38 @@ def test_migrate_registry_in_place(tmp_path, mock_registry_data):
     assert by_id["climate.sdomoticabticino_4_1"]["platform"] == "myhome"
     assert by_id["climate.sdomoticabticino_4_1"]["unique_id"] == "00:03:50:20:00:01-4-1"
 
+    assert by_id["light.sdomoticabticino2_12"]["platform"] == "myhome"
+    assert by_id["light.sdomoticabticino2_12"]["unique_id"] == "00:03:50:20:00:01-1-12"
+
+    assert by_id["alarm_control_panel.sdomoticabtalarm"]["platform"] == "myhome"
+    assert by_id["alarm_control_panel.sdomoticabtalarm"]["unique_id"] == "00:03:50:20:00:01-5-0"
+
+    assert by_id["binary_sensor.sdomoticabtalarm_zone_1"]["platform"] == "myhome"
+    assert by_id["binary_sensor.sdomoticabtalarm_zone_1"]["unique_id"] == "00:03:50:20:00:01-25-1"
+
+    assert by_id["media_player.bticino_sound_ampli_11"]["platform"] == "myhome"
+    assert by_id["media_player.bticino_sound_ampli_11"]["unique_id"] == "00:03:50:20:00:01-16-1"
+
     # Non-sdomotica entities untouched
     assert by_id["light.hue_bloom"]["platform"] == "hue"
+
+
+def test_find_sdomotica_files_multi_package(tmp_path):
+    """Test finding multiple packages and shared config.json paths."""
+    from scripts.migrate_from_sdomotica import find_sdomotica_files
+
+    pkg_dir = tmp_path / "packages"
+    pkg_dir.mkdir()
+    (pkg_dir / "sdomoticabticino.yaml").write_text("light: []", encoding="utf-8")
+    (pkg_dir / "sdomoticabtalarm.yaml").write_text("alarm_control_panel: []", encoding="utf-8")
+
+    share_dir = tmp_path / "share" / "sdomotica"
+    share_dir.mkdir(parents=True)
+    (share_dir / "config.json").write_text("{}", encoding="utf-8")
+
+    found = find_sdomotica_files(tmp_path)
+    assert len(found["yamls"]) == 2
+    assert found["json"] == share_dir / "config.json"
 
 
 def test_main_cli_modes(tmp_path, mock_registry_data, mock_sdomotica_config_json):

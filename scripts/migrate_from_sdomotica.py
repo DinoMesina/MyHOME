@@ -44,15 +44,15 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 _LOGGER = logging.getLogger("migrate_sdomotica")
 
 SDOMOTICA_ENTITY_RE = re.compile(
-    r"^(?P<domain>light|cover|switch|sensor|binary_sensor|climate|media_player|alarm_control_panel|lock)\.sdomoticabticino_?(?P<address>[0-9a-zA-Z_#]+)$",
+    r"^(?P<domain>light|cover|switch|sensor|binary_sensor|climate|media_player|alarm_control_panel|lock)\.sdomotica(?:bticino2_|bticino20212_|bticino_?|btalarm_?|alarm_?)?(?P<address>[0-9a-zA-Z_#]*)$",
     re.IGNORECASE,
 )
 AUDIO_ZONE_ENTITY_RE = re.compile(
-    r"^(?P<domain>media_player)\.audio_zone_(?P<zone>[0-9]+)$",
+    r"^(?P<domain>media_player)\.(?:audio_zone_|bticino_sound_ampli_|bticino_sound_?)(?P<zone>[0-9]+)?$",
     re.IGNORECASE,
 )
 CLIMATE_ZONE_ENTITY_RE = re.compile(
-    r"^(?P<domain>climate)\.(?:sdomoticabticino_?4_|sdomotica_climate_|thermostat_)(?P<zone>[0-9]+)$",
+    r"^(?P<domain>climate)\.(?:sdomotica(?:bticino2?)?_?4_|sdomotica_climate_|thermostat_)(?P<zone>[0-9]+)$",
     re.IGNORECASE,
 )
 
@@ -193,25 +193,51 @@ def find_entity_registry(config_dir: str | Path) -> Path | None:
     return None
 
 
-def find_sdomotica_files(config_dir: str | Path) -> dict[str, Path]:
-    found: dict[str, Path] = {}
+def find_sdomotica_files(config_dir: str | Path) -> dict[str, Any]:
+    found: dict[str, Any] = {"yamls": [], "yaml": None, "json": None}
     base = Path(config_dir)
 
     yaml_candidates = [
         base / "packages" / "sdomoticabticino.yaml",
+        base / "packages" / "sdomoticabticino2.yaml",
+        base / "packages" / "sdomoticabticino20212.yaml",
+        base / "packages" / "sdomoticabtalarm.yaml",
+        base / "packages" / "sdomoticabticinoalarm.yaml",
         base / "packages" / "sdomotica.yaml",
         base / "packages" / "myhome.yaml",
         base / "sdomoticabticino.yaml",
+        base / "sdomoticabticino2.yaml",
+        base / "sdomoticabtalarm.yaml",
+        base / "sdomotica.yaml",
     ]
+    seen_yamls: set[Path] = set()
     for y in yaml_candidates:
-        if y.is_file():
-            found["yaml"] = y
-            break
+        if y.is_file() and y.resolve() not in seen_yamls:
+            found["yamls"].append(y)
+            seen_yamls.add(y.resolve())
+            if found["yaml"] is None:
+                found["yaml"] = y
+
+    pkg_dir = base / "packages"
+    if pkg_dir.is_dir():
+        for p in sorted(pkg_dir.glob("*sdomotica*.yaml")):
+            if p.resolve() not in seen_yamls:
+                found["yamls"].append(p)
+                seen_yamls.add(p.resolve())
+                if found["yaml"] is None:
+                    found["yaml"] = p
 
     json_candidates = [
         base / "config.json",
         base / "sdomotica_config.json",
         base / "sdomotica.json",
+        base / "sdomotica" / "config.json",
+        base / "share" / "sdomotica" / "config.json",
+        base / "share" / "sdomoticabticino" / "config.json",
+        base.parent / "share" / "sdomotica" / "config.json",
+        base.parent / "share" / "sdomoticabticino" / "config.json",
+        base.parent / "share" / "sdomoticabticino2021" / "config.json",
+        base.parent / "share" / "sdomoticabticino20212" / "config.json",
     ]
     for j in json_candidates:
         if j.is_file():
@@ -253,24 +279,37 @@ def extract_sdomotica_entities(registry_data: dict[str, Any]) -> list[SDomoticaE
         sdomotica_match = SDOMOTICA_ENTITY_RE.match(entity_id)
 
         zone: str | None = None
+        dev_class: str | None = None
         if climate_match:
             domain = climate_match.group("domain")
             address = climate_match.group("zone")
             zone = address
         elif audio_match:
             domain = audio_match.group("domain")
-            address = audio_match.group("zone")
-            zone = address
+            addr_str = audio_match.group("zone") or "1"
+            address = addr_str
+            zone = addr_str[0] if len(addr_str) >= 1 else "1"
         elif sdomotica_match:
             domain = sdomotica_match.group("domain")
-            address = sdomotica_match.group("address")
+            address = sdomotica_match.group("address") or ""
             if domain == "climate" and (address.startswith("4_") or address.startswith("4#")):
                 zone = address[2:]
                 address = zone
-        elif "sdomotica" in unique_id.lower() or platform in ["sdomotica", "myhomeaudio"]:
+            elif domain == "alarm_control_panel" and (not address or address in ["sdomoticabtalarm", "sdomoticaalarm"]):
+                address = "0"
+            elif domain == "binary_sensor" and "zone_" in address:
+                address = address.split("zone_", 1)[-1]
+                dev_class = "safety"
+            elif not address:
+                address = "0" if domain == "alarm_control_panel" else "1"
+        elif "sdomotica" in unique_id.lower() or platform in ["sdomotica", "myhomeaudio", "sdomoticabticino", "sdomoticabtalarm"]:
             domain = entity_id.split(".", 1)[0]
             digits = "".join(filter(str.isdigit, entity_id.split(".")[-1]))
-            address = digits or entity_id.split(".")[-1]
+            address = digits or ("0" if domain == "alarm_control_panel" else "1")
+            if domain == "media_player":
+                zone = address[0] if len(address) >= 1 else "1"
+            elif domain == "climate":
+                zone = address
         else:
             continue
 
@@ -288,6 +327,7 @@ def extract_sdomotica_entities(registry_data: dict[str, Any]) -> list[SDomoticaE
                 area_id=area_id,
                 icon=icon,
                 zone=zone,
+                device_class=dev_class,
                 raw_entry=item,
             )
         )
@@ -548,6 +588,70 @@ def extract_sdomotica_package_yaml(yaml_content: str | dict[str, Any]) -> list[S
                 )
             )
 
+    for item in parsed.get("sensor", []):
+        if not isinstance(item, dict):
+            continue
+        name = item.get("name", "Sensor")
+        state_topic = item.get("state_topic", "")
+        uom = item.get("unit_of_measurement", "")
+        dev_class = item.get("device_class")
+        if not dev_class:
+            if uom in ["W", "kW"] or "power" in state_topic:
+                dev_class = "power"
+            elif uom in ["Wh", "kWh"] or "energy" in state_topic:
+                dev_class = "energy"
+            elif uom in ["°C", "C", "°F", "F"] or "temp" in state_topic:
+                dev_class = "temperature"
+        addr_match = re.search(r"sdomotica/(?:energy|power|sensor|temperature)/([^/]+)", state_topic)
+        addr = addr_match.group(1) if addr_match else "".join(filter(str.isdigit, name)) or "1"
+        slug_id = re.sub(r"[^a-zA-Z0-9_]", "_", f"sdomoticabticino_{addr}").lower()
+        entities.append(
+            SDomoticaEntity(
+                domain="sensor",
+                entity_id=f"sensor.{slug_id}",
+                address=addr,
+                name=name,
+                device_class=dev_class,
+            )
+        )
+
+    for item in parsed.get("binary_sensor", []):
+        if not isinstance(item, dict):
+            continue
+        name = item.get("name", "Contact")
+        state_topic = item.get("state_topic", "")
+        dev_class = item.get("device_class", "opening")
+        inverted = item.get("payload_on") == "0" or "inv" in name.lower()
+        addr_match = re.search(r"sdomotica/(?:sensor|contact|binary_sensor|alarm)/([^/]+)", state_topic)
+        addr = addr_match.group(1) if addr_match else "".join(filter(str.isdigit, name)) or "1"
+        slug_id = re.sub(r"[^a-zA-Z0-9_]", "_", f"sdomoticabticino_{addr}").lower()
+        entities.append(
+            SDomoticaEntity(
+                domain="binary_sensor",
+                entity_id=f"binary_sensor.{slug_id}",
+                address=addr,
+                name=name,
+                device_class=dev_class,
+                inverted=inverted,
+            )
+        )
+
+    for item in parsed.get("alarm_control_panel", []):
+        if not isinstance(item, dict):
+            continue
+        name = item.get("name", "Burglar Alarm")
+        cmd_topic = item.get("command_topic", "")
+        addr_match = re.search(r"sdomotica/(?:alarm|5)/([^/]+)", cmd_topic)
+        addr = addr_match.group(1) if addr_match else "0"
+        entities.append(
+            SDomoticaEntity(
+                domain="alarm_control_panel",
+                entity_id="alarm_control_panel.sdomoticabtalarm",
+                address=addr,
+                name=name,
+            )
+        )
+
     return entities
 
 
@@ -786,21 +890,23 @@ def main(argv: list[str] | None = None) -> int:
         except Exception as err:
             _LOGGER.error("Failed to parse config.json: %s", err)
 
-    yaml_path = (
-        Path(args.sdomotica_yaml).resolve()
-        if args.sdomotica_yaml
-        else find_sdomotica_files(config_path).get("yaml")
-    )
-    if yaml_path and yaml_path.is_file() and yaml is not None:
-        _LOGGER.info("Loading Sdomotica package YAML from: %s", yaml_path)
-        try:
-            with open(yaml_path, "r", encoding="utf-8") as f:
-                yaml_text = f.read()
-            yaml_ents = extract_sdomotica_package_yaml(yaml_text)
-            _LOGGER.info("Extracted %d devices from package YAML", len(yaml_ents))
-            extra_entities.extend(yaml_ents)
-        except Exception as err:
-            _LOGGER.error("Failed to parse package YAML: %s", err)
+    yaml_paths: list[Path] = []
+    if args.sdomotica_yaml:
+        yaml_paths.append(Path(args.sdomotica_yaml).resolve())
+    else:
+        yaml_paths.extend(find_sdomotica_files(config_path).get("yamls", []))
+
+    for y_path in yaml_paths:
+        if y_path.is_file() and yaml is not None:
+            _LOGGER.info("Loading Sdomotica package YAML from: %s", y_path)
+            try:
+                with open(y_path, "r", encoding="utf-8") as f:
+                    yaml_text = f.read()
+                yaml_ents = extract_sdomotica_package_yaml(yaml_text)
+                _LOGGER.info("Extracted %d devices from %s", len(yaml_ents), y_path.name)
+                extra_entities.extend(yaml_ents)
+            except Exception as err:
+                _LOGGER.error("Failed to parse package YAML %s: %s", y_path, err)
 
     registry_entities: list[SDomoticaEntity] = []
     if registry_path and registry_path.is_file():
