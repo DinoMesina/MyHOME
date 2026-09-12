@@ -161,8 +161,8 @@ async def async_setup_services(hass: HomeAssistant) -> None:
 
         sweep_queries = [
             "*#13**0##",   # Gateway real-time clock
-            "*#13**15##",  # Gateway model & firmware status
-            "*#1*0##",     # All lighting & switch actuators
+            "*#13**15##",  # Gateway device model
+            "*#13**16##",  # Gateway firmware version
             "*#2*0##",     # All cover actuators
             "*#4*0##",     # Thermoregulation master status
         ]
