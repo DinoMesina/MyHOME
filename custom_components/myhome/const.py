@@ -46,3 +46,8 @@ CONF_SHORT_PRESS = "pushbutton_short_press"
 CONF_SHORT_RELEASE = "pushbutton_short_release"
 CONF_LONG_PRESS = "pushbutton_long_press"
 CONF_LONG_RELEASE = "pushbutton_long_release"
+CONF_TRAVEL_TIME = "travel_time"
+CONF_OPEN_TIME = "open_time"
+CONF_CLOSE_TIME = "close_time"
+DEFAULT_TRAVEL_TIME = 25.0
+

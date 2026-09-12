@@ -51,6 +51,7 @@ class MyHOMEEntity(Entity):
 
     async def async_added_to_hass(self):
         """When entity is added to hass."""
+        await super().async_added_to_hass()
         self._hass.data[DOMAIN][self._gateway_handler.mac][CONF_PLATFORMS][self._platform][self._device_id][CONF_ENTITIES][self._platform] = self
         await self.async_update()
 
@@ -58,3 +59,4 @@ class MyHOMEEntity(Entity):
         """When entity is removed from hass."""
         if self._platform in self._hass.data[DOMAIN][self._gateway_handler.mac][CONF_PLATFORMS][self._platform][self._device_id][CONF_ENTITIES]:
             del self._hass.data[DOMAIN][self._gateway_handler.mac][CONF_PLATFORMS][self._platform][self._device_id][CONF_ENTITIES][self._platform]
+        await super().async_will_remove_from_hass()
