@@ -22,6 +22,13 @@ Migration Capabilities:
      orphaned SDomotica entries in-place to platform 'myhome' with native
      unique_ids. Eliminates entity_id renaming (_2 suffix), preserves
      historical statistics, and retains all room/area assignments.
+
+Legal Notice:
+  This script is an independent data conversion and interoperability utility
+  developed under AGPL-3.0. It parses user configuration files and Home
+  Assistant registry databases under EU Directive 2009/24/EC Art. 6, GDPR
+  Art. 20 (data portability), and US Copyright Act Fair Use / 17 U.S.C. 1201(f).
+  It contains no proprietary software, code, or binaries from SDomotica or Legrand.
 """
 from __future__ import annotations
 
