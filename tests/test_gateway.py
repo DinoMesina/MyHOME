@@ -1123,6 +1123,21 @@ def test_handle_gateway_diagnostics_dimension_15_and_16(gateway_handler, mock_co
         assert not mock_dev_reg.async_update_device.called
 
 
+def test_compat_gateway_timezone():
+    """Verify OWNd compatibility timezone patch handles F454 '999' sentinel."""
+    from custom_components.myhome.gateway import _compat_gateway_timezone
+
+    # 1. Unconfigured F454 timezone sentinel '999'
+    assert _compat_gateway_timezone(["23", "06", "59", "999"]) == ""
+
+    # 2. Standard timezone offset (001 -> +01:00)
+    assert _compat_gateway_timezone(["23", "06", "59", "001"]) == "+01:00"
+
+    # 3. Short values list without timezone element
+    assert _compat_gateway_timezone(["23", "06", "59"]) == ""
+
+
+
 
 
 
