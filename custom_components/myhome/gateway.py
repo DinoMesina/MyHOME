@@ -59,24 +59,17 @@ from .const import (
     LOGGER,
 )
 
-_orig_gw_tz = getattr(_ownd_msg, "_orig_gateway_timezone", None)
-if _orig_gw_tz is None:
-    _orig_gw_tz = getattr(_ownd_msg, "_gateway_timezone", None)
-    if _orig_gw_tz is not None:
-        _ownd_msg._orig_gateway_timezone = _orig_gw_tz
+_orig_gw_tz = _ownd_msg._gateway_timezone
 
 
 def _compat_gateway_timezone(values: list[str]) -> str:
     """Compatibility wrapper for OWNd < 2.0.0b7: accept 999 as unconfigured timezone."""
     if len(values) > 3 and values[3] == "999":
         return ""
-    if _orig_gw_tz is not None:
-        return _orig_gw_tz(values)
-    return ""
+    return _orig_gw_tz(values)
 
 
-if _orig_gw_tz is not None and getattr(_ownd_msg._gateway_timezone, "__name__", "") != "_compat_gateway_timezone":
-    _ownd_msg._gateway_timezone = _compat_gateway_timezone
+_ownd_msg._gateway_timezone = _compat_gateway_timezone
 
 EVENT_READY_TIMEOUT = 120
 COMMAND_SESSION_IDLE_TIMEOUT = 15.0
