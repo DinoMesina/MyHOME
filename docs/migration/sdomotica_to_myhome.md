@@ -6,15 +6,19 @@ This guide provides a step-by-step, zero-touch migration path for users transiti
 
 ## 📌 Executive Summary
 
-Many Legrand & BTicino MyHOME installations were previously integrated into Home Assistant via SDomotica (either through MQTT or custom bridge software). These installations follow standard legacy naming conventions:
-- **Lights**: `light.sdomoticabticino0` through `light.sdomoticabticino60`
-- **Covers**: `cover.sdomoticabticino68` through `cover.sdomoticabticino78`
-- **Switches**: `switch.sdomoticabticino61`, `switch.sdomoticabticino62`
-- **Audio Zones**: `media_player.audio_zone_14` through `media_player.audio_zone_36`
+Many Legrand & BTicino MyHOME installations were previously integrated into Home Assistant via SDomotica (either through MQTT packages or the custom bridge add-on). In these setups, Home Assistant entity IDs are automatically generated based on each installation's SCS bus addresses and device types:
+- **Lights & Relays**: `light.sdomoticabticino<where>` (or `light.sdomoticabticino2_<where>` for secondary gateways)
+- **F422 Bus Interfaces**: `light.sdomoticabticino<where>_4_<interface>` (e.g. `where: 41`, `interface: 01`)
+- **Covers & Shutters**: `cover.sdomoticabticino<where>` (e.g. `cover.sdomoticabticino31`)
+- **Climate & Thermoregulation**: `climate.sdomoticabticino_4_<zone>` (e.g. `climate.sdomoticabticino_4_1`)
+- **Audio Sound System**: `media_player.audio_zone_<zone>` (e.g. `media_player.audio_zone_2`)
+- **Burglar Alarm**: `alarm_control_panel.sdomoticabtalarm` (or `sdomotica_alarm`)
+- **Energy & Power Sensors**: `sensor.sdomoticabticino<where>` (e.g. F522/F523 power meters)
+- **Auxiliary Contacts / Binary Sensors**: `binary_sensor.sdomoticabticino<where>` (e.g. 3477 dry contacts)
 
 ### Our Migration Guarantees
-1. **Zero Dashboard Changes**: Your existing Lovelace cards, entity grids, auto-entities filters, and ApexCharts remain 100% operational.
-2. **Zero Automation Changes**: Automations, scenes, and scripts referencing `light.sdomoticabticino*` continue working without renaming.
+1. **Zero Dashboard Changes**: Your existing Lovelace cards, entity grids, auto-entities filters, and ApexCharts remain 100% operational with your exact entity IDs.
+2. **Zero Automation Changes**: Automations, scenes, and scripts referencing your existing entities continue working without renaming.
 3. **Preserved History & Areas**: Historical database statistics, energy records, and room/area assignments are preserved.
 
 ---
@@ -47,7 +51,7 @@ python scripts/migrate_from_sdomotica.py --config-dir /config --dry-run
 # Or directly preview from Sdomotica config.json:
 python scripts/migrate_from_sdomotica.py --sdomotica-json config.json --dry-run
 ```
-*Output summary:*
+*Example output summary (discovering all devices configured in your installation):*
 ```
 --- Discovered SDomotica Entities ---
   • binary_sensor       :   4 devices
