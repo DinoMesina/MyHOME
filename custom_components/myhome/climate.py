@@ -185,7 +185,8 @@ class MyHOMEClimate(MyHOMEEntity, ClimateEntity):
             return self._local_target_temperature
         else:
             return self._target_temperature
-
+            
+    @property
     def extra_state_attributes(self):
         """Restituisce attributi aggiuntivi per il termostato."""
         attributes = {}
@@ -299,12 +300,34 @@ class MyHOMEClimate(MyHOMEEntity, ClimateEntity):
             )
         elif message.message_type == MESSAGE_TYPE_LOCAL_OFFSET:
             LOGGER.info(
-                "%s %s",
+                "%s 1: %s",
                 self._gateway_handler.log_id,
                 message.human_readable_log,
             )
-            self._local_offset = message.local_offset
-            self._knob_pos = message.knob_pos
+            # message._dimension_value from OWNd
+            if str(message._dimension_value[0]) == "0" or str(message._dimension_value[0]) == "00":
+                self._knob_pos = "0"
+            elif str(message._dimension_value[0]) == "4":
+                self._knob_pos = "OFF"
+            elif str(message._dimension_value[0]) == "5":
+                self._knob_pos = "*"
+            elif str(message._dimension_value[0]).startswith("0"):
+                self._knob_pos = f"+{str(message._dimension_value[0])[1:]}"
+            else:
+                self._knob_pos = f"-{str(message._dimension_value[0])[1:]}"
+            log_string = f"Zone {message._zone}'s knob position is set to {self._knob_pos}"
+            if str(message._dimension_value[0]) == "4" or str(message._dimension_value[0]) == "5":
+                self._local_offset = 0
+                log_string += "."
+            else:
+                self._local_offset = int(self._knob_pos)
+                log_string += "°C."
+            LOGGER.info(
+                "%s 2: %s",
+                self._gateway_handler.log_id,
+                log_string
+            )
+            #self._local_offset = message.local_offset
             if self._target_temperature is not None:
                 self._local_target_temperature = (
                     self._target_temperature + self._local_offset
