@@ -8,7 +8,12 @@ from OWNd.message import (
     CLIMATE_MODE_COOL,
     CLIMATE_MODE_HEAT,
     CLIMATE_MODE_OFF,
+    LOCAL_CONTROL_OFF,
+    LOCAL_CONTROL_OVERRIDE,
+    LOCAL_CONTROL_PROTECTION,
+    LOCAL_CONTROL_UNKNOWN,
     MESSAGE_TYPE_ACTION,
+    MESSAGE_TYPE_FAN_SPEED,
     MESSAGE_TYPE_LOCAL_OFFSET,
     MESSAGE_TYPE_LOCAL_TARGET_TEMPERATURE,
     MESSAGE_TYPE_MAIN_HUMIDITY,
@@ -564,7 +569,6 @@ async def test_climate_fan_mode_and_attributes(hass):
     gateway.send.assert_not_called()
 
     # Event handling for fan speeds
-    from OWNd.message import MESSAGE_TYPE_FAN_SPEED
     event = MagicMock()
     event.message_type = MESSAGE_TYPE_FAN_SPEED
     event.human_readable_log = "Fan speed event"
@@ -592,3 +596,42 @@ async def test_climate_fan_mode_and_attributes(hass):
     assert str(gateway.send_status_request.call_args[0][0]) == "*#4*5##"
 
 
+async def test_climate_knob_positions_coverage(hass):
+    """Test all missing local_control_state branches to achieve 100% coverage."""
+    gateway_mock = MagicMock()
+    gateway_mock.mac = "00:11:22:33:44:55"
+
+    entity = MyHOMEClimate(
+        hass=hass,
+        name="Test Climate",
+        device_id="4-1",
+        who="4",
+        where="1",
+        heating=True,
+        cooling=True,
+        fan=False,
+        standalone=True,
+        central=False,
+        manufacturer="BTicino",
+        model="Heating Zone",
+        gateway=gateway_mock,
+    )
+    entity.hass = hass
+
+    test_cases = [
+        (None, "UNKNOWN"),
+        (LOCAL_CONTROL_OFF, "OFF"),
+        (LOCAL_CONTROL_PROTECTION, "*"),
+        (LOCAL_CONTROL_OVERRIDE, "?"),
+        (LOCAL_CONTROL_UNKNOWN, "UNKNOWN"),
+    ]
+
+    for control_state, expected_knob_pos in test_cases:
+        mock_event = MagicMock()
+        mock_event.message_type = MESSAGE_TYPE_LOCAL_OFFSET
+        mock_event.local_offset = 0
+        mock_event.local_control_state = control_state
+        mock_event.human_readable_log = "Mock Log"
+
+        entity.handle_event(mock_event)
+        assert entity._knob_pos == expected_knob_pos
