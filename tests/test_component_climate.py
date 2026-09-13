@@ -638,7 +638,7 @@ async def test_climate_knob_positions_coverage(hass):
         mock_event.local_control_state = control_state
         entity.handle_event(mock_event)
         assert entity._knob_pos == expected_knob_pos
-    
+
     mock_event.local_offset = 2
     mock_event.local_control_state = LOCAL_CONTROL_OFFSET
     entity.handle_event(mock_event)
