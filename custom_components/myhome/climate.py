@@ -699,21 +699,18 @@ class MyHOMEClimate(MyHOMEEntity, ClimateEntity):
                 message.human_readable_log,
             )
             self._local_offset = message.local_offset
-            if message.local_control_state is None:
+            if message.local_control_state is None or message.local_control_state == LOCAL_CONTROL_UNKNOWN:
                 self._knob_pos = "UNKNOWN"
+            elif message.local_control_state == LOCAL_CONTROL_NORMAL or message.local_control_state == LOCAL_CONTROL_OFFSET:
+                self._knob_pos = f"{message.local_offset:+d}" if message.local_offset != 0 else "0"
+            elif message.local_control_state == LOCAL_CONTROL_OFF:
+                self._knob_pos = "OFF"
+            elif message.local_control_state == LOCAL_CONTROL_PROTECTION:
+                self._knob_pos = "*"
+            elif message.local_control_state == LOCAL_CONTROL_OVERRIDE:
+                self._knob_pos = "?"
             else:
-                if message.local_control_state == LOCAL_CONTROL_NORMAL or message.local_control_state == LOCAL_CONTROL_OFFSET:
-                    self._knob_pos = f"{message.local_offset:+d}" if message.local_offset != 0 else "0"
-                elif message.local_control_state == LOCAL_CONTROL_OFF:
-                    self._knob_pos = "OFF"
-                elif message.local_control_state == LOCAL_CONTROL_PROTECTION:
-                    self._knob_pos = "*"
-                elif message.local_control_state == LOCAL_CONTROL_OVERRIDE:
-                    self._knob_pos = "?"
-                elif message.local_control_state == LOCAL_CONTROL_UNKNOWN:
-                    self._knob_pos = "UNKNOWN"
-                else:
-                    self._knob_pos = "UNK"
+                self._knob_pos = "UNK"
             if self._target_temperature is not None:
                 self._local_target_temperature = self._target_temperature + self._local_offset
         elif message.message_type == MESSAGE_TYPE_LOCAL_TARGET_TEMPERATURE:
