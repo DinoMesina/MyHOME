@@ -602,7 +602,7 @@ async def test_climate_knob_positions_coverage(hass):
     """Test climate knob"""
     gateway_mock = MagicMock()
     gateway_mock.mac = "00:11:22:33:44:55"
-    
+
     entity = MyHOMEClimate(
         hass=hass,
         name="Test Climate",
