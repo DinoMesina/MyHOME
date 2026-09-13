@@ -10,6 +10,7 @@ from OWNd.message import (
     CLIMATE_MODE_OFF,
     LOCAL_CONTROL_NORMAL,
     LOCAL_CONTROL_OFF,
+    LOCAL_CONTROL_OFFSET,
     LOCAL_CONTROL_OVERRIDE,
     LOCAL_CONTROL_PROTECTION,
     LOCAL_CONTROL_UNKNOWN,
@@ -622,7 +623,6 @@ async def test_climate_knob_positions_coverage(hass):
     test_cases = [
         (None, "UNKNOWN"),
         (LOCAL_CONTROL_NORMAL, "0"),
-        (LOCAL_CONTROL_OFFSET, "0"),
         (LOCAL_CONTROL_OFF, "OFF"),
         (LOCAL_CONTROL_PROTECTION, "*"),
         (LOCAL_CONTROL_OVERRIDE, "?"),
@@ -630,12 +630,15 @@ async def test_climate_knob_positions_coverage(hass):
         ("else", "UNK"),
     ]
 
+    mock_event = MagicMock()
+    mock_event.message_type = MESSAGE_TYPE_LOCAL_OFFSET
+    mock_event.local_offset = 0
+    mock_event.human_readable_log = "Mock Log"
     for control_state, expected_knob_pos in test_cases:
-        mock_event = MagicMock()
-        mock_event.message_type = MESSAGE_TYPE_LOCAL_OFFSET
-        mock_event.local_offset = 0
         mock_event.local_control_state = control_state
-        mock_event.human_readable_log = "Mock Log"
-
         entity.handle_event(mock_event)
         assert entity._knob_pos == expected_knob_pos
+    
+    mock_event.local_offset = 2
+    mock_event.local_control_state = LOCAL_CONTROL_OFFSET
+    assert entity._knob_pos == "+2"
