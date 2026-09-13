@@ -624,6 +624,8 @@ async def test_climate_knob_positions_coverage(hass):
         (LOCAL_CONTROL_PROTECTION, "*"),
         (LOCAL_CONTROL_OVERRIDE, "?"),
         (LOCAL_CONTROL_UNKNOWN, "UNKNOWN"),
+        (LOCAL_CONTROL_NORMAL, "0"),
+        ("else", "UNK"),
     ]
 
     for control_state, expected_knob_pos in test_cases:
