@@ -1,6 +1,7 @@
 """Support for MyHome heating."""
 
 from homeassistant.components.climate import (
+    ClimateEntity,
     DOMAIN as PLATFORM,
 )
 from homeassistant.components.climate.const import (
