@@ -699,10 +699,12 @@ class MyHOMEClimate(MyHOMEEntity, ClimateEntity):
                 message.human_readable_log,
             )
             self._local_offset = message.local_offset
-            if message.local_control_state is None or message.local_control_state == LOCAL_CONTROL_UNKNOWN:
+            if message.local_control_state == LOCAL_CONTROL_UNKNOWN or message.local_control_state is None:
                 self._knob_pos = "UNKNOWN"
-            elif message.local_control_state == LOCAL_CONTROL_NORMAL or message.local_control_state == LOCAL_CONTROL_OFFSET:
-                self._knob_pos = f"{message.local_offset:+d}" if message.local_offset != 0 else "0"
+            elif message.local_control_state == LOCAL_CONTROL_OFFSET:
+                self._knob_pos = f"{message.local_offset:+d}"
+            elif message.local_control_state == LOCAL_CONTROL_NORMAL:
+                self._knob_pos = "0"
             elif message.local_control_state == LOCAL_CONTROL_OFF:
                 self._knob_pos = "OFF"
             elif message.local_control_state == LOCAL_CONTROL_PROTECTION:
