@@ -8,6 +8,7 @@ from OWNd.message import (
     CLIMATE_MODE_COOL,
     CLIMATE_MODE_HEAT,
     CLIMATE_MODE_OFF,
+    LOCAL_CONTROL_NORMAL,
     LOCAL_CONTROL_OFF,
     LOCAL_CONTROL_OVERRIDE,
     LOCAL_CONTROL_PROTECTION,
@@ -597,10 +598,10 @@ async def test_climate_fan_mode_and_attributes(hass):
 
 
 async def test_climate_knob_positions_coverage(hass):
-    """Test all missing local_control_state branches to achieve 100% coverage."""
+    """Test climate knob"""
     gateway_mock = MagicMock()
     gateway_mock.mac = "00:11:22:33:44:55"
-
+    
     entity = MyHOMEClimate(
         hass=hass,
         name="Test Climate",
@@ -608,7 +609,7 @@ async def test_climate_knob_positions_coverage(hass):
         who="4",
         where="1",
         heating=True,
-        cooling=True,
+        cooling=False,
         fan=False,
         standalone=True,
         central=False,
@@ -621,6 +622,7 @@ async def test_climate_knob_positions_coverage(hass):
     test_cases = [
         (None, "UNKNOWN"),
         (LOCAL_CONTROL_NORMAL, "0"),
+        (LOCAL_CONTROL_OFFSET, "0"),
         (LOCAL_CONTROL_OFF, "OFF"),
         (LOCAL_CONTROL_PROTECTION, "*"),
         (LOCAL_CONTROL_OVERRIDE, "?"),
