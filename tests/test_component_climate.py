@@ -627,7 +627,7 @@ async def test_climate_knob_positions_coverage(hass):
         (LOCAL_CONTROL_PROTECTION, "*"),
         (LOCAL_CONTROL_OVERRIDE, "?"),
         (LOCAL_CONTROL_UNKNOWN, "UNKNOWN"),
-        ("else", "UNK"),
+        ("else", "UNKNOWN"),
     ]
 
     mock_event = MagicMock()
