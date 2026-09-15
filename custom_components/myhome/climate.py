@@ -452,7 +452,7 @@ class MyHOMEClimate(MyHOMEEntity, ClimateEntity):
         attrs = {
             "local_offset": self._local_offset,
             "local_target_temperature": self._local_target_temperature,
-            "knob_pos":self._knob_pos,
+            "knob_pos": self._knob_pos,
         }
         if self._fan:
             attrs["fan_mode"] = self._attr_fan_mode
@@ -698,8 +698,8 @@ class MyHOMEClimate(MyHOMEEntity, ClimateEntity):
                 self._gateway_handler.log_id,
                 message.human_readable_log,
             )
-            self._local_offset = message.local_offset
-            if message.local_control_state == LOCAL_CONTROL_UNKNOWN or message.local_control_state is None:
+            self._local_offset = message.local_offset if message.local_offset is not None else 0
+            if message.local_control_state in (LOCAL_CONTROL_UNKNOWN, None):
                 self._knob_pos = "UNKNOWN"
             elif message.local_control_state == LOCAL_CONTROL_OFFSET:
                 self._knob_pos = f"{message.local_offset:+d}"
@@ -712,7 +712,7 @@ class MyHOMEClimate(MyHOMEEntity, ClimateEntity):
             elif message.local_control_state == LOCAL_CONTROL_OVERRIDE:
                 self._knob_pos = "?"
             else:
-                self._knob_pos = "UNK"
+                self._knob_pos = "UNKNOWN"
             if self._target_temperature is not None:
                 self._local_target_temperature = self._target_temperature + self._local_offset
         elif message.message_type == MESSAGE_TYPE_LOCAL_TARGET_TEMPERATURE:
