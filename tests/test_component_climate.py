@@ -643,3 +643,11 @@ async def test_climate_knob_positions_coverage(hass):
     mock_event.local_control_state = LOCAL_CONTROL_OFFSET
     entity.handle_event(mock_event)
     assert entity._knob_pos == "+2"
+
+    # Test real frame with OFF state (where OWNd sets local_offset to None)
+    entity._target_temperature = 20.0
+    event_off = OWNHeatingEvent("*#4*1*13*4##")
+    entity.handle_event(event_off)
+    assert entity._knob_pos == "OFF"
+    assert entity._local_offset == 0
+    assert entity._local_target_temperature == 20.0
